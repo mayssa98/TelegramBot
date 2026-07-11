@@ -61,6 +61,7 @@ def init_db():
 def _seed_catalog():
     db = get_conn()
     if db.services.count_documents({}, limit=1):
+        _repair_catalog_encoding(db)
         return
     catalog = [
         ("Canva", "🎨", [("Canva Pro 1m", .14, 113, ""), ("Canva Pro Head 1m", .86, 2, "")]),
@@ -78,6 +79,27 @@ def _seed_catalog():
         db.services.insert_one({"id": sid, "name": name, "emoji": emoji, "sort_order": order, "active": 1})
         for name_, price, stock, note in offers:
             db.offers.insert_one({"id": _next_id("offers"), "service_id": sid, "name": name_, "price": price, "stock": stock, "note": note, "active": 1})
+
+
+def _repair_catalog_encoding(db):
+    """Repair catalogue emojis previously seeded from a misencoded deployment."""
+    emojis = {
+        "Canva": "🎨", "Capcut": "🎬", "Chatgpt": "🤖",
+        "Discord Nitro": "🎮", "Gemini AI": "✨", "Grok AI": "🧠",
+        "Manus AI": "🚀", "Adobe Creative Cloud": "🅰️",
+        "Alight Motion": "📲", "Base44 AI": "🧩", "Duolingo": "🦉",
+        "Emergent AI": "🌐", "Flux AI": "⚡", "Freebeat AI": "🎵",
+        "Gamma AI": "📊", "Getcontac Premium": "📞", "Google Colab": "🐍",
+        "Meitu": "📸", "Outlook Mail": "📧", "Perplexity AI": "🔍",
+        "Picsart": "🖼️", "Reelshort": "📹", "Uncensored AI": "🔓",
+        "Viu": "📺", "VPN": "🛡️", "Weshsop AI": "🛍️",
+    }
+    for name, emoji in emojis.items():
+        db.services.update_one({"name": name}, {"$set": {"emoji": emoji}})
+    db.offers.update_many(
+        {"note": {"$in": ["Prix Ã  définir", "Prix Ã  dÃ©finir"]}},
+        {"$set": {"note": "Prix à définir"}},
+    )
 
 
 def upsert_user(telegram_id, username, first_name):
