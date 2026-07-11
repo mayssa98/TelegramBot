@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import traceback
 from http.server import BaseHTTPRequestHandler
 
 from telegram import Update
@@ -46,5 +47,6 @@ class handler(BaseHTTPRequestHandler):
             _loop.run_until_complete(app.process_update(update))
             self._reply(200, {"ok": True})
         except Exception as exc:
+            traceback.print_exc()
             self.log_error("Webhook processing failed: %s", exc)
             self._reply(500, {"ok": False})
