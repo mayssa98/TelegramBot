@@ -22,3 +22,6 @@ pythonpath = ["."]
 
 [tool.ruff]
 extend = "ruff.toml"
+
+[tool.vercel]
+entrypoint = "api/webhook:handler"
