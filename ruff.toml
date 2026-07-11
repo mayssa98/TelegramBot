@@ -1,0 +1,11 @@
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",   # line-too-long — à corriger progressivement
+    "E402",   # module-import-not-at-top — nécessaire pour certains imports conditionnels
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101"]

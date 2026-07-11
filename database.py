@@ -1,10 +1,10 @@
 """MongoDB persistence for users, catalogue, orders, and affiliate data."""
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from cryptography.fernet import Fernet
 from pymongo import ASCENDING, DESCENDING, MongoClient, ReturnDocument
 from pymongo.errors import DuplicateKeyError
-from cryptography.fernet import Fernet
 
 from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 
@@ -51,6 +51,7 @@ def init_db():
     db.orders.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
     db.orders.create_index("status")
     db.orders.create_index("txid", unique=True, partialFilterExpression={"txid": {"$gt": ""}})
+    db.orders.create_index("expires_at")
     db.settings.create_index("key", unique=True)
     db.referrals.create_index("referred_id", unique=True)
     db.referrals.create_index("referrer_id")
@@ -59,9 +60,12 @@ def init_db():
     db.pending_states.create_index("user_id", unique=True)
     db.inventory.create_index([("offer_id", ASCENDING), ("status", ASCENDING)])
     db.inventory.create_index("fingerprint", unique=True)
+    db.inventory.create_index("reserved_order_id", partialFilterExpression={"reserved_order_id": {"$ne": None}})
     db.processed_updates.create_index("created_at", expireAfterSeconds=604800)
     db.audit_events.create_index("created_at")
     db.support_tickets.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+    db.support_tickets.create_index("user_id")
+    db.ticket_messages.create_index([("ticket_id", ASCENDING), ("created_at", ASCENDING)])
     _seed_catalog()
 
 
@@ -318,7 +322,7 @@ def pop_pending_state(user_id, default=None):
 def claim_update(update_id):
     """Return False when Telegram retries an update already being processed."""
     try:
-        get_conn().processed_updates.insert_one({"_id": update_id, "created_at": datetime.now(timezone.utc)})
+        get_conn().processed_updates.insert_one({"_id": update_id, "created_at": datetime.now(UTC)})
         return True
     except DuplicateKeyError:
         return False
@@ -382,29 +386,139 @@ def fulfill_order(order_id):
 
 
 def audit_event(action, actor_id=None, details=None):
-    get_conn().audit_events.insert_one({"action": action, "actor_id": actor_id, "details": details or {}, "created_at": datetime.now(timezone.utc)})
+    get_conn().audit_events.insert_one({"action": action, "actor_id": actor_id, "details": details or {}, "created_at": datetime.now(UTC)})
 
 
 def dashboard_summary():
+    """Legacy wrapper — kept for backward compatibility."""
+    data = dashboard_data()
+    return data.get("summary", {})
+
+
+def dashboard_data():
+    """Comprehensive dashboard data for the admin panel."""
     db = get_conn()
-    paid = list(db.orders.aggregate([
-        {"$match": {"status": {"$in": ["paid", "delivered"]}}},
-        {"$group": {"_id": None, "revenue": {"$sum": "$total_price"}, "orders": {"$sum": 1}}},
-    ]))
-    totals = paid[0] if paid else {"revenue": 0, "orders": 0}
+    now = int(time.time())
+    today_start = now - (now % 86400)
+    week_ago = now - 7 * 86400
+    month_ago = now - 30 * 86400
+    prev_week_start = week_ago - 7 * 86400
+
+    # --- Users ---
+    total_users = db.users.count_documents({})
+    new_users_today = db.users.count_documents({"created_at": {"$gte": today_start}})
+    new_users_7d = db.users.count_documents({"created_at": {"$gte": week_ago}})
+    new_users_prev_7d = db.users.count_documents({"created_at": {"$gte": prev_week_start, "$lt": week_ago}})
+
+    # --- Orders ---
+    total_orders = db.orders.count_documents({})
+    orders_today = db.orders.count_documents({"created_at": {"$gte": today_start}})
+    pending_orders = db.orders.count_documents({"status": {"$in": ["pending_payment", "awaiting_verification", "manual_review"]}})
+
+    paid_statuses = ["paid", "payment_confirmed", "delivered"]
+    paid_orders = db.orders.count_documents({"status": {"$in": paid_statuses}})
+    delivered_orders = db.orders.count_documents({"status": "delivered"})
+
+    # --- Revenue ---
+    def _revenue(match_filter):
+        result = list(db.orders.aggregate([
+            {"$match": match_filter},
+            {"$group": {"_id": None, "total": {"$sum": "$total_price"}}},
+        ]))
+        return round(result[0]["total"], 2) if result else 0.0
+
+    revenue_today = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": today_start}})
+    revenue_7d = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": week_ago}})
+    revenue_30d = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": month_ago}})
+    revenue_prev_7d = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": prev_week_start, "$lt": week_ago}})
+
+    # Conversion rate
+    conversion_rate = round((paid_orders / total_orders * 100) if total_orders else 0, 1)
+
+    # --- Tickets ---
+    open_tickets = db.support_tickets.count_documents({"status": {"$nin": ["closed", "resolved"]}})
+
+    # --- Inventory & stock ---
+    available_inventory = db.inventory.count_documents({"status": "available"})
+
+    # Low stock offers
+    from config import LOW_STOCK_THRESHOLD
+    low_stock_offers = list(db.offers.find(
+        {"active": 1, "stock": {"$lte": LOW_STOCK_THRESHOLD, "$gt": 0}},
+        {"id": 1, "name": 1, "stock": 1, "service_id": 1},
+    ))
+
+    out_of_stock_offers = list(db.offers.find(
+        {"active": 1, "stock": {"$lte": 0}},
+        {"id": 1, "name": 1, "service_id": 1},
+    ))
+
+    # --- Alerts ---
+    alerts = []
+    for off in out_of_stock_offers:
+        alerts.append({"type": "stock_empty", "message": f"Stock épuisé: {off['name']}", "severity": "error", "entity_id": off["id"]})
+    for off in low_stock_offers:
+        alerts.append({"type": "stock_low", "message": f"Stock faible ({off['stock']}): {off['name']}", "severity": "warning", "entity_id": off["id"]})
+
+    old_pending = db.orders.count_documents({
+        "status": "pending_payment",
+        "created_at": {"$lt": now - 3600},
+    })
+    if old_pending:
+        alerts.append({"type": "old_pending", "message": f"{old_pending} commande(s) en attente depuis plus d'1h", "severity": "warning"})
+
+    unanswered_tickets = db.support_tickets.count_documents({"status": "waiting_admin"})
+    if unanswered_tickets:
+        alerts.append({"type": "unanswered_tickets", "message": f"{unanswered_tickets} ticket(s) sans réponse", "severity": "warning"})
+
+    # --- Services enrichis ---
+    services_enriched = []
+    for svc in db.services.find({}).sort([("sort_order", ASCENDING), ("id", ASCENDING)]):
+        svc_data = _public(svc)
+        offers = list(db.offers.find({"service_id": svc["id"]}))
+        svc_data["offer_count"] = len(offers)
+        svc_data["total_stock"] = sum(o.get("stock", 0) for o in offers)
+        # Count sales
+        svc_data["total_sales"] = db.orders.count_documents({
+            "offer_id": {"$in": [o["id"] for o in offers]},
+            "status": {"$in": paid_statuses},
+        }) if offers else 0
+        services_enriched.append(svc_data)
+
+    summary = {
+        "users": total_users,
+        "new_users_today": new_users_today,
+        "new_users_7d": new_users_7d,
+        "new_users_prev_7d": new_users_prev_7d,
+        "orders": total_orders,
+        "orders_today": orders_today,
+        "pending_orders": pending_orders,
+        "paid_orders": paid_orders,
+        "delivered_orders": delivered_orders,
+        "revenue_today": revenue_today,
+        "revenue_7d": revenue_7d,
+        "revenue_30d": revenue_30d,
+        "revenue_prev_7d": revenue_prev_7d,
+        "conversion_rate": conversion_rate,
+        "open_tickets": open_tickets,
+        "low_stock_offers": len(low_stock_offers),
+        "available_inventory": available_inventory,
+    }
+
     return {
-        "users": db.users.count_documents({}),
-        "orders": db.orders.count_documents({}),
-        "paid_orders": totals.get("orders", 0),
-        "revenue": round(totals.get("revenue", 0), 2),
-        "available_inventory": db.inventory.count_documents({"status": "available"}),
-        "open_tickets": db.support_tickets.count_documents({"status": "open"}),
+        "summary": summary,
+        "alerts": alerts,
+        "orders": list_orders(limit=50),
+        "services": services_enriched,
+        "users": list_users(limit=200),
+        "tickets": list_tickets(limit=50),
+        "audits": list_audit_events(limit=100),
     }
 
 
 def create_ticket(user_id, message):
     tid = _next_id("tickets")
-    get_conn().support_tickets.insert_one({"id": tid, "user_id": user_id, "message": message[:2000], "status": "open", "created_at": datetime.now(timezone.utc)})
+    get_conn().support_tickets.insert_one({"id": tid, "user_id": user_id, "message": message[:2000], "status": "open", "created_at": datetime.now(UTC)})
     audit_event("ticket.created", user_id, {"ticket_id": tid})
     return tid
 
@@ -418,7 +532,7 @@ def get_ticket(ticket_id):
 
 
 def close_ticket(ticket_id):
-    return bool(get_conn().support_tickets.update_one({"id": ticket_id}, {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc)}}).matched_count)
+    return bool(get_conn().support_tickets.update_one({"id": ticket_id}, {"$set": {"status": "closed", "closed_at": datetime.now(UTC)}}).matched_count)
 
 
 def list_users(limit=100):

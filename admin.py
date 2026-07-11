@@ -23,7 +23,7 @@ def tickets_keyboard():
 def orders_list_keyboard(status):
     orders = db.list_orders(status=status, limit=50)
     rows = [[InlineKeyboardButton(
-        f"#{o['id']} • {o['offer_name']} • {o['total_price']:.2f}{CURRENCY}",
+        f"#{o['id']} • {o['offer_name']} • {o['total_price']:.2f} {CURRENCY}",
         callback_data=f"adm_order:{o['id']}",
     )] for o in orders]
     rows.append([InlineKeyboardButton("⬅️ Retour", callback_data="adm_panel")])
@@ -35,7 +35,7 @@ def order_detail_text(o):
         return "Commande introuvable."
     return (f"🧾 *Commande #{o['id']}*\nUtilisateur: `{o['user_id']}`\n"
             f"Produit: {o['service_name']} — {o['offer_name']}\n"
-            f"Quantité: {o['qty']}\nTotal: *{o['total_price']:.2f}{CURRENCY}*\n"
+            f"Quantité: {o['qty']}\nTotal: *{o['total_price']:.2f} {CURRENCY}*\n"
             f"Statut: `{o['status']}`\nTXID: `{o['txid'] or '—'}`")
 
 

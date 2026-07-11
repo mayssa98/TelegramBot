@@ -1,0 +1,208 @@
+"""Service métier pour le support client.
+
+Gère les tickets sous forme de conversations avec messages multiples,
+catégories, priorités et liaison aux commandes.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import UTC, datetime
+
+import database as db
+from app.constants import TicketCategory, TicketPriority, TicketStatus
+
+log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Création de ticket
+# ---------------------------------------------------------------------------
+
+def create_ticket(
+    user_id: int,
+    message: str,
+    category: str = TicketCategory.OTHER,
+    order_id: int | None = None,
+    priority: str = TicketPriority.NORMAL,
+) -> dict:
+    """Crée un ticket support avec un premier message.
+
+    Returns:
+        Le ticket créé avec son ID.
+    """
+    conn = db.get_conn()
+    ticket_id = db._next_id("tickets")
+    now = datetime.now(UTC)
+
+    ticket = {
+        "id": ticket_id,
+        "user_id": user_id,
+        "order_id": order_id,
+        "category": category,
+        "priority": priority,
+        "status": TicketStatus.WAITING_ADMIN,
+        "created_at": now,
+        "updated_at": now,
+        "closed_at": None,
+    }
+    conn.support_tickets.insert_one(ticket)
+
+    # Premier message du client
+    add_message(ticket_id, user_id, message, sender_type="client")
+
+    db.audit_event(
+        "ticket.created",
+        actor_id=user_id,
+        details={"ticket_id": ticket_id, "category": category, "order_id": order_id},
+    )
+    log.info("Ticket #%d créé par user %d (catégorie: %s)", ticket_id, user_id, category)
+
+    return db._public(conn.support_tickets.find_one({"id": ticket_id}))
+
+
+# ---------------------------------------------------------------------------
+# Messages
+# ---------------------------------------------------------------------------
+
+def add_message(
+    ticket_id: int,
+    sender_id: int,
+    content: str,
+    sender_type: str = "client",
+) -> dict:
+    """Ajoute un message à un ticket.
+
+    Args:
+        ticket_id: ID du ticket.
+        sender_id: Telegram ID de l'expéditeur.
+        content: Contenu du message.
+        sender_type: "client" ou "admin".
+
+    Returns:
+        Le message créé.
+    """
+    conn = db.get_conn()
+    msg_id = db._next_id("ticket_messages")
+    now = datetime.now(UTC)
+
+    msg = {
+        "id": msg_id,
+        "ticket_id": ticket_id,
+        "sender_id": sender_id,
+        "sender_type": sender_type,
+        "content": content[:2000],
+        "created_at": now,
+    }
+    conn.ticket_messages.insert_one(msg)
+
+    # Mettre à jour le statut du ticket
+    new_status = TicketStatus.WAITING_ADMIN if sender_type == "client" else TicketStatus.WAITING_CUSTOMER
+    conn.support_tickets.update_one(
+        {"id": ticket_id},
+        {"$set": {"status": new_status, "updated_at": now}},
+    )
+
+    return db._public(msg)
+
+
+def get_messages(ticket_id: int, limit: int = 50) -> list[dict]:
+    """Récupère les messages d'un ticket, du plus ancien au plus récent."""
+    conn = db.get_conn()
+    from pymongo import ASCENDING
+    return [
+        db._public(m)
+        for m in conn.ticket_messages.find(
+            {"ticket_id": ticket_id}
+        ).sort("created_at", ASCENDING).limit(limit)
+    ]
+
+
+def admin_reply(ticket_id: int, admin_id: int, content: str) -> dict | None:
+    """Réponse admin à un ticket.
+
+    Returns:
+        Le message créé, ou None si le ticket n'existe pas.
+    """
+    ticket = get_ticket(ticket_id)
+    if not ticket:
+        return None
+
+    msg = add_message(ticket_id, admin_id, content, sender_type="admin")
+    log.info("Admin a répondu au ticket #%d", ticket_id)
+    return msg
+
+
+# ---------------------------------------------------------------------------
+# Gestion des tickets
+# ---------------------------------------------------------------------------
+
+def get_ticket(ticket_id: int) -> dict | None:
+    """Récupère un ticket par son ID."""
+    return db._public(db.get_conn().support_tickets.find_one({"id": ticket_id}))
+
+
+def list_tickets(
+    status: str | None = None,
+    user_id: int | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    """Liste les tickets avec filtres optionnels."""
+    query: dict = {}
+    if status:
+        query["status"] = status
+    if user_id:
+        query["user_id"] = user_id
+
+    from pymongo import DESCENDING
+    return [
+        db._public(t)
+        for t in db.get_conn().support_tickets.find(query).sort(
+            "updated_at", DESCENDING
+        ).limit(limit)
+    ]
+
+
+def close_ticket(ticket_id: int) -> bool:
+    """Ferme un ticket."""
+    conn = db.get_conn()
+    result = conn.support_tickets.update_one(
+        {"id": ticket_id, "status": {"$ne": TicketStatus.CLOSED}},
+        {
+            "$set": {
+                "status": TicketStatus.CLOSED,
+                "closed_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
+            }
+        },
+    )
+    if result.modified_count:
+        db.audit_event("ticket.closed", details={"ticket_id": ticket_id})
+        return True
+    return False
+
+
+def reopen_ticket(ticket_id: int) -> bool:
+    """Rouvre un ticket fermé."""
+    conn = db.get_conn()
+    result = conn.support_tickets.update_one(
+        {"id": ticket_id, "status": TicketStatus.CLOSED},
+        {
+            "$set": {
+                "status": TicketStatus.OPEN,
+                "closed_at": None,
+                "updated_at": datetime.now(UTC),
+            }
+        },
+    )
+    if result.modified_count:
+        db.audit_event("ticket.reopened", details={"ticket_id": ticket_id})
+        return True
+    return False
+
+
+def count_open_tickets() -> int:
+    """Compte les tickets non fermés."""
+    conn = db.get_conn()
+    return conn.support_tickets.count_documents(
+        {"status": {"$nin": [TicketStatus.CLOSED, TicketStatus.RESOLVED]}}
+    )

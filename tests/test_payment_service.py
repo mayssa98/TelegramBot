@@ -1,0 +1,122 @@
+"""Tests unitaires pour le service des paiements."""
+
+from __future__ import annotations
+
+import pytest
+
+import database as db
+from app.constants import OrderStatus
+from app.domain import payment_service
+
+
+@pytest.fixture
+def mock_payment_verifier(monkeypatch):
+    """Permet d'injecter une réponse simulée de verify_payment."""
+    state = {"status": "confirmed", "reason": "Transaction Binance Pay confirmée"}
+
+    def _mock(txid, amount, currency=None, created_at=None):
+        return state
+
+    monkeypatch.setattr(payment_service, "verify_payment", _mock)
+    return state
+
+
+def test_validate_txid_format():
+    """Vérifie le filtrage de format de transaction (TXID)."""
+    # Valides
+    assert payment_service.validate_txid_format("123456") == "123456"
+    assert payment_service.validate_txid_format("TXID-993-abc_123") == "TXID-993-abc_123"
+
+    # Trop court
+    with pytest.raises(payment_service.TxidValidationError, match="trop court"):
+        payment_service.validate_txid_format("12345")
+
+    # Caractères interdits
+    with pytest.raises(payment_service.TxidValidationError, match="caractères non autorisés"):
+        payment_service.validate_txid_format("TXID@123")
+
+
+def test_submit_payment_success(mock_mongodb, mock_payment_verifier):
+    """Vérifie le flux de paiement réussi avec vérification automatique."""
+    db.add_service("VOD", "🎬")
+    offer_id = db.add_offer(service_id=1, name="Netflix", price=5.0, stock=3)
+    offer = db.get_offer(offer_id)
+
+    # Ajouter du stock pour permettre la livraison automatique
+    db.add_inventory_items(offer_id, ["code_netflix_123"])
+
+    # Créer une commande
+    import time
+    now = int(time.time())
+    conn = db.get_conn()
+    conn.orders.insert_one({
+        "id": 1,
+        "user_id": 123,
+        "offer_id": offer_id,
+        "service_name": "VOD",
+        "offer_name": "Netflix",
+        "qty": 1,
+        "total_price": 5.0,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "",
+        "created_at": now - 60,
+        "expires_at": now + 1800,
+    })
+
+    # Soumettre le paiement
+    result = payment_service.submit_payment(order_id=1, txid="TXID_VALID_123", user_id=123)
+
+    assert result["status"] == "delivered"
+    assert result["delivered_content"] == ["code_netflix_123"]
+
+    db_order = db.get_order(1)
+    assert db_order["status"] == OrderStatus.DELIVERED
+    assert db_order["txid"] == "TXID_VALID_123"
+
+
+def test_submit_payment_duplicate_txid(mock_mongodb):
+    """Vérifie qu'on ne peut pas réutiliser le même TXID pour une autre commande."""
+    conn = db.get_conn()
+    # Commande 1 déjà payée avec le TXID
+    conn.orders.insert_one({
+        "id": 1,
+        "user_id": 123,
+        "status": OrderStatus.DELIVERED,
+        "txid": "TXID_DEJA_UTILISE",
+    })
+    # Commande 2 en attente
+    conn.orders.insert_one({
+        "id": 2,
+        "user_id": 123,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "",
+        "total_price": 5.0,
+    })
+
+    # Tenter de réutiliser le TXID
+    result = payment_service.submit_payment(order_id=2, txid="TXID_DEJA_UTILISE", user_id=123)
+    assert result["status"] == "failed"
+    assert result["error_code"] == "already_used"
+
+
+def test_confirm_payment_manual(mock_mongodb):
+    """Vérifie l'idempotence et la confirmation manuelle par l'admin."""
+    conn = db.get_conn()
+    conn.orders.insert_one({
+        "id": 1,
+        "user_id": 123,
+        "offer_id": 1,
+        "qty": 1,
+        "total_price": 5.0,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "",
+    })
+
+    # Confirmer manuellement
+    assert payment_service.confirm_payment_manual(order_id=1) is True
+
+    db_order = db.get_order(1)
+    assert db_order["status"] in (OrderStatus.PAID, OrderStatus.PAYMENT_CONFIRMED)
+
+    # Ré-essayer (idempotent, doit renvoyer True)
+    assert payment_service.confirm_payment_manual(order_id=1) is True

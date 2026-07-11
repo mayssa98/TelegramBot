@@ -2,6 +2,7 @@
 Internationalisation FR / EN / AR.
 Usage : t(lang, "key", **kwargs)
 """
+import contextlib
 
 TRANSLATIONS = {
     # ---------------- Démarrage / langue ----------------
@@ -82,7 +83,29 @@ TRANSLATIONS = {
     },
     "btn_main_menu": {"fr": "🖤 Retour à BlackMarket", "en": "🖤 Return to BlackMarket", "ar": "🖤 العودة إلى BlackMarket"},
     "btn_refresh": {"fr": "🔄 Actualiser les services", "en": "🔄 Refresh services", "ar": "🔄 تحديث الخدمات"},
+    "btn_confirm": {"fr": "✅ Confirmer l'achat", "en": "✅ Confirm purchase", "ar": "✅ تأكيد الشراء"},
+    "btn_cancel": {"fr": "❌ Annuler", "en": "❌ Cancel", "ar": "❌ إلغاء"},
+    "btn_continue_payment": {"fr": "💳 Continuer le paiement", "en": "💳 Continue payment", "ar": "💳 متابعة الدفع"},
+    "btn_new_order": {"fr": "🆕 Nouvelle commande", "en": "🆕 New order", "ar": "🆕 طلب جديد"},
+    "btn_delivery_ok": {"fr": "✅ Tout fonctionne", "en": "✅ Everything works", "ar": "✅ كل شيء يعمل"},
+    "btn_delivery_problem": {"fr": "⚠️ Signaler un problème", "en": "⚠️ Report a problem", "ar": "⚠️ الإبلاغ عن مشكلة"},
     "cat_other": {"fr": "📦 Autres services", "en": "📦 Other services", "ar": "📦 خدمات أخرى"},
+    # ---------------- Confirmation d'achat ----------------
+    "confirm_purchase": {
+        "fr": "🧾 *Résumé de votre commande*\n\n{emoji} Service : *{service}*\n📋 Offre : *{offer}*\n💵 Prix unitaire : *{price} {cur}*\n📦 Quantité : *{qty}*\n💰 Total : *{total} {cur}*\n\nConfirmez-vous cet achat ?",
+        "en": "🧾 *Order summary*\n\n{emoji} Service: *{service}*\n📋 Offer: *{offer}*\n💵 Unit price: *{price} {cur}*\n📦 Quantity: *{qty}*\n💰 Total: *{total} {cur}*\n\nDo you confirm this purchase?",
+        "ar": "🧾 *ملخص الطلب*\n\n{emoji} الخدمة: *{service}*\n📋 العرض: *{offer}*\n💵 السعر: *{price} {cur}*\n📦 الكمية: *{qty}*\n💰 الإجمالي: *{total} {cur}*\n\nهل تؤكد هذا الشراء؟",
+    },
+    "duplicate_order": {
+        "fr": "⚠️ *Commande existante détectée*\n\nVous avez déjà une commande #{oid} en attente pour *{offer}* ({total} {cur}).\n\nQue souhaitez-vous faire ?",
+        "en": "⚠️ *Existing order detected*\n\nYou already have a pending order #{oid} for *{offer}* ({total} {cur}).\n\nWhat would you like to do?",
+        "ar": "⚠️ *تم اكتشاف طلب موجود*\n\nلديك بالفعل طلب #{oid} معلق لـ *{offer}* ({total} {cur}).\n\nماذا تريد أن تفعل؟",
+    },
+    "already_paid": {
+        "fr": "ℹ️ La commande #{oid} a déjà été payée.",
+        "en": "ℹ️ Order #{oid} has already been paid.",
+        "ar": "ℹ️ الطلب #{oid} تم دفعه بالفعل.",
+    },
     # ---------------- Paiement ----------------
     "order_created": {
         "fr": "🧾 *Commande #{oid} créée*\n\nService : *{service}*\nOffre : *{offer}*\nQuantité : *{qty}*\nMontant total : *{total} {cur}*\n\n💳 *Paiement via Binance Pay*\n\n1️⃣ Envoyez *{total} {cur}* à l'ID Binance Pay :\n`{binance_id}`\n\n2️⃣ Après le paiement, appuyez sur le bouton ci-dessous et envoyez l'*ID de transaction Binance*.",
@@ -139,9 +162,15 @@ TRANSLATIONS = {
     "status_pending_payment": {"fr": "💳 En attente de paiement", "en": "💳 Awaiting payment", "ar": "💳 بانتظار الدفع"},
     "status_awaiting_verification": {"fr": "🔎 Vérification en cours", "en": "🔎 Under verification", "ar": "🔎 قيد التحقق"},
     "status_paid": {"fr": "✅ Payée (préparation)", "en": "✅ Paid (preparing)", "ar": "✅ مدفوعة (قيد التجهيز)"},
+    "status_payment_confirmed": {"fr": "✅ Paiement confirmé", "en": "✅ Payment confirmed", "ar": "✅ تم تأكيد الدفع"},
+    "status_preparing_delivery": {"fr": "📦 Préparation en cours", "en": "📦 Preparing delivery", "ar": "📦 قيد التجهيز"},
     "status_delivered": {"fr": "🎁 Livrée", "en": "🎁 Delivered", "ar": "🎁 تم التسليم"},
     "status_cancelled": {"fr": "❌ Annulée", "en": "❌ Cancelled", "ar": "❌ ملغاة"},
     "status_rejected": {"fr": "🚫 Refusée", "en": "🚫 Rejected", "ar": "🚫 مرفوضة"},
+    "status_manual_review": {"fr": "🔍 Vérification manuelle", "en": "🔍 Manual review", "ar": "🔍 مراجعة يدوية"},
+    "status_expired": {"fr": "⏰ Expirée", "en": "⏰ Expired", "ar": "⏰ منتهية الصلاحية"},
+    "status_refunded": {"fr": "💸 Remboursée", "en": "💸 Refunded", "ar": "💸 تم الاسترداد"},
+    "status_verification_failed": {"fr": "❌ Échec de vérification", "en": "❌ Verification failed", "ar": "❌ فشل التحقق"},
     # ---------------- Livraison ----------------
     "delivery_received": {
         "fr": "🎁 *Votre commande #{oid} est livrée !*\n\nService : *{service}* — {offer}\n\n{content}\n\nMerci pour votre confiance ! 💜",
@@ -173,10 +202,8 @@ def t(lang, key, **kwargs):
     entry = TRANSLATIONS.get(key, {})
     text = entry.get(lang) or entry.get("fr") or key
     if kwargs:
-        try:
+        with contextlib.suppress(KeyError, IndexError):
             text = text.format(**kwargs)
-        except (KeyError, IndexError):
-            pass
     return text
 
 

@@ -2,27 +2,39 @@
 HEAVENPREM — Bot Telegram de vente de services numériques.
 Point d'entrée principal. Exécuté en long polling pour rester réactif 24/7.
 """
-import logging
 import asyncio
-import os
+import contextlib
 import html
+import logging
+import os
 
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, ApplicationHandlerStop, filters,
+    Application,
+    ApplicationHandlerStop,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
 )
 
+import admin
 import database as db
 import keyboards as kb
-import admin
-from payment_verifier import verify_payment
-from i18n import t, status_label
+from app.domain import order_service, payment_service
 from config import (
-    BOT_TOKEN, ADMIN_ID, BINANCE_PAY_ID, SHOP_NAME, CURRENCY, DEFAULT_LANG,
-    AFFILIATE_TARGET, AFFILIATE_REWARD_CENTS,
+    ADMIN_ID,
+    AFFILIATE_REWARD_CENTS,
+    AFFILIATE_TARGET,
+    BINANCE_PAY_ID,
+    BOT_TOKEN,
+    CURRENCY,
+    DEFAULT_LANG,
+    SHOP_NAME,
 )
+from i18n import status_label, t
 
 _handlers = [logging.StreamHandler()]
 if not os.environ.get("VERCEL"):
@@ -68,55 +80,7 @@ async def block_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE)
         raise ApplicationHandlerStop
 
 
-async def audit_client_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Transmet à l'admin chaque message/commande reçu d'un client."""
-    user = update.effective_user
-    message = update.effective_message
-    if not user or user.id == ADMIN_ID or not message:
-        return
-    content = message.text or message.caption or f"[{message.effective_attachment.__class__.__name__}]"
-    content = html.escape(str(content)[:3000])
-    identity = html.escape(user.full_name or "—")
-    username = f"@{html.escape(user.username)}" if user.username else "sans username"
-    try:
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"📨 <b>Interaction client</b>\n"
-            f"👤 {identity} ({username})\n"
-            f"🆔 <code>{user.id}</code>\n"
-            f"💬 {content}",
-            parse_mode=ParseMode.HTML,
-        )
-    except Exception as exc:
-        log.warning("Impossible de notifier l'admin: %s", exc)
 
-
-async def audit_client_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Transmet à l'admin chaque bouton pressé par un client."""
-    query = update.callback_query
-    user = query.from_user if query else None
-    if not query or not user or user.id == ADMIN_ID:
-        return
-    identity = html.escape(user.full_name or "—")
-    username = f"@{html.escape(user.username)}" if user.username else "sans username"
-    label = ""
-    if query.message and query.message.reply_markup:
-        for row in query.message.reply_markup.inline_keyboard:
-            for button in row:
-                if button.callback_data == query.data:
-                    label = button.text
-                    break
-    try:
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"🖱 <b>Bouton client</b>\n"
-            f"👤 {identity} ({username})\n"
-            f"🆔 <code>{user.id}</code>\n"
-            f"🔘 {html.escape(label or query.data or '—')}",
-            parse_mode=ParseMode.HTML,
-        )
-    except Exception as exc:
-        log.warning("Impossible de notifier l'admin: %s", exc)
 
 
 def lang_of(user_id):
@@ -198,11 +162,11 @@ async def show_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = html.escape("@" + account["username"] if account.get("username") else "—")
     lines = [f"👤 <b>{labels[0]}</b>", "", f"🪪 <b>{labels[1]}:</b> {name}",
              f"🔗 <b>{labels[2]}:</b> {username}", f"🧾 <b>{labels[3]}:</b> {account['order_count']}",
-             f"✅ <b>{labels[4]}:</b> {account['paid_count']}", f"💰 <b>{labels[5]}:</b> {account['total_paid']:.2f}{CURRENCY}",
+             f"✅ <b>{labels[4]}:</b> {account['paid_count']}", f"💰 <b>{labels[5]}:</b> {account['total_paid']:.2f} {CURRENCY}",
              "", f"📚 <b>{labels[6]}:</b>"]
     if account["orders"]:
         for order in account["orders"][:10]:
-            lines.append(f"• #{order['id']} — {html.escape(str(order['offer_name']))} — {order['total_price']:.2f}{CURRENCY} — {html.escape(status_label(lang, order['status']))}")
+            lines.append(f"• #{order['id']} — {html.escape(str(order['offer_name']))} — {order['total_price']:.2f} {CURRENCY} — {html.escape(status_label(lang, order['status']))}")
     else:
         lines.append("—")
     await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML,
@@ -334,7 +298,13 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     if data.startswith("buy:"):
-        await handle_buy(update, context, lang)
+        await handle_buy_confirmation(update, context, lang)
+        return
+    if data.startswith("confirm_buy:"):
+        await handle_buy_confirmed(update, context, lang)
+        return
+    if data.startswith("cancel_buy:"):
+        await q.edit_message_text(t(lang, "cancelled_msg"))
         return
     if data.startswith("paid:"):
         oid = int(data.split(":")[1])
@@ -342,25 +312,82 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(t(lang, "ask_txid", oid=oid),
                                    parse_mode=ParseMode.MARKDOWN)
         return
+    if data.startswith("continue_pay:"):
+        oid = int(data.split(":")[1])
+        order = db.get_order(oid)
+        if order and order["user_id"] == uid:
+            text = t(lang, "order_created", oid=oid, service=order["service_name"],
+                     offer=order["offer_name"], qty=order["qty"],
+                     total=f"{order['total_price']:.2f}", cur=CURRENCY,
+                     binance_id=BINANCE_PAY_ID)
+            await q.message.reply_text(text, parse_mode=ParseMode.MARKDOWN,
+                                       reply_markup=kb.paid_keyboard(lang, oid))
+        return
 
 
-# ---------------- Achat ----------------
-async def handle_buy(update, context, lang):
+# ---------------- Confirmation avant achat ----------------
+async def handle_buy_confirmation(update, context, lang):
+    """Affiche un résumé avant de créer la commande."""
     q = update.callback_query
     uid = q.from_user.id
-    oid_offer = int(q.data.split(":")[1])
-    offer = db.get_offer(oid_offer)
+    offer_id = int(q.data.split(":")[1])
+    offer = db.get_offer(offer_id)
+
     if not offer or offer["price"] is None or offer["stock"] <= 0:
         await q.answer(t(lang, "out_of_stock"), show_alert=True)
         return
-    order_id = db.create_order(uid, offer, qty=1)
-    order = db.get_order(order_id)
-    text = t(lang, "order_created", oid=order_id, service=order["service_name"],
+
+    # Vérifier s'il y a déjà une commande pending pour cette offre
+    existing = order_service.check_duplicate_pending_order(uid, offer_id)
+    if existing:
+        await q.edit_message_text(
+            t(lang, "duplicate_order", oid=existing["id"],
+              offer=existing["offer_name"],
+              total=f"{existing['total_price']:.2f}", cur=CURRENCY),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.duplicate_order_keyboard(lang, existing["id"], offer_id),
+        )
+        return
+
+    svc = db.get_service(offer["service_id"])
+    # Afficher le résumé de confirmation
+    await q.edit_message_text(
+        t(lang, "confirm_purchase",
+          emoji=svc["emoji"] if svc else "📦",
+          service=svc["name"] if svc else "",
+          offer=offer["name"],
+          price=f"{offer['price']:.2f}",
+          cur=CURRENCY,
+          qty=1,
+          total=f"{offer['price']:.2f}"),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.confirm_buy_keyboard(lang, offer_id),
+    )
+
+
+async def handle_buy_confirmed(update, context, lang):
+    """Crée la commande après confirmation de l'utilisateur."""
+    q = update.callback_query
+    uid = q.from_user.id
+    offer_id = int(q.data.split(":")[1])
+    offer = db.get_offer(offer_id)
+
+    if not offer or offer["price"] is None or offer["stock"] <= 0:
+        await q.answer(t(lang, "out_of_stock"), show_alert=True)
+        return
+
+    try:
+        order = order_service.create_order(uid, offer, qty=1)
+    except ValueError as exc:
+        await q.answer(str(exc), show_alert=True)
+        return
+
+    text = t(lang, "order_created", oid=order["id"], service=order["service_name"],
              offer=order["offer_name"], qty=order["qty"],
              total=f"{order['total_price']:.2f}", cur=CURRENCY,
              binance_id=BINANCE_PAY_ID)
-    await q.message.reply_text(text, parse_mode=ParseMode.MARKDOWN,
-                               reply_markup=kb.paid_keyboard(lang, order_id))
+    await q.edit_message_text(text, parse_mode=ParseMode.MARKDOWN,
+                              reply_markup=kb.paid_keyboard(lang, order["id"]))
 
 
 # ---------------- Saisie en attente (txid / admin) ----------------
@@ -381,7 +408,7 @@ async def handle_pending_input(update, context, lang):
             if price < 0:
                 raise ValueError
             db.update_offer(ref, price=price)
-            await update.message.reply_text(f"✅ Prix mis à jour : {price:.2f}{CURRENCY}")
+            await update.message.reply_text(f"✅ Prix mis à jour : {price:.2f} {CURRENCY}")
         except ValueError:
             await update.message.reply_text("⚠️ Valeur invalide. Envoyez un nombre, ex : 1.99")
             return
@@ -486,40 +513,38 @@ async def handle_pending_input(update, context, lang):
 # ---------------- Traitement de l'ID de transaction ----------------
 async def process_txid(update, context, lang, order_id, txid):
     uid = update.effective_user.id
-    order = db.get_order(order_id)
-    if not order or order["user_id"] != uid:
-        await update.message.reply_text(t(lang, "not_for_you"))
-        return
-    if len(txid) < 6:
-        await update.message.reply_text(t(lang, "txid_too_short"))
-        PENDING[uid] = ("await_txid", order_id)  # garder l'état
-        return
 
-    db.update_order(order_id, txid=txid, status="awaiting_verification")
     await update.message.reply_text(t(lang, "verifying"))
 
-    # Vérification automatique (peut être longue) -> exécutée en thread
+    # Vérification via le service de paiement (idempotent)
     result = await asyncio.to_thread(
-        verify_payment, txid, order["total_price"], CURRENCY, order["created_at"]
+        payment_service.submit_payment, order_id, txid, uid
     )
 
-    if result["status"] == "confirmed" and db.mark_order_paid(order_id, "auto"):
-        delivered = db.fulfill_order(order_id)
-        if delivered:
-            content = "\n\n".join(delivered)
+    if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery"):
+        if result["delivered_content"]:
+            content = "\n\n".join(result["delivered_content"])
             paid_order = db.get_order(order_id)
             await update.message.reply_text(
                 t(lang, "delivery_received", oid=order_id,
                   service=paid_order["service_name"], offer=paid_order["offer_name"],
-                  content=content), parse_mode=ParseMode.MARKDOWN,
+                  content=html.escape(content)),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.post_delivery_keyboard(lang, order_id),
             )
         else:
             await update.message.reply_text(t(lang, "verify_ok", oid=order_id),
                                             parse_mode=ParseMode.MARKDOWN)
             await admin.notify_new_order(context, db.get_order(order_id))
+    elif result["status"] == "already_paid":
+        await update.message.reply_text(t(lang, "already_paid", oid=order_id),
+                                        parse_mode=ParseMode.MARKDOWN)
     else:
-        db.update_order(order_id, status="pending_payment", txid="",
-                        verify_method="auto_failed")
+        error_code = result.get("error_code", "unknown")
+        if error_code == "too_short":
+            await update.message.reply_text(t(lang, "txid_too_short"))
+            PENDING[uid] = ("await_txid", order_id)  # garder l'état
+            return
         await update.message.reply_text(t(lang, "verify_failed", oid=order_id),
                                         parse_mode=ParseMode.MARKDOWN)
 
@@ -645,7 +670,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm_off:") or data.startswith("adm_off_back:"):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
-        price = "—" if off["price"] is None else f"{off['price']:.2f}{CURRENCY}"
+        price = "—" if off["price"] is None else f"{off['price']:.2f} {CURRENCY}"
         await q.edit_message_text(
             f"🧩 *{off['name']}*\n💵 Prix : {price}\n📦 Stock : {off['stock']}\n📝 {off['note'] or '—'}",
             parse_mode=ParseMode.MARKDOWN,
@@ -703,11 +728,9 @@ async def deliver_order(update, context, order_id, content):
 
 async def notify_client(context, user_id, key, **kwargs):
     cl = lang_of(user_id)
-    try:
+    with contextlib.suppress(Exception):
         await context.bot.send_message(user_id, t(cl, key, **kwargs),
                                        parse_mode=ParseMode.MARKDOWN)
-    except Exception:
-        pass
 
 
 # ---------------- Erreurs ----------------
@@ -722,9 +745,7 @@ def build_app():
     from telegram.request import HTTPXRequest
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     app = Application.builder().token(BOT_TOKEN).request(request).build()
-    # Groupe -1 : audit non bloquant avant les handlers fonctionnels du groupe 0.
-    app.add_handler(CallbackQueryHandler(audit_client_callback), group=-1)
-    app.add_handler(MessageHandler(filters.ALL, audit_client_message), group=-1)
+    # Groupe -2 : blocage des utilisateurs bannis avant les handlers du groupe 0.
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(CommandHandler("start", cmd_start))

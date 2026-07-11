@@ -1,8 +1,9 @@
 """Constructeurs de claviers inline et reply."""
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+
 import database as db
-from i18n import t
 from config import ADMIN_ID, CURRENCY
+from i18n import t
 
 
 def lang_keyboard():
@@ -29,7 +30,7 @@ def main_menu_keyboard(lang, user_id):
 def services_keyboard(lang):
     buttons = []
     services = db.list_services()
-    
+
     # Grouper par catégorie
     categories = {}
     for svc in services:
@@ -37,14 +38,14 @@ def services_keyboard(lang):
         if cat not in categories:
             categories[cat] = []
         categories[cat].append(svc)
-    
+
     for cat, svcs in categories.items():
         # Titre de la catégorie (bouton non cliquable ou simplement décoratif)
         buttons.append([InlineKeyboardButton(f"─── {cat} ───", callback_data="none")])
-        
+
         # Services par ligne (2 par ligne pour un design plus compact et pro)
         row = []
-        for i, svc in enumerate(svcs):
+        for _i, svc in enumerate(svcs):
             total = db.service_total_stock(svc["id"])
             stock_badge = "🟢" if total > 0 else "🔴"
             label = f"{stock_badge} {svc['emoji']} {svc['name']}"
@@ -54,7 +55,7 @@ def services_keyboard(lang):
                 row = []
         if row:
             buttons.append(row)
-            
+
     buttons.append([InlineKeyboardButton(t(lang, "btn_refresh"), callback_data="catalog")])
     buttons.append([InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")])
     return InlineKeyboardMarkup(buttons)
@@ -63,10 +64,7 @@ def services_keyboard(lang):
 def offers_keyboard(lang, service_id):
     buttons = []
     for off in db.list_offers(service_id):
-        if off["price"] is None:
-            price_str = t(lang, "price_tbd")
-        else:
-            price_str = f"{off['price']:.2f}{CURRENCY}"
+        price_str = t(lang, "price_tbd") if off["price"] is None else f"{off['price']:.2f} {CURRENCY}"
         stock_str = "🔴 Épuisé" if off["stock"] <= 0 else f"🟢 Stock {off['stock']}"
         label = f"{off['name']} • {price_str} • {stock_str}"
         buttons.append([InlineKeyboardButton(label, callback_data=f"off:{off['id']}")])
@@ -91,9 +89,35 @@ def paid_keyboard(lang, order_id):
     ])
 
 
+def confirm_buy_keyboard(lang, offer_id):
+    """Clavier de confirmation avant achat."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(lang, "btn_confirm"), callback_data=f"confirm_buy:{offer_id}")],
+        [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{offer_id}")],
+    ])
+
+
+def duplicate_order_keyboard(lang, existing_order_id, offer_id):
+    """Clavier lorsqu'une commande identique existe déjà."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(lang, "btn_continue_payment"), callback_data=f"continue_pay:{existing_order_id}")],
+        [InlineKeyboardButton(t(lang, "btn_new_order"), callback_data=f"confirm_buy:{offer_id}")],
+        [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{offer_id}")],
+    ])
+
+
+def post_delivery_keyboard(lang, order_id):
+    """Clavier après livraison : confirmer ou signaler un problème."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(lang, "btn_delivery_ok"), callback_data=f"delivery_ok:{order_id}")],
+        [InlineKeyboardButton(t(lang, "btn_delivery_problem"), callback_data=f"delivery_problem:{order_id}")],
+    ])
+
+
 def affiliate_keyboard(lang, referral_link, share_text):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(t(lang, "affiliate_share"),
                               switch_inline_query=share_text)],
         [InlineKeyboardButton(t(lang, "affiliate_open"), url=referral_link)],
     ])
+
