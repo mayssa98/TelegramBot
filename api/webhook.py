@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import threading
 import traceback
 from http.server import BaseHTTPRequestHandler
 
@@ -11,13 +12,15 @@ from bot import build_app
 
 _loop = asyncio.new_event_loop()
 _app = None
+_runtime_lock = threading.Lock()
 
 
 def _application():
     global _app
     if _app is None:
-        _app = build_app()
-        _loop.run_until_complete(_app.initialize())
+        candidate = build_app()
+        _loop.run_until_complete(candidate.initialize())
+        _app = candidate
     return _app
 
 
@@ -42,9 +45,10 @@ class handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length))
-            app = _application()
-            update = Update.de_json(payload, app.bot)
-            _loop.run_until_complete(app.process_update(update))
+            with _runtime_lock:
+                app = _application()
+                update = Update.de_json(payload, app.bot)
+                _loop.run_until_complete(app.process_update(update))
             self._reply(200, {"ok": True})
         except Exception as exc:
             traceback.print_exc()
