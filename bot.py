@@ -24,11 +24,14 @@ from config import (
     AFFILIATE_TARGET, AFFILIATE_REWARD_CENTS,
 )
 
-os.makedirs("logs", exist_ok=True)
+_handlers = [logging.StreamHandler()]
+if not os.environ.get("VERCEL"):
+    os.makedirs("logs", exist_ok=True)
+    _handlers.insert(0, logging.FileHandler("logs/bot.log"))
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     level=logging.INFO,
-    handlers=[logging.FileHandler("logs/bot.log"), logging.StreamHandler()],
+    handlers=_handlers,
 )
 log = logging.getLogger("bot")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -37,7 +40,22 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 # états utilisateurs en mémoire (clé = user_id)
 # "await_txid": order_id  |  "adm_setprice": offer_id  |  "adm_setstock": offer_id
 #  "adm_deliver": order_id
-PENDING = {}
+class PendingStates:
+    """Small mapping facade backed by MongoDB for serverless-safe conversations."""
+    def __contains__(self, user_id):
+        return db.get_pending_state(user_id) is not None
+
+    def __setitem__(self, user_id, state):
+        db.set_pending_state(user_id, state)
+
+    def get(self, user_id, default=None):
+        return db.get_pending_state(user_id) or default
+
+    def pop(self, user_id, default=None):
+        return db.pop_pending_state(user_id, default)
+
+
+PENDING = PendingStates()
 
 
 async def audit_client_message(update: Update, context: ContextTypes.DEFAULT_TYPE):

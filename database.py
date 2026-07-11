@@ -48,12 +48,13 @@ def init_db():
     db.orders.create_index("id", unique=True)
     db.orders.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
     db.orders.create_index("status")
-    db.orders.create_index("txid", unique=True, partialFilterExpression={"txid": {"$ne": ""}})
+    db.orders.create_index("txid", unique=True, partialFilterExpression={"txid": {"$gt": ""}})
     db.settings.create_index("key", unique=True)
     db.referrals.create_index("referred_id", unique=True)
     db.referrals.create_index("referrer_id")
     db.wallets.create_index("user_id", unique=True)
     db.affiliate_rewards.create_index([("referrer_id", ASCENDING), ("milestone", ASCENDING)], unique=True)
+    db.pending_states.create_index("user_id", unique=True)
     _seed_catalog()
 
 
@@ -249,3 +250,22 @@ def get_setting(key, default=None):
 
 def set_setting(key, value):
     get_conn().settings.update_one({"key": key}, {"$set": {"value": str(value)}}, upsert=True)
+
+
+def get_pending_state(user_id):
+    row = get_conn().pending_states.find_one({"user_id": user_id})
+    return (row["kind"], row["ref"]) if row else None
+
+
+def set_pending_state(user_id, state):
+    kind, ref = state
+    get_conn().pending_states.update_one(
+        {"user_id": user_id},
+        {"$set": {"kind": kind, "ref": ref, "updated_at": int(time.time())}},
+        upsert=True,
+    )
+
+
+def pop_pending_state(user_id, default=None):
+    row = get_conn().pending_states.find_one_and_delete({"user_id": user_id})
+    return (row["kind"], row["ref"]) if row else default
