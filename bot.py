@@ -185,6 +185,30 @@ async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🎫 Décrivez votre problème dans un seul message. L'administrateur le recevra.")
 
 
+async def show_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    lang = lang_of(uid)
+    account = db.user_account_summary(uid)
+    labels = {
+        "fr": ("Mon compte BlackMarket", "Nom", "Utilisateur", "Commandes", "Paiements validés", "Total payé", "Historique récent"),
+        "en": ("My BlackMarket account", "Name", "Username", "Orders", "Validated payments", "Total paid", "Recent history"),
+        "ar": ("حساب BlackMarket", "الاسم", "المستخدم", "الطلبات", "المدفوعات المؤكدة", "إجمالي المدفوع", "السجل الأخير"),
+    }[lang if lang in ("fr", "en", "ar") else "fr"]
+    name = html.escape(str(account.get("first_name") or update.effective_user.full_name or "—"))
+    username = html.escape("@" + account["username"] if account.get("username") else "—")
+    lines = [f"👤 <b>{labels[0]}</b>", "", f"🪪 <b>{labels[1]}:</b> {name}",
+             f"🔗 <b>{labels[2]}:</b> {username}", f"🧾 <b>{labels[3]}:</b> {account['order_count']}",
+             f"✅ <b>{labels[4]}:</b> {account['paid_count']}", f"💰 <b>{labels[5]}:</b> {account['total_paid']:.2f}{CURRENCY}",
+             "", f"📚 <b>{labels[6]}:</b>"]
+    if account["orders"]:
+        for order in account["orders"][:10]:
+            lines.append(f"• #{order['id']} — {html.escape(str(order['offer_name']))} — {order['total_price']:.2f}{CURRENCY} — {html.escape(status_label(lang, order['status']))}")
+    else:
+        lines.append("—")
+    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML,
+                                              reply_markup=kb.main_menu_keyboard(lang, uid))
+
+
 async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang = lang_of(user_id)
@@ -239,6 +263,8 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_catalog(update, context, lang)
     elif text == t(lang, "menu_orders"):
         await show_my_orders(update, context, lang)
+    elif text == t(lang, "menu_account"):
+        await show_account(update, context)
     elif text == t(lang, "menu_help"):
         await update.message.reply_text(t(lang, "help_text", shop=SHOP_NAME),
                                         parse_mode=ParseMode.MARKDOWN)
@@ -705,6 +731,7 @@ def build_app():
     app.add_handler(CommandHandler("menu", lambda u, c: send_main_menu(u, c, lang_of(u.effective_user.id))))
     app.add_handler(CommandHandler("admin", cmd_admin))
     app.add_handler(CommandHandler("support", cmd_support))
+    app.add_handler(CommandHandler("account", show_account))
     app.add_handler(CommandHandler("affiliate", show_affiliate))
     app.add_handler(CallbackQueryHandler(cb_lang, pattern=r"^lang:"))
     app.add_handler(CallbackQueryHandler(cb_admin, pattern=r"^adm_"))

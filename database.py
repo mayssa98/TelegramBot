@@ -272,6 +272,21 @@ def list_user_orders(user_id, limit=15):
     return [_public(x) for x in get_conn().orders.find({"user_id": user_id}).sort("id", DESCENDING).limit(limit)]
 
 
+def user_account_summary(user_id):
+    db = get_conn()
+    user = _public(db.users.find_one({"telegram_id": user_id})) or {"telegram_id": user_id}
+    orders = list_user_orders(user_id, limit=25)
+    paid_statuses = {"paid", "delivered"}
+    paid = [x for x in orders if x.get("status") in paid_statuses]
+    user.update({
+        "orders": orders,
+        "order_count": db.orders.count_documents({"user_id": user_id}),
+        "paid_count": db.orders.count_documents({"user_id": user_id, "status": {"$in": list(paid_statuses)}}),
+        "total_paid": round(sum(float(x.get("total_price") or 0) for x in paid), 2),
+    })
+    return user
+
+
 def get_setting(key, default=None):
     row = get_conn().settings.find_one({"key": key})
     return row.get("value", default) if row else default

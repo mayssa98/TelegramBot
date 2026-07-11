@@ -16,7 +16,8 @@ def lang_keyboard():
 def main_menu_keyboard(lang, user_id):
     rows = [
         [t(lang, "menu_catalog")],
-        [t(lang, "menu_orders"), t(lang, "menu_help")],
+        [t(lang, "menu_account"), t(lang, "menu_orders")],
+        [t(lang, "menu_help")],
         [t(lang, "menu_affiliate")],
         [t(lang, "menu_lang")],
     ]
@@ -45,7 +46,8 @@ def services_keyboard(lang):
         row = []
         for i, svc in enumerate(svcs):
             total = db.service_total_stock(svc["id"])
-            label = f"{svc['emoji']} {svc['name']}"
+            stock_badge = "🟢" if total > 0 else "🔴"
+            label = f"{stock_badge} {svc['emoji']} {svc['name']}"
             row.append(InlineKeyboardButton(label, callback_data=f"svc:{svc['id']}"))
             if len(row) == 2:
                 buttons.append(row)
@@ -53,6 +55,7 @@ def services_keyboard(lang):
         if row:
             buttons.append(row)
             
+    buttons.append([InlineKeyboardButton(t(lang, "btn_refresh"), callback_data="catalog")])
     buttons.append([InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")])
     return InlineKeyboardMarkup(buttons)
 
@@ -64,10 +67,11 @@ def offers_keyboard(lang, service_id):
             price_str = t(lang, "price_tbd")
         else:
             price_str = f"{off['price']:.2f}{CURRENCY}"
-        stock_str = "❌" if off["stock"] <= 0 else f"📦{off['stock']}"
+        stock_str = "🔴 Épuisé" if off["stock"] <= 0 else f"🟢 Stock {off['stock']}"
         label = f"{off['name']} • {price_str} • {stock_str}"
         buttons.append([InlineKeyboardButton(label, callback_data=f"off:{off['id']}")])
     buttons.append([InlineKeyboardButton(t(lang, "btn_back_services"), callback_data="catalog")])
+    buttons.append([InlineKeyboardButton(t(lang, "btn_refresh"), callback_data=f"svc:{service_id}")])
     return InlineKeyboardMarkup(buttons)
 
 

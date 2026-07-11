@@ -27,6 +27,7 @@ TRANSLATIONS = {
     "menu_help": {"fr": "ℹ️ Aide", "en": "ℹ️ Help", "ar": "ℹ️ مساعدة"},
     "menu_admin": {"fr": "🛠️ Admin", "en": "🛠️ Admin", "ar": "🛠️ المشرف"},
     "menu_affiliate": {"fr": "💸 Mon affiliation", "en": "💸 My affiliate", "ar": "💸 الإحالات"},
+    "menu_account": {"fr": "👤 Mon compte", "en": "👤 My account", "ar": "👤 حسابي"},
     "affiliate_title": {
         "fr": "💸 *Programme d'affiliation*\n\n👥 Filleuls : *{count}*\n🎯 Progression : *{progress}/{target}*\n💰 Solde : *{balance}$*\n\nInvitez {target} nouvelles personnes avec votre lien et recevez *{reward}$*. Chaque personne ne peut compter qu'une fois.\n\n🔗 Votre lien :\n`{link}`",
         "en": "💸 *Affiliate program*\n\n👥 Referrals: *{count}*\n🎯 Progress: *{progress}/{target}*\n💰 Balance: *{balance}$*\n\nInvite {target} new people with your link and receive *{reward}$*. Each person counts only once.\n\n🔗 Your link:\n`{link}`",
@@ -79,7 +80,8 @@ TRANSLATIONS = {
         "en": "⬅️ Back to services",
         "ar": "⬅️ العودة إلى الخدمات",
     },
-    "btn_main_menu": {"fr": "🏠 Menu principal", "en": "🏠 Main menu", "ar": "🏠 القائمة الرئيسية"},
+    "btn_main_menu": {"fr": "🖤 Retour à BlackMarket", "en": "🖤 Return to BlackMarket", "ar": "🖤 العودة إلى BlackMarket"},
+    "btn_refresh": {"fr": "🔄 Actualiser les services", "en": "🔄 Refresh services", "ar": "🔄 تحديث الخدمات"},
     "cat_other": {"fr": "📦 Autres services", "en": "📦 Other services", "ar": "📦 خدمات أخرى"},
     # ---------------- Paiement ----------------
     "order_created": {

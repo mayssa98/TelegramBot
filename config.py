@@ -39,7 +39,7 @@ INVENTORY_KEY = os.environ.get("HP_INVENTORY_KEY", "").strip()
 DASHBOARD_PASSWORD = os.environ.get("HP_DASHBOARD_PASSWORD", "").strip()
 
 # --- Divers ---
-SHOP_NAME = "HEAVENPREM"
+SHOP_NAME = "BlackMarket"
 DEFAULT_LANG = "fr"
 SUPPORTED_LANGS = ["fr", "en", "ar"]
 CURRENCY = "$"
