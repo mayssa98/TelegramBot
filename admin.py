@@ -69,6 +69,7 @@ def service_admin_keyboard(service_id):
 def offer_admin_keyboard(offer_id):
     off = db.get_offer(offer_id)
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔐 Ajouter des codes", callback_data=f"adm_inventory:{offer_id}")],
         [InlineKeyboardButton("💵 Modifier le prix", callback_data=f"adm_setprice:{offer_id}"),
          InlineKeyboardButton("📦 Modifier le stock", callback_data=f"adm_setstock:{offer_id}")],
         [InlineKeyboardButton("✏️ Modifier le nom", callback_data=f"adm_offname:{offer_id}"),

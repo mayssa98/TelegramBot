@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler
 from telegram import Update
 
 from bot import build_app
+import database as db
 
 _loop = asyncio.new_event_loop()
 _app = None
@@ -45,12 +46,18 @@ class handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length))
+            update_id = payload.get("update_id")
+            if update_id is None or not db.claim_update(update_id):
+                self._reply(200, {"ok": True, "duplicate": True})
+                return
             with _runtime_lock:
                 app = _application()
                 update = Update.de_json(payload, app.bot)
                 _loop.run_until_complete(app.process_update(update))
             self._reply(200, {"ok": True})
         except Exception as exc:
+            if "update_id" in locals() and update_id is not None:
+                db.release_update(update_id)
             traceback.print_exc()
             self.log_error("Webhook processing failed: %s", exc)
             self._reply(500, {"ok": False})

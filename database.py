@@ -1,10 +1,12 @@
 """MongoDB persistence for users, catalogue, orders, and affiliate data."""
 import time
+from datetime import datetime, timezone
 
 from pymongo import ASCENDING, DESCENDING, MongoClient, ReturnDocument
 from pymongo.errors import DuplicateKeyError
+from cryptography.fernet import Fernet
 
-from config import MONGODB_DB, MONGODB_URI
+from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 
 _client = None
 _db = None
@@ -55,6 +57,9 @@ def init_db():
     db.wallets.create_index("user_id", unique=True)
     db.affiliate_rewards.create_index([("referrer_id", ASCENDING), ("milestone", ASCENDING)], unique=True)
     db.pending_states.create_index("user_id", unique=True)
+    db.inventory.create_index([("offer_id", ASCENDING), ("status", ASCENDING)])
+    db.inventory.create_index("fingerprint", unique=True)
+    db.processed_updates.create_index("created_at", expireAfterSeconds=604800)
     _seed_catalog()
 
 
@@ -291,3 +296,69 @@ def set_pending_state(user_id, state):
 def pop_pending_state(user_id, default=None):
     row = get_conn().pending_states.find_one_and_delete({"user_id": user_id})
     return (row["kind"], row["ref"]) if row else default
+
+
+def claim_update(update_id):
+    """Return False when Telegram retries an update already being processed."""
+    try:
+        get_conn().processed_updates.insert_one({"_id": update_id, "created_at": datetime.now(timezone.utc)})
+        return True
+    except DuplicateKeyError:
+        return False
+
+
+def release_update(update_id):
+    get_conn().processed_updates.delete_one({"_id": update_id})
+
+
+def _fernet():
+    if not INVENTORY_KEY:
+        raise RuntimeError("HP_INVENTORY_KEY is required for automatic inventory")
+    return Fernet(INVENTORY_KEY.encode())
+
+
+def add_inventory_items(offer_id, items):
+    import hashlib
+    db = get_conn()
+    cipher = _fernet()
+    added = 0
+    for value in (x.strip() for x in items):
+        if not value:
+            continue
+        fingerprint = hashlib.sha256(f"{offer_id}:{value}".encode()).hexdigest()
+        try:
+            db.inventory.insert_one({"offer_id": offer_id, "payload": cipher.encrypt(value.encode()).decode(), "fingerprint": fingerprint, "status": "available", "created_at": int(time.time())})
+            added += 1
+        except DuplicateKeyError:
+            pass
+    if added:
+        db.offers.update_one({"id": offer_id}, {"$inc": {"stock": added}})
+    return added
+
+
+def inventory_stats(offer_id):
+    db = get_conn()
+    return {status: db.inventory.count_documents({"offer_id": offer_id, "status": status}) for status in ("available", "sold")}
+
+
+def fulfill_order(order_id):
+    """Atomically claim encrypted stock and return decrypted delivery values."""
+    db = get_conn()
+    order = db.orders.find_one({"id": order_id, "status": "paid"})
+    if not order or not order.get("offer_id"):
+        return None
+    claimed = []
+    for _ in range(order.get("qty", 1)):
+        item = db.inventory.find_one_and_update(
+            {"offer_id": order["offer_id"], "status": "available"},
+            {"$set": {"status": "reserved", "order_id": order_id, "reserved_at": int(time.time())}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if not item:
+            db.inventory.update_many({"order_id": order_id, "status": "reserved"}, {"$set": {"status": "available"}, "$unset": {"order_id": "", "reserved_at": ""}})
+            return None
+        claimed.append(item)
+    values = [_fernet().decrypt(x["payload"].encode()).decode() for x in claimed]
+    db.inventory.update_many({"order_id": order_id, "status": "reserved"}, {"$set": {"status": "sold", "sold_at": int(time.time())}})
+    db.orders.update_one({"id": order_id, "status": "paid"}, {"$set": {"status": "delivered", "delivery_text": "[encrypted automatic delivery]", "updated_at": int(time.time())}})
+    return values

@@ -35,6 +35,7 @@ GMAIL_CONNECTOR_UID = os.environ.get(
 # --- Base de données ---
 MONGODB_URI = os.environ.get("HP_MONGODB_URI", "").strip()
 MONGODB_DB = os.environ.get("HP_MONGODB_DB", "heavenprem").strip()
+INVENTORY_KEY = os.environ.get("HP_INVENTORY_KEY", "").strip()
 
 # --- Divers ---
 SHOP_NAME = "HEAVENPREM"

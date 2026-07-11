@@ -412,6 +412,22 @@ async def handle_pending_input(update, context, lang):
         await update.message.reply_text("✅ Offre ajoutée.", reply_markup=admin.admin_panel_keyboard())
         return
 
+    if kind == "adm_inventory" and uid == ADMIN_ID:
+        items = [line.strip() for line in text.splitlines() if line.strip()]
+        try:
+            added = db.add_inventory_items(ref, items)
+        except RuntimeError as exc:
+            await update.message.reply_text(f"⚠️ {exc}")
+            return
+        PENDING.pop(uid, None)
+        stats = db.inventory_stats(ref)
+        await update.message.reply_text(
+            f"✅ {added} code(s) ajouté(s) et chiffré(s).\n"
+            f"Disponible : {stats['available']} • Vendus : {stats['sold']}",
+            reply_markup=admin.offer_admin_keyboard(ref),
+        )
+        return
+
     # --- Admin : livraison ---
     if kind == "adm_deliver" and uid == ADMIN_ID:
         await deliver_order(update, context, ref, text)
@@ -440,9 +456,19 @@ async def process_txid(update, context, lang, order_id, txid):
     )
 
     if result["status"] == "confirmed" and db.mark_order_paid(order_id, "auto"):
-        await update.message.reply_text(t(lang, "verify_ok", oid=order_id),
-                                        parse_mode=ParseMode.MARKDOWN)
-        await admin.notify_new_order(context, db.get_order(order_id))
+        delivered = db.fulfill_order(order_id)
+        if delivered:
+            content = "\n\n".join(delivered)
+            paid_order = db.get_order(order_id)
+            await update.message.reply_text(
+                t(lang, "delivery_received", oid=order_id,
+                  service=paid_order["service_name"], offer=paid_order["offer_name"],
+                  content=content), parse_mode=ParseMode.MARKDOWN,
+            )
+        else:
+            await update.message.reply_text(t(lang, "verify_ok", oid=order_id),
+                                            parse_mode=ParseMode.MARKDOWN)
+            await admin.notify_new_order(context, db.get_order(order_id))
     else:
         db.update_order(order_id, status="pending_payment", txid="",
                         verify_method="auto_failed")
@@ -518,6 +544,15 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(
             "➕ Envoyez : `Nom | prix | stock | note`\nExemple : `Premium 1 mois | 4.99 | 20 | Garantie 30 jours`",
             parse_mode=ParseMode.MARKDOWN)
+        return
+    if data.startswith("adm_inventory:"):
+        oid = int(data.split(":")[1])
+        PENDING[uid] = ("adm_inventory", oid)
+        stats = db.inventory_stats(oid)
+        await q.message.reply_text(
+            "🔐 Envoyez un code/compte par ligne. Ils seront chiffrés avant stockage.\n"
+            f"Actuellement disponibles : {stats['available']}"
+        )
         return
     if data.startswith("adm_svcname:") or data.startswith("adm_svcemoji:"):
         action, sid = data.split(":")
