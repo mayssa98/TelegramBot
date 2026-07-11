@@ -11,7 +11,7 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters,
+    ContextTypes, ApplicationHandlerStop, filters,
 )
 
 import database as db
@@ -56,6 +56,16 @@ class PendingStates:
 
 
 PENDING = PendingStates()
+
+
+async def block_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user and user.id != ADMIN_ID and db.is_user_banned(user.id):
+        if update.callback_query:
+            await update.callback_query.answer("⛔ Accès suspendu.", show_alert=True)
+        elif update.effective_message:
+            await update.effective_message.reply_text("⛔ Votre accès à cette boutique est suspendu.")
+        raise ApplicationHandlerStop
 
 
 async def audit_client_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -689,6 +699,8 @@ def build_app():
     # Groupe -1 : audit non bloquant avant les handlers fonctionnels du groupe 0.
     app.add_handler(CallbackQueryHandler(audit_client_callback), group=-1)
     app.add_handler(MessageHandler(filters.ALL, audit_client_message), group=-1)
+    app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
+    app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", lambda u, c: send_main_menu(u, c, lang_of(u.effective_user.id))))
     app.add_handler(CommandHandler("admin", cmd_admin))

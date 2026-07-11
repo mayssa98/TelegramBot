@@ -400,3 +400,26 @@ def list_tickets(status="open", limit=50):
 
 def get_ticket(ticket_id):
     return _public(get_conn().support_tickets.find_one({"id": ticket_id}))
+
+
+def close_ticket(ticket_id):
+    return bool(get_conn().support_tickets.update_one({"id": ticket_id}, {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc)}}).matched_count)
+
+
+def list_users(limit=100):
+    return [_public(x) for x in get_conn().users.find({}).sort("created_at", DESCENDING).limit(limit)]
+
+
+def set_user_banned(user_id, banned):
+    result = get_conn().users.update_one({"telegram_id": user_id}, {"$set": {"banned": bool(banned)}})
+    audit_event("user.banned" if banned else "user.unbanned", details={"user_id": user_id})
+    return bool(result.matched_count)
+
+
+def is_user_banned(user_id):
+    row = get_conn().users.find_one({"telegram_id": user_id}, {"banned": 1})
+    return bool(row and row.get("banned"))
+
+
+def list_audit_events(limit=100):
+    return [_public(x) for x in get_conn().audit_events.find({}).sort("created_at", DESCENDING).limit(limit)]
