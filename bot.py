@@ -170,6 +170,11 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    PENDING[update.effective_user.id] = ("support", 0)
+    await update.message.reply_text("🎫 Décrivez votre problème dans un seul message. L'administrateur le recevra.")
+
+
 async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang = lang_of(user_id)
@@ -428,6 +433,13 @@ async def handle_pending_input(update, context, lang):
         )
         return
 
+    if kind == "support":
+        ticket_id = db.create_ticket(uid, text)
+        PENDING.pop(uid, None)
+        await update.message.reply_text(f"✅ Ticket #{ticket_id} créé. L'administrateur vous répondra bientôt.")
+        await context.bot.send_message(ADMIN_ID, f"🎫 Nouveau ticket #{ticket_id}\nUtilisateur: `{uid}`\n\n{text[:2000]}", parse_mode=ParseMode.MARKDOWN)
+        return
+
     # --- Admin : livraison ---
     if kind == "adm_deliver" and uid == ADMIN_ID:
         await deliver_order(update, context, ref, text)
@@ -532,6 +544,20 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("📦 *Gestion catalogue* — choisissez un service :",
                                   parse_mode=ParseMode.MARKDOWN,
                                   reply_markup=admin.catalog_admin_keyboard())
+        return
+    if data == "adm_tickets":
+        markup, tickets = admin.tickets_keyboard()
+        await q.edit_message_text(f"🎫 Tickets ouverts ({len(tickets)})", reply_markup=markup)
+        return
+    if data.startswith("adm_ticket:"):
+        ticket = db.get_ticket(int(data.split(":")[1]))
+        if ticket:
+            await q.edit_message_text(
+                f"🎫 Ticket #{ticket['id']}\nUtilisateur: `{ticket['user_id']}`\n"
+                f"Statut: `{ticket['status']}`\n\n{ticket['message']}",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=admin.admin_panel_keyboard(),
+            )
         return
     if data == "adm_addsvc":
         PENDING[uid] = ("adm_addsvc", 0)
@@ -666,6 +692,7 @@ def build_app():
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", lambda u, c: send_main_menu(u, c, lang_of(u.effective_user.id))))
     app.add_handler(CommandHandler("admin", cmd_admin))
+    app.add_handler(CommandHandler("support", cmd_support))
     app.add_handler(CommandHandler("affiliate", show_affiliate))
     app.add_handler(CallbackQueryHandler(cb_lang, pattern=r"^lang:"))
     app.add_handler(CallbackQueryHandler(cb_admin, pattern=r"^adm_"))

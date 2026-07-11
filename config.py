@@ -36,6 +36,7 @@ GMAIL_CONNECTOR_UID = os.environ.get(
 MONGODB_URI = os.environ.get("HP_MONGODB_URI", "").strip()
 MONGODB_DB = os.environ.get("HP_MONGODB_DB", "heavenprem").strip()
 INVENTORY_KEY = os.environ.get("HP_INVENTORY_KEY", "").strip()
+DASHBOARD_PASSWORD = os.environ.get("HP_DASHBOARD_PASSWORD", "").strip()
 
 # --- Divers ---
 SHOP_NAME = "HEAVENPREM"

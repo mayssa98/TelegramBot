@@ -9,7 +9,15 @@ def admin_panel_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Commandes payées", callback_data="adm_list:paid")],
         [InlineKeyboardButton("📦 Catalogue", callback_data="adm_catalog")],
+        [InlineKeyboardButton("🎫 Tickets support", callback_data="adm_tickets")],
     ])
+
+
+def tickets_keyboard():
+    tickets = db.list_tickets(limit=50)
+    rows = [[InlineKeyboardButton(f"#{x['id']} • utilisateur {x['user_id']}", callback_data=f"adm_ticket:{x['id']}")] for x in tickets]
+    rows.append([InlineKeyboardButton("⬅️ Retour", callback_data="adm_panel")])
+    return InlineKeyboardMarkup(rows), tickets
 
 
 def orders_list_keyboard(status):

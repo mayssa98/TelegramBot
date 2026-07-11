@@ -60,6 +60,8 @@ def init_db():
     db.inventory.create_index([("offer_id", ASCENDING), ("status", ASCENDING)])
     db.inventory.create_index("fingerprint", unique=True)
     db.processed_updates.create_index("created_at", expireAfterSeconds=604800)
+    db.audit_events.create_index("created_at")
+    db.support_tickets.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
     _seed_catalog()
 
 
@@ -362,3 +364,39 @@ def fulfill_order(order_id):
     db.inventory.update_many({"order_id": order_id, "status": "reserved"}, {"$set": {"status": "sold", "sold_at": int(time.time())}})
     db.orders.update_one({"id": order_id, "status": "paid"}, {"$set": {"status": "delivered", "delivery_text": "[encrypted automatic delivery]", "updated_at": int(time.time())}})
     return values
+
+
+def audit_event(action, actor_id=None, details=None):
+    get_conn().audit_events.insert_one({"action": action, "actor_id": actor_id, "details": details or {}, "created_at": datetime.now(timezone.utc)})
+
+
+def dashboard_summary():
+    db = get_conn()
+    paid = list(db.orders.aggregate([
+        {"$match": {"status": {"$in": ["paid", "delivered"]}}},
+        {"$group": {"_id": None, "revenue": {"$sum": "$total_price"}, "orders": {"$sum": 1}}},
+    ]))
+    totals = paid[0] if paid else {"revenue": 0, "orders": 0}
+    return {
+        "users": db.users.count_documents({}),
+        "orders": db.orders.count_documents({}),
+        "paid_orders": totals.get("orders", 0),
+        "revenue": round(totals.get("revenue", 0), 2),
+        "available_inventory": db.inventory.count_documents({"status": "available"}),
+        "open_tickets": db.support_tickets.count_documents({"status": "open"}),
+    }
+
+
+def create_ticket(user_id, message):
+    tid = _next_id("tickets")
+    get_conn().support_tickets.insert_one({"id": tid, "user_id": user_id, "message": message[:2000], "status": "open", "created_at": datetime.now(timezone.utc)})
+    audit_event("ticket.created", user_id, {"ticket_id": tid})
+    return tid
+
+
+def list_tickets(status="open", limit=50):
+    return [_public(x) for x in get_conn().support_tickets.find({"status": status}).sort("created_at", DESCENDING).limit(limit)]
+
+
+def get_ticket(ticket_id):
+    return _public(get_conn().support_tickets.find_one({"id": ticket_id}))
