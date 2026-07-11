@@ -1,2 +1,12 @@
+[project]
+name = "telegrambot"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "python-telegram-bot==21.6",
+    "python-dotenv==1.0.1",
+    "pymongo==4.10.1",
+]
+
 [tool.vercel]
 entrypoint = "api.webhook:handler"
