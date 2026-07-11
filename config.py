@@ -33,8 +33,8 @@ GMAIL_CONNECTOR_UID = os.environ.get(
 )
 
 # --- Base de données ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("HP_DB_PATH", os.path.join(BASE_DIR, "data", "heavenprem.db"))
+MONGODB_URI = os.environ.get("HP_MONGODB_URI", "").strip()
+MONGODB_DB = os.environ.get("HP_MONGODB_DB", "heavenprem").strip()
 
 # --- Divers ---
 SHOP_NAME = "HEAVENPREM"
