@@ -349,11 +349,23 @@ class handler(BaseHTTPRequestHandler):
                 currency = form.get("currency", "USDT").strip()
                 low_stock = int(form.get("low_stock_threshold", 5))
                 expiry = int(form.get("order_expiry_seconds", 1800))
+                payment_recipient = form.get("payment_recipient", "").strip()
+                maintenance_enabled = form.get("maintenance_enabled", "") == "on"
+                maintenance_message = form.get("maintenance_message", "").strip()[:500]
+                affiliate_enabled = form.get("affiliate_enabled", "") == "on"
+                affiliate_target = max(1, int(form.get("affiliate_target", 10)))
+                affiliate_reward_cents = max(0, int(form.get("affiliate_reward_cents", 100)))
 
                 db.set_setting("shop_name", shop_name)
                 db.set_setting("currency", currency)
                 db.set_setting("low_stock_threshold", low_stock)
                 db.set_setting("order_expiry_seconds", expiry)
+                db.set_setting("payment_recipient", payment_recipient)
+                db.set_setting("maintenance_enabled", maintenance_enabled)
+                db.set_setting("maintenance_message", maintenance_message)
+                db.set_setting("affiliate_enabled", affiliate_enabled)
+                db.set_setting("affiliate_target", affiliate_target)
+                db.set_setting("affiliate_reward_cents", affiliate_reward_cents)
                 db.audit_event("settings.updated")
 
             else:

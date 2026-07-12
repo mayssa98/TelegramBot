@@ -80,6 +80,17 @@ async def block_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE)
         raise ApplicationHandlerStop
 
 
+async def block_maintenance_purchases(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Disable only new purchases while keeping orders and support available."""
+    user = update.effective_user
+    if not user or user.id == ADMIN_ID or not update.callback_query:
+        return
+    settings = db.shop_settings()
+    if settings["maintenance_enabled"]:
+        await update.callback_query.answer(settings["maintenance_message"], show_alert=True)
+        raise ApplicationHandlerStop
+
+
 
 
 
@@ -829,6 +840,10 @@ def build_app():
     # Groupe -2 : blocage des utilisateurs bannis avant les handlers du groupe 0.
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
+    app.add_handler(
+        CallbackQueryHandler(block_maintenance_purchases, pattern=r"^(buy|confirm_buy):"),
+        group=-1,
+    )
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", lambda u, c: send_main_menu(u, c, lang_of(u.effective_user.id))))
     app.add_handler(CommandHandler("catalog", cmd_catalog))

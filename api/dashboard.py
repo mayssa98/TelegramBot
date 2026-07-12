@@ -905,6 +905,28 @@ def render_dashboard(data: dict) -> str:
                         <label for="expiry-input">Délai d'expiration des commandes (secondes)</label>
                         <input type="number" id="expiry-input" name="order_expiry_seconds" min="300" required>
                     </div>
+                    <div class="form-group">
+                        <label for="payment-recipient-input">Identifiant de paiement</label>
+                        <input type="text" id="payment-recipient-input" name="payment_recipient">
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="affiliate-enabled-input" name="affiliate_enabled"> Affiliation active</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="affiliate-target-input">Objectif d'affiliation</label>
+                        <input type="number" id="affiliate-target-input" name="affiliate_target" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="affiliate-reward-input">Récompense d'affiliation (centimes)</label>
+                        <input type="number" id="affiliate-reward-input" name="affiliate_reward_cents" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="maintenance-enabled-input" name="maintenance_enabled"> Mode maintenance</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="maintenance-message-input">Message de maintenance</label>
+                        <textarea id="maintenance-message-input" name="maintenance_message" maxlength="500"></textarea>
+                    </div>
                     <button class="btn btn-primary" type="submit">💾 Enregistrer la configuration</button>
                 </form>
             </div>
@@ -1338,6 +1360,12 @@ def render_dashboard(data: dict) -> str:
             document.getElementById("currency-input").value = dashboardData.currency || "USDT";
             document.getElementById("low-stock-input").value = dashboardData.low_stock_threshold || 5;
             document.getElementById("expiry-input").value = dashboardData.order_expiry_seconds || 1800;
+            document.getElementById("payment-recipient-input").value = dashboardData.payment_recipient || "";
+            document.getElementById("affiliate-enabled-input").checked = dashboardData.affiliate_enabled !== false;
+            document.getElementById("affiliate-target-input").value = dashboardData.affiliate_target || 10;
+            document.getElementById("affiliate-reward-input").value = dashboardData.affiliate_reward_cents || 100;
+            document.getElementById("maintenance-enabled-input").checked = dashboardData.maintenance_enabled === true;
+            document.getElementById("maintenance-message-input").value = dashboardData.maintenance_message || "";
         }
 
         // Actions Ajax

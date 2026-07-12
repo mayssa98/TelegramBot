@@ -315,6 +315,38 @@ def set_setting(key, value):
     get_conn().settings.update_one({"key": key}, {"$set": {"value": str(value)}}, upsert=True)
 
 
+def shop_settings():
+    """Return typed, administrator-editable shop settings."""
+    from config import (
+        AFFILIATE_REWARD_CENTS,
+        AFFILIATE_TARGET,
+        BINANCE_PAY_ID,
+        LOW_STOCK_THRESHOLD,
+        ORDER_EXPIRY_SECONDS,
+        SHOP_NAME,
+    )
+
+    defaults = {
+        "shop_name": SHOP_NAME,
+        "currency": "USDT",
+        "payment_recipient": BINANCE_PAY_ID,
+        "order_expiry_seconds": ORDER_EXPIRY_SECONDS,
+        "low_stock_threshold": LOW_STOCK_THRESHOLD,
+        "affiliate_enabled": True,
+        "affiliate_target": AFFILIATE_TARGET,
+        "affiliate_reward_cents": AFFILIATE_REWARD_CENTS,
+        "maintenance_enabled": False,
+        "maintenance_message": "La boutique est temporairement en maintenance.",
+    }
+    rows = {row["key"]: row.get("value") for row in get_conn().settings.find({"key": {"$in": list(defaults)}})}
+    result = defaults | rows
+    for key in ("order_expiry_seconds", "low_stock_threshold", "affiliate_target", "affiliate_reward_cents"):
+        result[key] = int(result[key])
+    for key in ("affiliate_enabled", "maintenance_enabled"):
+        result[key] = str(result[key]).lower() in {"1", "true", "yes", "on"}
+    return result
+
+
 def get_pending_state(user_id):
     row = get_conn().pending_states.find_one({"user_id": user_id})
     return (row["kind"], row["ref"]) if row else None
@@ -528,6 +560,7 @@ def dashboard_data():
         "users": list_users(limit=200),
         "tickets": list_tickets(limit=50),
         "audits": list_audit_events(limit=100),
+        **shop_settings(),
     }
 
 
