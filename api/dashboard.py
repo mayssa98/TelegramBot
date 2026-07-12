@@ -41,17 +41,17 @@ def render_dashboard(data: dict) -> str:
         <div class="kpi-card">
             <h3>Utilisateurs</h3>
             <div class="kpi-value">{summary.get('users', 0)}</div>
-            <div class="kpi-subtext">+{summary.get('new_users_today', 0)} aujourd'hui • +{summary.get('new_users_7d', 0)} sur 7j</div>
+            <div class="kpi-subtext">+{summary.get('new_users_today', 0)} aujourd'hui • {summary.get('users_7d_change_pct', 0):+.1f}% vs 7j précédents</div>
         </div>
         <div class="kpi-card">
             <h3>Commandes</h3>
             <div class="kpi-value">{summary.get('orders', 0)}</div>
-            <div class="kpi-subtext">{summary.get('paid_orders', 0)} payées • {summary.get('pending_orders', 0)} en attente</div>
+            <div class="kpi-subtext">{summary.get('paid_orders', 0)} payées • {summary.get('orders_day_delta', 0):+d} vs hier</div>
         </div>
         <div class="kpi-card">
             <h3>Chiffre d'Affaires</h3>
             <div class="kpi-value">{summary.get('revenue_7d', 0.0):.2f} {currency}</div>
-            <div class="kpi-subtext">Aujourd'hui : {summary.get('revenue_today', 0.0):.2f} {currency} • 30j : {summary.get('revenue_30d', 0.0):.2f} {currency}</div>
+            <div class="kpi-subtext">{summary.get('revenue_7d_change_pct', 0):+.1f}% vs 7j précédents • 30j : {summary.get('revenue_30d', 0.0):.2f} {currency}</div>
         </div>
         <div class="kpi-card">
             <h3>Conversion & Stock</h3>

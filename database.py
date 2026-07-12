@@ -447,6 +447,7 @@ def dashboard_data():
     db = get_conn()
     now = int(time.time())
     today_start = now - (now % 86400)
+    yesterday_start = today_start - 86400
     week_ago = now - 7 * 86400
     month_ago = now - 30 * 86400
     prev_week_start = week_ago - 7 * 86400
@@ -460,6 +461,7 @@ def dashboard_data():
     # --- Orders ---
     total_orders = db.orders.count_documents({})
     orders_today = db.orders.count_documents({"created_at": {"$gte": today_start}})
+    orders_yesterday = db.orders.count_documents({"created_at": {"$gte": yesterday_start, "$lt": today_start}})
     pending_orders = db.orders.count_documents({"status": {"$in": ["pending_payment", "awaiting_verification", "manual_review"]}})
 
     paid_statuses = ["paid", "payment_confirmed", "delivered"]
@@ -475,6 +477,7 @@ def dashboard_data():
         return round(result[0]["total"], 2) if result else 0.0
 
     revenue_today = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": today_start}})
+    revenue_yesterday = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": yesterday_start, "$lt": today_start}})
     revenue_7d = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": week_ago}})
     revenue_30d = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": month_ago}})
     revenue_prev_7d = _revenue({"status": {"$in": paid_statuses}, "created_at": {"$gte": prev_week_start, "$lt": week_ago}})
@@ -518,6 +521,38 @@ def dashboard_data():
     if unanswered_tickets:
         alerts.append({"type": "unanswered_tickets", "message": f"{unanswered_tickets} ticket(s) sans réponse", "severity": "warning"})
 
+    paid_not_delivered = db.orders.count_documents({
+        "status": {"$in": ["paid", "payment_confirmed", "preparing_delivery"]},
+        "paid_at": {"$lt": now - 900},
+    })
+    if paid_not_delivered:
+        alerts.append({
+            "type": "paid_not_delivered",
+            "message": f"{paid_not_delivered} commande(s) payée(s) non livrée(s) depuis plus de 15 min",
+            "severity": "error",
+        })
+
+    failed_payments = db.orders.count_documents({
+        "status": {"$in": ["verification_failed", "manual_review"]},
+    })
+    if failed_payments:
+        alerts.append({
+            "type": "payment_review",
+            "message": f"{failed_payments} paiement(s) nécessitent une intervention",
+            "severity": "warning",
+        })
+
+    recent_errors = db.audit_events.count_documents({
+        "action": {"$in": ["system.error", "webhook.error", "delivery.error"]},
+        "created_at": {"$gte": datetime.fromtimestamp(now - 86400, UTC)},
+    })
+    if recent_errors:
+        alerts.append({
+            "type": "recent_errors",
+            "message": f"{recent_errors} erreur(s) système durant les dernières 24 h",
+            "severity": "error",
+        })
+
     # --- Services enrichis ---
     services_enriched = []
     for svc in db.services.find({}).sort([("sort_order", ASCENDING), ("id", ASCENDING)]):
@@ -539,17 +574,33 @@ def dashboard_data():
         "new_users_prev_7d": new_users_prev_7d,
         "orders": total_orders,
         "orders_today": orders_today,
+        "orders_yesterday": orders_yesterday,
+        "orders_day_delta": orders_today - orders_yesterday,
         "pending_orders": pending_orders,
         "paid_orders": paid_orders,
         "delivered_orders": delivered_orders,
         "revenue_today": revenue_today,
+        "revenue_yesterday": revenue_yesterday,
+        "revenue_day_delta": round(revenue_today - revenue_yesterday, 2),
         "revenue_7d": revenue_7d,
         "revenue_30d": revenue_30d,
         "revenue_prev_7d": revenue_prev_7d,
+        "revenue_7d_change_pct": round(
+            ((revenue_7d - revenue_prev_7d) / revenue_prev_7d * 100) if revenue_prev_7d else (100.0 if revenue_7d else 0.0),
+            1,
+        ),
+        "users_7d_change_pct": round(
+            ((new_users_7d - new_users_prev_7d) / new_users_prev_7d * 100)
+            if new_users_prev_7d else (100.0 if new_users_7d else 0.0),
+            1,
+        ),
         "conversion_rate": conversion_rate,
         "open_tickets": open_tickets,
         "low_stock_offers": len(low_stock_offers),
         "available_inventory": available_inventory,
+        "failed_payments": failed_payments,
+        "paid_not_delivered": paid_not_delivered,
+        "recent_errors": recent_errors,
     }
 
     return {
