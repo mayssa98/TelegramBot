@@ -7,9 +7,11 @@ import base64
 import hmac
 import html
 import json
+import logging
 import os
 import threading
 import traceback
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlsplit
 
@@ -18,6 +20,7 @@ from telegram.constants import ParseMode
 
 import database as db
 from api.dashboard import render_dashboard
+from app import __version__
 from app.domain import inventory_service, order_service, payment_service, support_service
 from bot import build_app
 from config import CURRENCY, DASHBOARD_PASSWORD
@@ -25,6 +28,17 @@ from config import CURRENCY, DASHBOARD_PASSWORD
 _loop = asyncio.new_event_loop()
 _app = None
 _runtime_lock = threading.Lock()
+log = logging.getLogger(__name__)
+
+
+def health_payload() -> dict:
+    """Return a public, non-sensitive health response."""
+    return {
+        "ok": True,
+        "service": "TelegramBot webhook",
+        "version": __version__,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
 
 
 def _application():
@@ -100,7 +114,7 @@ class handler(BaseHTTPRequestHandler):
             return
 
         # Health check par défaut
-        self._reply(200, {"ok": True, "service": "TelegramBot webhook"})
+        self._reply(200, health_payload())
 
     def _dashboard_authorized(self) -> bool:
         if not DASHBOARD_PASSWORD:
@@ -143,6 +157,10 @@ class handler(BaseHTTPRequestHandler):
             if "update_id" in locals() and update_id is not None:
                 db.release_update(update_id)
             traceback.print_exc()
+            log.exception(
+                "webhook_processing_failed update_id=%s",
+                update_id if "update_id" in locals() else None,
+            )
             self.log_error("Webhook processing failed: %s", exc)
             self._reply(500, {"ok": False})
 

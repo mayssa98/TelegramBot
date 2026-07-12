@@ -60,7 +60,7 @@ def init_db():
     db.pending_states.create_index("user_id", unique=True)
     db.inventory.create_index([("offer_id", ASCENDING), ("status", ASCENDING)])
     db.inventory.create_index("fingerprint", unique=True)
-    db.inventory.create_index("reserved_order_id", partialFilterExpression={"reserved_order_id": {"$ne": None}})
+    db.inventory.create_index("reserved_order_id")
     db.processed_updates.create_index("created_at", expireAfterSeconds=604800)
     db.audit_events.create_index("created_at")
     db.support_tickets.create_index([("status", ASCENDING), ("created_at", DESCENDING)])

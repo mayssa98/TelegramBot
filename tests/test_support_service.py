@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
-import database as db
 from app.constants import TicketCategory, TicketPriority, TicketStatus
 from app.domain import support_service
 

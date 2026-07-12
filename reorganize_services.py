@@ -1,5 +1,5 @@
-import sqlite3
 import os
+import sqlite3
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "heavenprem.db")
 
@@ -12,18 +12,18 @@ CATEGORIES = {
 def reorganize():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     # Ajouter une colonne catégorie si elle n'existe pas
-    try:
+    try:  # noqa: SIM105 - legacy one-off SQLite migration
         cursor.execute("ALTER TABLE services ADD COLUMN category TEXT")
     except sqlite3.OperationalError:
         pass # déjà existante
-    
+
     # Mettre à jour les catégories
     for cat, sids in CATEGORIES.items():
         for sid in sids:
             cursor.execute("UPDATE services SET category = ? WHERE id = ?", (cat, sid))
-    
+
     # Améliorer les noms et emojis
     updates = [
         (1, "🎨 Canva Pro", "🎨"),
@@ -37,10 +37,10 @@ def reorganize():
         (20, "🔍 Perplexity Pro", "🔍"),
         (19, "📧 Outlook Business", "📧")
     ]
-    
+
     for sid, name, emoji in updates:
         cursor.execute("UPDATE services SET name = ?, emoji = ? WHERE id = ?", (name, emoji, sid))
-        
+
     conn.commit()
     conn.close()
     print("Services réorganisés avec succès.")

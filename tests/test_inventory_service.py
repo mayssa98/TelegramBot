@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 import database as db
 from app.constants import InventoryStatus, OrderStatus
 from app.domain import inventory_service

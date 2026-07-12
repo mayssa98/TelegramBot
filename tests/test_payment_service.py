@@ -40,7 +40,6 @@ def test_submit_payment_success(mock_mongodb, mock_payment_verifier):
     """Vérifie le flux de paiement réussi avec vérification automatique."""
     db.add_service("VOD", "🎬")
     offer_id = db.add_offer(service_id=1, name="Netflix", price=5.0, stock=3)
-    offer = db.get_offer(offer_id)
 
     # Ajouter du stock pour permettre la livraison automatique
     db.add_inventory_items(offer_id, ["code_netflix_123"])
