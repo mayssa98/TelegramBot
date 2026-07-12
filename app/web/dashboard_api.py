@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from contextlib import suppress
+from datetime import UTC, datetime
 from typing import Any
 
 from pymongo import DESCENDING
@@ -33,6 +35,18 @@ def list_orders(params: dict[str, list[str]]) -> dict[str, Any]:
     offer_id = _first(params, "offer_id")
     if offer_id and offer_id.isdigit():
         query["offer_id"] = int(offer_id)
+    service_id = _first(params, "service_id")
+    if service_id and service_id.isdigit():
+        offer_ids = [row["id"] for row in db.get_conn().offers.find({"service_id": int(service_id)}, {"id": 1})]
+        query["offer_id"] = {"$in": offer_ids}
+    date_filter: dict[str, int] = {}
+    for param_name, operator in (("date_from", "$gte"), ("date_to", "$lte")):
+        raw = _first(params, param_name)
+        if raw:
+            with suppress(ValueError):
+                date_filter[operator] = int(datetime.fromisoformat(raw).replace(tzinfo=UTC).timestamp())
+    if date_filter:
+        query["created_at"] = date_filter
     search = _first(params, "search")
     if search:
         clauses: list[dict[str, Any]] = [
@@ -46,7 +60,9 @@ def list_orders(params: dict[str, list[str]]) -> dict[str, Any]:
 
     collection = db.get_conn().orders
     total = collection.count_documents(query)
-    rows = collection.find(query).sort("created_at", DESCENDING).skip((page - 1) * per_page).limit(per_page)
+    sort_field = "total_price" if _first(params, "sort") == "amount" else "created_at"
+    sort_direction = 1 if _first(params, "direction") == "asc" else DESCENDING
+    rows = collection.find(query).sort(sort_field, sort_direction).skip((page - 1) * per_page).limit(per_page)
     return {
         "items": [db._public(row) for row in rows],
         "page": page,

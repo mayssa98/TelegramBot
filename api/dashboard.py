@@ -763,6 +763,12 @@ def render_dashboard(data: dict) -> str:
                     <option value="refunded">Remboursée</option>
                     <option value="expired">Expirée</option>
                 </select>
+                <input type="date" id="order-date-from" onchange="filterOrders()" title="Depuis">
+                <input type="date" id="order-date-to" onchange="filterOrders()" title="Jusqu'à">
+                <select id="order-sort" onchange="filterOrders()">
+                    <option value="date">Trier par date</option>
+                    <option value="amount">Trier par montant</option>
+                </select>
             </div>
             <div class="table-wrap">
                 <table id="orders-table">
@@ -1325,6 +1331,7 @@ def render_dashboard(data: dict) -> str:
                             </div>
                             <div class="offer-actions">
                                 <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="openEditOfferModal(${offer.id})">✏️ Éditer</button>
+                                <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="duplicateOffer(${offer.id})">📋 Dupliquer</button>
                                 <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="toggleOffer(${offer.id}, ${offer.active})">${offer.active ? '⏸' : '▶️'}</button>
                             </div>
                         `;
@@ -1539,6 +1546,12 @@ def render_dashboard(data: dict) -> str:
                 const query = new URLSearchParams({ page: ordersPagination.page, per_page: 25 });
                 if (status) query.set("status", status);
                 if (search) query.set("search", search);
+                const dateFrom = document.getElementById("order-date-from")?.value || "";
+                const dateTo = document.getElementById("order-date-to")?.value || "";
+                const sort = document.getElementById("order-sort")?.value || "date";
+                if (dateFrom) query.set("date_from", dateFrom);
+                if (dateTo) query.set("date_to", dateTo + "T23:59:59");
+                query.set("sort", sort);
                 const inventoryQuery = new URLSearchParams({ page: inventoryPagination.page, per_page: 25 });
                 const inventoryStatus = document.getElementById("inventory-filter-status")?.value || "";
                 const inventorySearch = document.getElementById("inventory-search")?.value || "";
@@ -1659,6 +1672,32 @@ def render_dashboard(data: dict) -> str:
             } catch (err) {
                 showToast("Erreur réseau", "error");
             }
+        }
+
+        async function offerAction(action, offerId, confirmation) {
+            if (confirmation && !confirm(confirmation)) return;
+            const params = new URLSearchParams({ action, offer_id: offerId });
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: params
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Action impossible");
+                showToast("Offre mise à jour");
+                await refreshDashboardData();
+            } catch (err) {
+                showToast(err.message || "Erreur réseau", "error");
+            }
+        }
+
+        function toggleOffer(offerId) {
+            return offerAction("toggle_offer", offerId);
+        }
+
+        function duplicateOffer(offerId) {
+            return offerAction("duplicate_offer", offerId, "Dupliquer cette offre sans copier son inventaire ?");
         }
 
         function openAddOfferModal(serviceId) {

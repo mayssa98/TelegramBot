@@ -332,6 +332,13 @@ class handler(BaseHTTPRequestHandler):
                 db.update_offer(oid, active=0 if offer["active"] else 1)
                 db.audit_event("offer.toggled", details={"offer_id": oid, "active": not offer["active"]})
 
+            elif action == "duplicate_offer":
+                oid = int(form["offer_id"])
+                new_id = db.duplicate_offer(oid)
+                if new_id is None:
+                    raise ValueError("Offre introuvable")
+                db.audit_event("offer.duplicated", details={"offer_id": oid, "new_offer_id": new_id})
+
             elif action == "add_inventory":
                 oid = int(form["offer_id"])
                 items = form.get("items", "").splitlines()

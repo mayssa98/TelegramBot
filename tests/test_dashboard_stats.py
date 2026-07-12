@@ -60,3 +60,9 @@ def test_offer_metadata_can_be_administered(mock_mongodb):
     assert offer["low_stock_threshold"] == 2
     assert offer["delivery_delay"] == "Within one hour"
     assert offer["sort_order"] == 9
+
+    duplicate_id = db.duplicate_offer(offer_id)
+    duplicate = db.get_offer(duplicate_id)
+    assert duplicate["name"].endswith("(copie)")
+    assert duplicate["stock"] == 0
+    assert duplicate["description"] == "Updated"

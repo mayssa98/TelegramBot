@@ -288,6 +288,20 @@ def add_offer(
     return oid
 
 
+def duplicate_offer(offer_id):
+    """Duplicate an offer without copying its inventory."""
+    source = get_conn().offers.find_one({"id": offer_id})
+    if not source:
+        return None
+    return add_offer(
+        source["service_id"], f"{source['name']} (copie)", source.get("price"), 0,
+        source.get("note", ""), description=source.get("description", ""),
+        currency=source.get("currency", "USDT"), auto_delivery=source.get("auto_delivery", True),
+        low_stock_threshold=source.get("low_stock_threshold", 5),
+        delivery_delay=source.get("delivery_delay", ""),
+    )
+
+
 def decrement_stock(offer_id, qty):
     get_conn().offers.update_one({"id": offer_id}, [{"$set": {"stock": {"$max": [0, {"$subtract": ["$stock", qty]}]}}}])
 

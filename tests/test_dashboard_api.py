@@ -37,6 +37,19 @@ def test_order_search_matches_numeric_customer(mock_mongodb):
     assert result["total"] == 1
 
 
+def test_order_date_service_and_amount_sort(mock_mongodb):
+    mock_mongodb.offers.insert_many([{"id": 700, "service_id": 200}, {"id": 800, "service_id": 300}])
+    mock_mongodb.orders.insert_many([
+        {"id": 1, "offer_id": 700, "total_price": 5.0, "created_at": 100},
+        {"id": 2, "offer_id": 700, "total_price": 12.0, "created_at": 200},
+        {"id": 3, "offer_id": 800, "total_price": 50.0, "created_at": 200},
+    ])
+
+    result = dashboard_api.list_orders({"service_id": ["200"], "sort": ["amount"]})
+
+    assert [item["id"] for item in result["items"]] == [2, 1]
+
+
 def test_ticket_filters(mock_mongodb):
     now = datetime.now(UTC)
     mock_mongodb.support_tickets.insert_many([
