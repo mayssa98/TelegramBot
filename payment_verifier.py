@@ -38,9 +38,9 @@ def _fetch_pay_transactions(start_time):
 def verify_payment(txid, amount, currency=None, created_at=None):
     txid = (txid or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
-        return {"status": "failed", "reason": "Format de transaction invalide"}
+        return {"status": "failed", "code": "invalid_format", "reason": "Format de transaction invalide"}
     if not BINANCE_API_KEY or not BINANCE_API_SECRET:
-        return {"status": "failed", "reason": "Clés Binance API non configurées"}
+        return {"status": "manual_review", "code": "not_configured", "reason": "Vérification automatique non configurée"}
 
     # Inclure une marge de 10 minutes avant la création de la commande.
     start_ms = ((created_at or int(time.time()) - 3600) * 1000) - 600_000
@@ -55,12 +55,12 @@ def verify_payment(txid, amount, currency=None, created_at=None):
             )
             asset = str(transaction.get("currency", "")).upper()
             if received <= 0:
-                return {"status": "failed", "reason": "La transaction n'est pas un paiement entrant"}
+                return {"status": "failed", "code": "not_incoming", "reason": "La transaction n'est pas un paiement entrant"}
             if asset != PAY_CURRENCY:
-                return {"status": "failed", "reason": f"Devise reçue: {asset}, attendue: {PAY_CURRENCY}"}
+                return {"status": "failed", "code": "wrong_currency", "reason": f"Devise reçue: {asset}, attendue: {PAY_CURRENCY}"}
             if received != expected:
-                return {"status": "failed", "reason": f"Montant reçu: {received}, attendu: {expected}"}
-            return {"status": "confirmed", "reason": "Transaction Binance Pay confirmée"}
-        return {"status": "failed", "reason": "Transaction absente de l'historique Binance Pay"}
+                return {"status": "failed", "code": "wrong_amount", "reason": f"Montant reçu: {received}, attendu: {expected}"}
+            return {"status": "confirmed", "code": "confirmed", "reason": "Transaction Binance Pay confirmée"}
+        return {"status": "failed", "code": "not_found", "reason": "Transaction absente de l'historique Binance Pay"}
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
-        return {"status": "failed", "reason": f"API Binance indisponible: {exc}"}
+        return {"status": "manual_review", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}

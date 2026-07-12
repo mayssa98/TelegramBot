@@ -177,6 +177,17 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
             # mark_order_paid a échoué (race condition ou stock insuffisant)
             result["error_code"] = "payment_failed"
             result["error_message"] = "Le paiement n'a pas pu être enregistré (stock insuffisant ou erreur)."
+    elif verification["status"] == "manual_review":
+        reason = verification.get("reason", "Vérification automatique indisponible")
+        mark_manual_review(order_id, reason)
+        result["status"] = "manual_review"
+        result["error_code"] = verification.get("code", "temporary_error")
+        result["error_message"] = reason
+        db.audit_event(
+            "payment.manual_review",
+            actor_id=user_id,
+            details={"order_id": order_id, "reason": reason},
+        )
     else:
         # Vérification échouée
         reason = verification.get("reason", "Raison inconnue")
@@ -186,7 +197,7 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
             txid="",
             verify_method="auto_failed",
         )
-        result["error_code"] = "verification_failed"
+        result["error_code"] = verification.get("code", "verification_failed")
         result["error_message"] = reason
 
         db.audit_event(

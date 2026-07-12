@@ -135,3 +135,26 @@ def test_confirm_payment_from_manual_review(mock_mongodb):
 
     assert payment_service.confirm_payment_manual(order_id=7) is True
     assert db.get_order(7)["status"] == OrderStatus.PAYMENT_CONFIRMED
+
+
+def test_temporary_verifier_error_enters_manual_review(mock_mongodb, monkeypatch):
+    conn = db.get_conn()
+    conn.orders.insert_one({
+        "id": 20,
+        "user_id": 123,
+        "total_price": 5.0,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "",
+    })
+    monkeypatch.setattr(
+        payment_service,
+        "verify_payment",
+        lambda *args, **kwargs: {"status": "manual_review", "code": "temporary_error", "reason": "timeout"},
+    )
+
+    result = payment_service.submit_payment(20, "TXID_123456", 123)
+
+    assert result["status"] == "manual_review"
+    order = db.get_order(20)
+    assert order["status"] == OrderStatus.MANUAL_REVIEW
+    assert order["txid"] == "TXID_123456"

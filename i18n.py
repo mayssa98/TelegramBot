@@ -178,6 +178,31 @@ TRANSLATIONS = {
         "en": "❌ Payment was not automatically confirmed for order #{oid}. Check the TXID, amount and currency, then tap *I have paid* again to retry.",
         "ar": "❌ لم يتم تأكيد دفع الطلب #{oid} تلقائياً. تحقق من رقم المعاملة والمبلغ والعملة ثم حاول مرة أخرى.",
     },
+    "payment_manual_review": {
+        "fr": "🔎 Le paiement de la commande #{oid} nécessite une vérification manuelle. Votre TXID est conservé et l’administrateur a été prévenu.",
+        "en": "🔎 Payment for order #{oid} requires manual review. Your transaction ID was saved and the administrator was notified.",
+        "ar": "🔎 يتطلب دفع الطلب #{oid} مراجعة يدوية. تم حفظ رقم المعاملة وإبلاغ المسؤول.",
+    },
+    "payment_wrong_amount": {
+        "fr": "❌ Le montant reçu ne correspond pas à la commande #{oid}.",
+        "en": "❌ The received amount does not match order #{oid}.",
+        "ar": "❌ المبلغ المستلم لا يطابق الطلب #{oid}.",
+    },
+    "payment_wrong_currency": {
+        "fr": "❌ La devise reçue ne correspond pas à la commande #{oid}.",
+        "en": "❌ The received currency does not match order #{oid}.",
+        "ar": "❌ العملة المستلمة لا تطابق الطلب #{oid}.",
+    },
+    "payment_not_found": {
+        "fr": "❌ Transaction introuvable pour la commande #{oid}. Vérifiez le TXID puis réessayez.",
+        "en": "❌ Transaction not found for order #{oid}. Check the ID and try again.",
+        "ar": "❌ لم يتم العثور على معاملة للطلب #{oid}. تحقق من الرقم وحاول مجددًا.",
+    },
+    "payment_txid_used": {
+        "fr": "❌ Ce TXID a déjà été utilisé pour une autre commande.",
+        "en": "❌ This transaction ID has already been used for another order.",
+        "ar": "❌ تم استخدام رقم المعاملة هذا لطلب آخر.",
+    },
     "txid_too_short": {
         "fr": "⚠️ Cet ID de transaction semble invalide. Veuillez vérifier et renvoyer l'ID de transaction Binance.",
         "en": "⚠️ This transaction ID looks invalid. Please check and resend the Binance transaction ID.",

@@ -631,13 +631,22 @@ async def process_txid(update, context, lang, order_id, txid):
     elif result["status"] == "already_paid":
         await update.message.reply_text(t(lang, "already_paid", oid=order_id),
                                         parse_mode=ParseMode.MARKDOWN)
+    elif result["status"] == "manual_review":
+        await update.message.reply_text(t(lang, "payment_manual_review", oid=order_id))
+        await admin.notify_new_order(context, db.get_order(order_id))
     else:
         error_code = result.get("error_code", "unknown")
         if error_code == "too_short":
             await update.message.reply_text(t(lang, "txid_too_short"))
             PENDING[uid] = ("await_txid", order_id)  # garder l'état
             return
-        await update.message.reply_text(t(lang, "verify_failed", oid=order_id),
+        error_key = {
+            "wrong_amount": "payment_wrong_amount",
+            "wrong_currency": "payment_wrong_currency",
+            "not_found": "payment_not_found",
+            "already_used": "payment_txid_used",
+        }.get(error_code, "verify_failed")
+        await update.message.reply_text(t(lang, error_key, oid=order_id),
                                         parse_mode=ParseMode.MARKDOWN)
 
 # ---------------- Mes commandes ----------------
