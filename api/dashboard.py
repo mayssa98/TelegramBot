@@ -18,7 +18,7 @@ def render_dashboard(data: dict) -> str:
     shop_name = data.get("shop_name", "BlackMarket")
 
     # Encodage sécurisé en JSON pour JS
-    json_data_str = json.dumps(data)
+    json_data_str = json.dumps(data, default=str)
 
     # Alertes HTML
     alerts_html = ""
@@ -1022,6 +1022,16 @@ def render_dashboard(data: dict) -> str:
     </div>
 
     <!-- 5. Ticket Conversation -->
+    <div class="modal" id="customer-detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Fiche client</h3>
+                <button class="close-btn" onclick="closeModal('customer-detail-modal')">&times;</button>
+            </div>
+            <div id="customer-detail-body"></div>
+        </div>
+    </div>
+
     <div class="modal" id="ticket-modal">
         <div class="modal-content" style="max-width:700px;">
             <div class="modal-header">
@@ -1207,9 +1217,12 @@ def render_dashboard(data: dict) -> str:
                     <td>${user.first_name || '—'}</td>
                     <td>${user.lang || 'fr'}</td>
                     <td>${user.order_count || 0}</td>
-                    <td>${(user.total_paid || 0).toFixed(2)} ${dashboardData.currency}</td>
+                    <td>${(user.total_spent || user.total_paid || 0).toFixed(2)} ${dashboardData.currency}</td>
                     <td><span class="badge badge-${user.banned ? 'cancelled' : 'paid'}">${user.banned ? 'Banni' : 'Actif'}</span></td>
-                    <td><button class="btn ${banClass}" style="padding:6px 12px; font-size:12px;" onclick="toggleBanUser(${user.telegram_id}, ${user.banned ? 0 : 1})">${banLabel}</button></td>
+                    <td>
+                        <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="viewCustomer(${user.telegram_id})">🔍 Profil</button>
+                        <button class="btn ${banClass}" style="padding:6px 12px;font-size:12px;" onclick="toggleBanUser(${user.telegram_id}, ${user.banned ? 0 : 1})">${banLabel}</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -1384,14 +1397,23 @@ def render_dashboard(data: dict) -> str:
                 const query = new URLSearchParams({ page: ordersPagination.page, per_page: 25 });
                 if (status) query.set("status", status);
                 if (search) query.set("search", search);
-                const [res, ordersRes] = await Promise.all([
+                const [res, ordersRes, customersRes, ticketsRes, inventoryRes] = await Promise.all([
                     fetch("/admin/api/data"),
-                    fetch("/admin/api/orders?" + query.toString())
+                    fetch("/admin/api/orders?" + query.toString()),
+                    fetch("/admin/api/customers?per_page=100"),
+                    fetch("/admin/api/tickets?per_page=100"),
+                    fetch("/admin/api/inventory")
                 ]);
-                if (res.ok && ordersRes.ok) {
+                if (res.ok && ordersRes.ok && customersRes.ok && ticketsRes.ok && inventoryRes.ok) {
                     dashboardData = await res.json();
                     const orderData = await ordersRes.json();
+                    const customerData = await customersRes.json();
+                    const ticketData = await ticketsRes.json();
+                    const inventoryData = await inventoryRes.json();
                     dashboardData.orders = orderData.items;
+                    dashboardData.users = customerData.items;
+                    dashboardData.tickets = ticketData.items;
+                    dashboardData.inventory = inventoryData.items;
                     ordersPagination = orderData;
                     refreshUI();
                     updateOrdersPagination();
@@ -1498,6 +1520,42 @@ def render_dashboard(data: dict) -> str:
         function openAddInventoryModal(offerId) {
             document.getElementById("add-inventory-offer-id").value = offerId;
             openModal("add-inventory-modal");
+        }
+
+        function escapeHtml(value) {
+            const node = document.createElement("div");
+            node.textContent = value == null ? "" : String(value);
+            return node.innerHTML;
+        }
+
+        async function viewCustomer(userId) {
+            try {
+                const res = await fetch(`/admin/api/customers?user_id=${userId}`);
+                const customer = await res.json();
+                if (!res.ok) throw new Error(customer.error || "Client introuvable");
+                const orders = (customer.orders || []).map(order =>
+                    `<li>#${order.id} — ${escapeHtml(order.offer_name || '')} — ${escapeHtml(order.status || '')}</li>`
+                ).join("") || "<li>Aucune commande</li>";
+                const tickets = (customer.tickets || []).map(ticket =>
+                    `<li>#${ticket.id} — ${escapeHtml(ticket.category || 'other')} — ${escapeHtml(ticket.status || '')}</li>`
+                ).join("") || "<li>Aucun ticket</li>";
+                document.getElementById("customer-detail-body").innerHTML = `
+                    <div class="detail-grid">
+                        <div><strong>Telegram ID :</strong> <code>${customer.telegram_id}</code></div>
+                        <div><strong>Username :</strong> ${escapeHtml(customer.username ? '@' + customer.username : '—')}</div>
+                        <div><strong>Prénom :</strong> ${escapeHtml(customer.first_name || '—')}</div>
+                        <div><strong>Langue :</strong> ${escapeHtml(customer.lang || 'fr')}</div>
+                        <div><strong>Commandes :</strong> ${customer.order_count || 0}</div>
+                        <div><strong>Payées :</strong> ${customer.paid_order_count || 0}</div>
+                        <div><strong>Total dépensé :</strong> ${(customer.total_spent || 0).toFixed(2)} ${escapeHtml(dashboardData.currency)}</div>
+                        <div><strong>Filleuls :</strong> ${customer.referral_count || 0}</div>
+                    </div>
+                    <h4>Commandes récentes</h4><ul>${orders}</ul>
+                    <h4>Tickets</h4><ul>${tickets}</ul>`;
+                openModal("customer-detail-modal");
+            } catch (err) {
+                showToast(err.message || "Erreur réseau", "error");
+            }
         }
 
         async function viewOrderDetail(orderId) {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from api.dashboard import render_dashboard
 from app.web import dashboard_api
 
 
@@ -80,3 +81,17 @@ def test_customer_detail_metrics(mock_mongodb):
     assert customer["order_count"] == 2
     assert customer["paid_order_count"] == 1
     assert customer["total_spent"] == 7.5
+
+
+def test_dashboard_renders_mongodb_dates():
+    page = render_dashboard({
+        "summary": {},
+        "orders": [],
+        "users": [{"telegram_id": 1, "created_at": datetime.now(UTC)}],
+        "tickets": [],
+        "services": [],
+        "audits": [],
+    })
+
+    assert "<!doctype html>" in page.lower()
+    assert "customer-detail-modal" in page
