@@ -95,3 +95,6 @@ def test_dashboard_renders_mongodb_dates():
 
     assert "<!doctype html>" in page.lower()
     assert "customer-detail-modal" in page
+    assert 'id="inventory-table"' in page
+    assert "revealInventory" in page
+    assert "toggleInventory" in page

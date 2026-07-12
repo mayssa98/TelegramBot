@@ -808,6 +808,27 @@ def render_dashboard(data: dict) -> str:
             <div class="catalog-grid" id="inventory-list">
                 <!-- Injecté par JS -->
             </div>
+            <div class="filters" style="margin-top:24px;">
+                <div class="search-box"><input id="inventory-search" placeholder="Rechercher une référence masquée..." oninput="filterInventoryItems()"></div>
+                <select id="inventory-filter-status" onchange="filterInventoryItems()">
+                    <option value="">Tous les statuts</option>
+                    <option value="available">Disponible</option>
+                    <option value="reserved">Réservé</option>
+                    <option value="delivered">Livré</option>
+                    <option value="disabled">Désactivé</option>
+                </select>
+            </div>
+            <div class="table-wrap">
+                <table id="inventory-table">
+                    <thead><tr><th>Référence</th><th>Offre</th><th>Aperçu masqué</th><th>Statut</th><th>Commande</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:16px;">
+                <button class="btn btn-secondary" id="inventory-prev" onclick="changeInventoryPage(-1)">← Précédent</button>
+                <span id="inventory-page-label">Page 1</span>
+                <button class="btn btn-secondary" id="inventory-next" onclick="changeInventoryPage(1)">Suivant →</button>
+            </div>
         </section>
 
         <!-- 5. CLIENTS -->
@@ -1078,7 +1099,9 @@ def render_dashboard(data: dict) -> str:
     <script>
         let dashboardData = __JSON_DATA__;
         let ordersPagination = { page: 1, pages: 1, total: 0 };
+        let inventoryPagination = { page: 1, pages: 1, total: 0 };
         let orderFilterTimer;
+        let inventoryFilterTimer;
 
         // Au chargement de la page
         document.addEventListener("DOMContentLoaded", () => {
@@ -1147,6 +1170,7 @@ def render_dashboard(data: dict) -> str:
             renderOrdersTable();
             renderCatalog();
             renderInventory();
+            renderInventoryItems();
             renderCustomersTable();
             renderTicketsTable();
             renderAuditTable();
@@ -1352,6 +1376,90 @@ def render_dashboard(data: dict) -> str:
             }
         }
 
+        function renderInventoryItems() {
+            const tbody = document.querySelector("#inventory-table tbody");
+            tbody.innerHTML = "";
+            const items = dashboardData.inventory || [];
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Aucune référence pour ces filtres.</td></tr>';
+                return;
+            }
+            items.forEach(item => {
+                const tr = document.createElement("tr");
+                const linkedOrder = item.reserved_order_id || item.delivered_order_id || "—";
+                const canToggle = ["available", "disabled"].includes(item.status);
+                tr.innerHTML = `
+                    <td><code>#${item.reference_id}</code></td>
+                    <td>#${item.offer_id}</td>
+                    <td><code>${escapeHtml(item.masked_preview || "***")}</code></td>
+                    <td><span class="badge badge-${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></td>
+                    <td>${linkedOrder === "—" ? linkedOrder : "#" + linkedOrder}</td>
+                    <td>
+                        <button class="btn btn-secondary" style="padding:6px 10px" onclick="revealInventory(${item.reference_id}, this)">👁 Révéler</button>
+                        ${canToggle ? `<button class="btn ${item.status === 'disabled' ? 'btn-primary' : 'btn-danger'}" style="padding:6px 10px" onclick="toggleInventory(${item.reference_id}, ${item.status === 'disabled' ? 0 : 1})">${item.status === 'disabled' ? 'Activer' : 'Désactiver'}</button>` : ''}
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterInventoryItems() {
+            clearTimeout(inventoryFilterTimer);
+            inventoryPagination.page = 1;
+            inventoryFilterTimer = setTimeout(refreshDashboardData, 250);
+        }
+
+        async function changeInventoryPage(delta) {
+            const next = Math.max(1, Math.min(inventoryPagination.pages || 1, inventoryPagination.page + delta));
+            if (next === inventoryPagination.page) return;
+            inventoryPagination.page = next;
+            await refreshDashboardData();
+        }
+
+        function updateInventoryPagination() {
+            const pages = inventoryPagination.pages || 1;
+            document.getElementById("inventory-page-label").textContent = `Page ${inventoryPagination.page} / ${pages} (${inventoryPagination.total || 0})`;
+            document.getElementById("inventory-prev").disabled = inventoryPagination.page <= 1;
+            document.getElementById("inventory-next").disabled = inventoryPagination.page >= pages;
+        }
+
+        async function revealInventory(itemId, button) {
+            if (!confirm("Afficher temporairement le contenu complet de cette référence ?")) return;
+            const params = new URLSearchParams({ action: "reveal_inventory", inventory_id: itemId });
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: params
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Révélation impossible");
+                const original = button.textContent;
+                button.textContent = data.value;
+                button.disabled = true;
+                setTimeout(() => { button.textContent = original; button.disabled = false; }, 15000);
+            } catch (err) {
+                showToast(err.message || "Erreur réseau", "error");
+            }
+        }
+
+        async function toggleInventory(itemId, disabled) {
+            if (!confirm("Confirmer le changement d'état de cette référence ?")) return;
+            const params = new URLSearchParams({ action: "toggle_inventory", inventory_id: itemId, disabled });
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: params
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Action impossible");
+                showToast("Inventaire mis à jour");
+                await refreshDashboardData();
+            } catch (err) {
+                showToast(err.message || "Erreur réseau", "error");
+            }
+        }
+
         function renderTicketsTable() {
             const tbody = document.querySelector("#tickets-table tbody");
             tbody.innerHTML = "";
@@ -1420,12 +1528,17 @@ def render_dashboard(data: dict) -> str:
                 const query = new URLSearchParams({ page: ordersPagination.page, per_page: 25 });
                 if (status) query.set("status", status);
                 if (search) query.set("search", search);
+                const inventoryQuery = new URLSearchParams({ page: inventoryPagination.page, per_page: 25 });
+                const inventoryStatus = document.getElementById("inventory-filter-status")?.value || "";
+                const inventorySearch = document.getElementById("inventory-search")?.value || "";
+                if (inventoryStatus) inventoryQuery.set("status", inventoryStatus);
+                if (inventorySearch) inventoryQuery.set("search", inventorySearch);
                 const [res, ordersRes, customersRes, ticketsRes, inventoryRes] = await Promise.all([
                     fetch("/admin/api/data"),
                     fetch("/admin/api/orders?" + query.toString()),
                     fetch("/admin/api/customers?per_page=100"),
                     fetch("/admin/api/tickets?per_page=100"),
-                    fetch("/admin/api/inventory")
+                    fetch("/admin/api/inventory?" + inventoryQuery.toString())
                 ]);
                 if (res.ok && ordersRes.ok && customersRes.ok && ticketsRes.ok && inventoryRes.ok) {
                     dashboardData = await res.json();
@@ -1437,9 +1550,11 @@ def render_dashboard(data: dict) -> str:
                     dashboardData.users = customerData.items;
                     dashboardData.tickets = ticketData.items;
                     dashboardData.inventory = inventoryData.items;
+                    inventoryPagination = inventoryData;
                     ordersPagination = orderData;
                     refreshUI();
                     updateOrdersPagination();
+                    updateInventoryPagination();
                     showToast("Données actualisées");
                 } else {
                     showToast("Échec de l'actualisation des données", "error");
