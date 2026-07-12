@@ -198,8 +198,37 @@ def service_total_stock(service_id):
     return result[0]["total"] if result else 0
 
 
-def update_offer(offer_id, price=None, stock=None, name=None, note=None, active=None):
-    values = {k: v for k, v in {"price": price, "stock": stock, "name": name, "note": note, "active": active}.items() if v is not None}
+def update_offer(
+    offer_id,
+    price=None,
+    stock=None,
+    name=None,
+    note=None,
+    active=None,
+    description=None,
+    currency=None,
+    sort_order=None,
+    auto_delivery=None,
+    low_stock_threshold=None,
+    delivery_delay=None,
+):
+    values = {
+        key: value
+        for key, value in {
+            "price": price,
+            "stock": stock,
+            "name": name,
+            "note": note,
+            "active": active,
+            "description": description,
+            "currency": currency,
+            "sort_order": sort_order,
+            "auto_delivery": auto_delivery,
+            "low_stock_threshold": low_stock_threshold,
+            "delivery_delay": delivery_delay,
+        }.items()
+        if value is not None
+    }
     if values:
         get_conn().offers.update_one({"id": offer_id}, {"$set": values})
 
@@ -227,9 +256,35 @@ def archive_offer(offer_id):
     return update_offer(offer_id, active=0)
 
 
-def add_offer(service_id, name, price, stock, note=""):
+def add_offer(
+    service_id,
+    name,
+    price,
+    stock,
+    note="",
+    description="",
+    currency="USDT",
+    auto_delivery=True,
+    low_stock_threshold=5,
+    delivery_delay="Instantané après confirmation",
+):
     oid = _next_id("offers")
-    get_conn().offers.insert_one({"id": oid, "service_id": service_id, "name": name, "price": price, "stock": stock, "note": note, "active": 1})
+    last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
+    get_conn().offers.insert_one({
+        "id": oid,
+        "service_id": service_id,
+        "name": name,
+        "description": description,
+        "price": price,
+        "currency": currency,
+        "stock": stock,
+        "note": note,
+        "auto_delivery": bool(auto_delivery),
+        "low_stock_threshold": int(low_stock_threshold),
+        "delivery_delay": delivery_delay,
+        "sort_order": (last or {}).get("sort_order", 0) + 1,
+        "active": 1,
+    })
     return oid
 
 

@@ -327,9 +327,12 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         svc = db.get_service(off["service_id"])
         price = t(lang, "price_tbd") if off["price"] is None else f"{off['price']:.2f}"
         note = f"📝 {off['note']}" if off["note"] else ""
+        description = off.get("description") or ""
+        delivery = off.get("delivery_delay") or ""
         await q.edit_message_text(
             t(lang, "offer_detail", emoji=svc["emoji"], service=svc["name"],
-              offer=off["name"], price=price, cur=CURRENCY, stock=off["stock"], note=note),
+              offer=off["name"], price=price, cur=off.get("currency", CURRENCY),
+              stock=off["stock"], note=note, description=description, delivery=delivery),
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=kb.offer_detail_keyboard(lang, off),
         )

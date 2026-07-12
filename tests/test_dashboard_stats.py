@@ -38,3 +38,25 @@ def test_dashboard_services_include_offers(mock_mongodb):
 
     assert service["offers"][0]["name"] == "Monthly"
     assert service["offer_count"] == 1
+
+
+def test_offer_metadata_can_be_administered(mock_mongodb):
+    service_id = db.add_service("AI", "🤖")
+    offer_id = db.add_offer(
+        service_id,
+        "Pro",
+        12.0,
+        3,
+        description="Premium account",
+        auto_delivery=False,
+        low_stock_threshold=2,
+        delivery_delay="Within one hour",
+    )
+    db.update_offer(offer_id, sort_order=9, description="Updated")
+
+    offer = db.get_offer(offer_id)
+    assert offer["description"] == "Updated"
+    assert offer["auto_delivery"] is False
+    assert offer["low_stock_threshold"] == 2
+    assert offer["delivery_delay"] == "Within one hour"
+    assert offer["sort_order"] == 9

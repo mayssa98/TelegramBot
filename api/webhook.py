@@ -248,7 +248,21 @@ class handler(BaseHTTPRequestHandler):
                 price = float(form["price"])
                 stock = int(form.get("stock", 0))
                 note = form.get("note", "")[:250]
-                oid = db.add_offer(sid, name, price, stock, note)
+                description = form.get("description", "").strip()[:1000]
+                auto_delivery = form.get("auto_delivery", "") == "on"
+                low_stock_threshold = max(0, int(form.get("low_stock_threshold", 5)))
+                delivery_delay = form.get("delivery_delay", "").strip()[:120]
+                oid = db.add_offer(
+                    sid,
+                    name,
+                    price,
+                    stock,
+                    note,
+                    description=description,
+                    auto_delivery=auto_delivery,
+                    low_stock_threshold=low_stock_threshold,
+                    delivery_delay=delivery_delay,
+                )
                 db.audit_event("offer.created", details={"offer_id": oid, "name": name})
 
             elif action == "update_offer":
@@ -257,7 +271,18 @@ class handler(BaseHTTPRequestHandler):
                 price = None if form.get("price", "") == "" else float(form["price"])
                 stock = max(0, int(form["stock"]))
                 note = form.get("note", "")[:250]
-                db.update_offer(oid, price=price, stock=stock, name=name, note=note)
+                db.update_offer(
+                    oid,
+                    price=price,
+                    stock=stock,
+                    name=name,
+                    note=note,
+                    description=form.get("description", "").strip()[:1000],
+                    sort_order=max(0, int(form.get("sort_order", 0))),
+                    auto_delivery=form.get("auto_delivery", "") == "on",
+                    low_stock_threshold=max(0, int(form.get("low_stock_threshold", 5))),
+                    delivery_delay=form.get("delivery_delay", "").strip()[:120],
+                )
                 db.audit_event("offer.updated", details={"offer_id": oid, "name": name})
 
             elif action == "toggle_offer":

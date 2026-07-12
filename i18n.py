@@ -111,9 +111,9 @@ TRANSLATIONS = {
     },
     # ---------------- Détail offre ----------------
     "offer_detail": {
-        "fr": "{emoji} *{service}*\n\n📋 Offre : *{offer}*\n💵 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n{note}",
-        "en": "{emoji} *{service}*\n\n📋 Offer: *{offer}*\n💵 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n{note}",
-        "ar": "{emoji} *{service}*\n\n📋 العرض: *{offer}*\n💵 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n{note}",
+        "fr": "{emoji} *{service}*\n\n📋 Offre : *{offer}*\n{description}\n💵 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n⏱ Livraison : {delivery}\n{note}",
+        "en": "{emoji} *{service}*\n\n📋 Offer: *{offer}*\n{description}\n💵 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n⏱ Delivery: {delivery}\n{note}",
+        "ar": "{emoji} *{service}*\n\n📋 العرض: *{offer}*\n{description}\n💵 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n⏱ التسليم: {delivery}\n{note}",
     },
     "btn_buy": {"fr": "🛒 Acheter maintenant", "en": "🛒 Buy now", "ar": "🛒 اشترِ الآن"},
     "btn_back": {"fr": "⬅️ Retour", "en": "⬅️ Back", "ar": "⬅️ رجوع"},

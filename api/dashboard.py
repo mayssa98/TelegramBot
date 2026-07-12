@@ -985,7 +985,30 @@ def render_dashboard(data: dict) -> str:
                     <label>Note / Description</label>
                     <textarea name="note"></textarea>
                 </div>
+                <div class="form-group"><label>Description détaillée</label><textarea name="description"></textarea></div>
+                <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" value="Instantané après confirmation"></div>
+                <div class="form-group"><label>Seuil de stock faible</label><input type="number" name="low_stock_threshold" value="5" min="0"></div>
+                <div class="form-group"><label><input type="checkbox" name="auto_delivery" checked> Livraison automatique</label></div>
                 <button class="btn btn-primary" type="submit">Créer l'offre</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="edit-offer-modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>Modifier l'offre</h3><button class="close-btn" onclick="closeModal('edit-offer-modal')">&times;</button></div>
+            <form onsubmit="handleFormSubmit(event, 'update_offer')">
+                <input type="hidden" name="offer_id" id="edit-offer-id">
+                <div class="form-group"><label>Nom</label><input name="name" id="edit-offer-name" required></div>
+                <div class="form-group"><label>Description</label><textarea name="description" id="edit-offer-description"></textarea></div>
+                <div class="form-group"><label>Note</label><textarea name="note" id="edit-offer-note"></textarea></div>
+                <div class="form-group"><label>Prix</label><input type="number" step="0.01" min="0" name="price" id="edit-offer-price" required></div>
+                <div class="form-group"><label>Stock affiché</label><input type="number" min="0" name="stock" id="edit-offer-stock" required></div>
+                <div class="form-group"><label>Ordre</label><input type="number" min="0" name="sort_order" id="edit-offer-sort"></div>
+                <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" id="edit-offer-delay"></div>
+                <div class="form-group"><label>Seuil de stock faible</label><input type="number" min="0" name="low_stock_threshold" id="edit-offer-threshold"></div>
+                <div class="form-group"><label><input type="checkbox" name="auto_delivery" id="edit-offer-auto"> Livraison automatique</label></div>
+                <button class="btn btn-primary" type="submit">Enregistrer</button>
             </form>
         </div>
     </div>
@@ -1515,6 +1538,27 @@ def render_dashboard(data: dict) -> str:
         function openAddOfferModal(serviceId) {
             document.getElementById("add-offer-service-id").value = serviceId;
             openModal("add-offer-modal");
+        }
+
+        function openEditOfferModal(offerId) {
+            const offer = (dashboardData.services || [])
+                .flatMap(service => service.offers || [])
+                .find(item => item.id === offerId);
+            if (!offer) {
+                showToast("Offre introuvable", "error");
+                return;
+            }
+            document.getElementById("edit-offer-id").value = offer.id;
+            document.getElementById("edit-offer-name").value = offer.name || "";
+            document.getElementById("edit-offer-description").value = offer.description || "";
+            document.getElementById("edit-offer-note").value = offer.note || "";
+            document.getElementById("edit-offer-price").value = offer.price ?? 0;
+            document.getElementById("edit-offer-stock").value = offer.stock ?? 0;
+            document.getElementById("edit-offer-sort").value = offer.sort_order ?? 0;
+            document.getElementById("edit-offer-delay").value = offer.delivery_delay || "";
+            document.getElementById("edit-offer-threshold").value = offer.low_stock_threshold ?? 5;
+            document.getElementById("edit-offer-auto").checked = offer.auto_delivery !== false;
+            openModal("edit-offer-modal");
         }
 
         function openAddInventoryModal(offerId) {
