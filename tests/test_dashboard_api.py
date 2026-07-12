@@ -47,3 +47,36 @@ def test_ticket_filters(mock_mongodb):
 
     assert result["total"] == 1
     assert result["items"][0]["id"] == 1
+
+
+def test_inventory_never_exposes_encrypted_payload(mock_mongodb):
+    mock_mongodb.inventory.insert_one({
+        "offer_id": 4,
+        "payload": "encrypted-secret",
+        "fingerprint": "hash",
+        "masked_preview": "us***@example.com",
+        "status": "available",
+        "created_at": 1,
+    })
+
+    result = dashboard_api.list_inventory({"offer_id": ["4"]})
+
+    assert result["total"] == 1
+    assert result["items"][0]["masked_preview"] == "us***@example.com"
+    assert "payload" not in result["items"][0]
+    assert "fingerprint" not in result["items"][0]
+
+
+def test_customer_detail_metrics(mock_mongodb):
+    mock_mongodb.users.insert_one({"telegram_id": 42, "username": "buyer", "created_at": 1})
+    mock_mongodb.orders.insert_many([
+        {"id": 1, "user_id": 42, "status": "delivered", "total_price": 7.5, "created_at": 2},
+        {"id": 2, "user_id": 42, "status": "pending_payment", "total_price": 3.0, "created_at": 3},
+    ])
+
+    customer = dashboard_api.customer_detail(42)
+
+    assert customer is not None
+    assert customer["order_count"] == 2
+    assert customer["paid_order_count"] == 1
+    assert customer["total_spent"] == 7.5

@@ -141,7 +141,24 @@ class handler(BaseHTTPRequestHandler):
             if not self._dashboard_authorized():
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
                 return
-            self._reply(200, {"items": dashboard_api.inventory_summary()})
+            params = parse_qs(url.query)
+            if params:
+                self._reply(200, dashboard_api.list_inventory(params))
+            else:
+                self._reply(200, {"items": dashboard_api.inventory_summary()})
+            return
+
+        elif path == "/admin/api/customers":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            params = parse_qs(url.query)
+            user_id = params.get("user_id", [""])[0]
+            if user_id.isdigit():
+                customer = dashboard_api.customer_detail(int(user_id))
+                self._reply(200 if customer else 404, customer or {"ok": False, "error": "Not found"})
+            else:
+                self._reply(200, dashboard_api.list_customers(params))
             return
 
         # Health check par défaut
