@@ -248,7 +248,13 @@ def transition_order(order_id: int, to_status: str, **extra_fields: Any) -> bool
 def _release_reserved_inventory(conn, order_id: int) -> int:
     """Libère tout inventaire réservé pour une commande."""
     result = conn.inventory.update_many(
-        {"order_id": order_id, "status": InventoryStatus.RESERVED},
-        {"$set": {"status": InventoryStatus.AVAILABLE}, "$unset": {"order_id": "", "reserved_at": ""}},
+        {"reserved_order_id": order_id, "status": InventoryStatus.RESERVED},
+        {
+            "$set": {
+                "status": InventoryStatus.AVAILABLE,
+                "reserved_order_id": None,
+                "reserved_at": None,
+            }
+        },
     )
     return result.modified_count

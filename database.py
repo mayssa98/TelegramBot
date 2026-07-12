@@ -229,15 +229,30 @@ def decrement_stock(offer_id, qty):
 def mark_order_paid(order_id, verify_method):
     db = get_conn()
     order = db.orders.find_one({"id": order_id})
-    if not order or order.get("status") in ("paid", "delivered"):
+    if not order or order.get("status") in ("paid", "payment_confirmed", "delivered"):
         return bool(order)
-    if order.get("status") not in ("awaiting_verification", "pending_payment"):
+    if order.get("status") not in (
+        "awaiting_verification",
+        "pending_payment",
+        "verification_failed",
+        "manual_review",
+    ):
         return False
     if order.get("offer_id"):
         stock = db.offers.update_one({"id": order["offer_id"], "stock": {"$gte": order["qty"]}}, {"$inc": {"stock": -order["qty"]}})
         if stock.modified_count != 1:
             return False
-    paid = db.orders.update_one({"id": order_id, "status": order["status"]}, {"$set": {"status": "paid", "verify_method": verify_method, "updated_at": int(time.time())}})
+    paid = db.orders.update_one(
+        {"id": order_id, "status": order["status"]},
+        {
+            "$set": {
+                "status": "payment_confirmed",
+                "verify_method": verify_method,
+                "paid_at": int(time.time()),
+                "updated_at": int(time.time()),
+            }
+        },
+    )
     if paid.modified_count != 1 and order.get("offer_id"):
         db.offers.update_one({"id": order["offer_id"]}, {"$inc": {"stock": order["qty"]}})
     return paid.modified_count == 1

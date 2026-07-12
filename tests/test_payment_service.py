@@ -119,3 +119,19 @@ def test_confirm_payment_manual(mock_mongodb):
 
     # Ré-essayer (idempotent, doit renvoyer True)
     assert payment_service.confirm_payment_manual(order_id=1) is True
+
+
+def test_confirm_payment_from_manual_review(mock_mongodb):
+    """An administrator can confirm an order explicitly placed in manual review."""
+    conn = db.get_conn()
+    conn.orders.insert_one({
+        "id": 7,
+        "user_id": 123,
+        "qty": 1,
+        "total_price": 5.0,
+        "status": OrderStatus.MANUAL_REVIEW,
+        "txid": "REVIEW_123",
+    })
+
+    assert payment_service.confirm_payment_manual(order_id=7) is True
+    assert db.get_order(7)["status"] == OrderStatus.PAYMENT_CONFIRMED

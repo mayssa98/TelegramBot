@@ -140,9 +140,29 @@ def deliver_for_order(order_id: int) -> list[str] | None:
         log.warning("Commande #%d déjà livrée, livraison ignorée", order_id)
         return None
 
-    if order.get("status") not in (OrderStatus.PAID, OrderStatus.PAYMENT_CONFIRMED, OrderStatus.PREPARING_DELIVERY):
+    if order.get("status") not in (OrderStatus.PAID, OrderStatus.PAYMENT_CONFIRMED):
         log.warning("Commande #%d pas en statut payé (%s), livraison impossible", order_id, order.get("status"))
         return None
+
+    # Acquérir atomiquement le droit de livrer. Une deuxième exécution concurrente
+    # ne peut plus franchir cette transition.
+    claimed = conn.orders.find_one_and_update(
+        {
+            "id": order_id,
+            "status": {"$in": [OrderStatus.PAID, OrderStatus.PAYMENT_CONFIRMED]},
+        },
+        {
+            "$set": {
+                "status": OrderStatus.PREPARING_DELIVERY,
+                "updated_at": int(time.time()),
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    if not claimed:
+        log.warning("Commande #%d déjà prise en charge pour livraison", order_id)
+        return None
+    order = claimed
 
     # Récupérer les éléments réservés
     reserved_items = list(conn.inventory.find(
@@ -154,9 +174,17 @@ def deliver_for_order(order_id: int) -> list[str] | None:
         if order.get("offer_id"):
             reserved = reserve_for_order(order["offer_id"], order_id, order.get("qty", 1))
             if not reserved:
+                conn.orders.update_one(
+                    {"id": order_id, "status": OrderStatus.PREPARING_DELIVERY},
+                    {"$set": {"status": OrderStatus.PAYMENT_CONFIRMED, "updated_at": int(time.time())}},
+                )
                 return None
             reserved_items = reserved
         else:
+            conn.orders.update_one(
+                {"id": order_id, "status": OrderStatus.PREPARING_DELIVERY},
+                {"$set": {"status": OrderStatus.PAYMENT_CONFIRMED, "updated_at": int(time.time())}},
+            )
             return None
 
     # Déchiffrer le contenu
@@ -168,13 +196,21 @@ def deliver_for_order(order_id: int) -> list[str] | None:
             values.append(decrypted)
         except Exception as exc:
             log.error("Échec déchiffrement inventaire %s: %s", item.get("_id"), exc)
+            conn.orders.update_one(
+                {"id": order_id, "status": OrderStatus.PREPARING_DELIVERY},
+                {"$set": {"status": OrderStatus.PAYMENT_CONFIRMED, "updated_at": int(time.time())}},
+            )
             return None
 
     # Marquer comme livrés
     now = int(time.time())
     item_ids = [item.get("_id") for item in reserved_items]
-    conn.inventory.update_many(
-        {"_id": {"$in": item_ids}},
+    inventory_result = conn.inventory.update_many(
+        {
+            "_id": {"$in": item_ids},
+            "status": InventoryStatus.RESERVED,
+            "reserved_order_id": order_id,
+        },
         {
             "$set": {
                 "status": InventoryStatus.DELIVERED,
@@ -183,10 +219,17 @@ def deliver_for_order(order_id: int) -> list[str] | None:
             }
         },
     )
+    if inventory_result.modified_count != len(item_ids):
+        log.error("Livraison #%d interrompue: inventaire modifié concurremment", order_id)
+        conn.orders.update_one(
+            {"id": order_id, "status": OrderStatus.PREPARING_DELIVERY},
+            {"$set": {"status": OrderStatus.PAYMENT_CONFIRMED, "updated_at": int(time.time())}},
+        )
+        return None
 
     # Mettre à jour la commande
     conn.orders.update_one(
-        {"id": order_id},
+        {"id": order_id, "status": OrderStatus.PREPARING_DELIVERY},
         {
             "$set": {
                 "status": OrderStatus.DELIVERED,

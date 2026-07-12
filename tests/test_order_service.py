@@ -80,6 +80,24 @@ def test_expire_order(mock_mongodb):
     assert updated_order["status"] == OrderStatus.EXPIRED
 
 
+def test_expire_order_releases_reserved_inventory(mock_mongodb):
+    """Expiring an order releases inventory using the canonical reservation field."""
+    db.add_service("VOD", "🎬")
+    offer_id = db.add_offer(service_id=1, name="Netflix", price=5.0, stock=0)
+    from app.domain import inventory_service
+
+    inventory_service.add_items(offer_id, ["credential"])
+    offer = db.get_offer(offer_id)
+    order = order_service.create_order(user_id=12345, offer=offer, qty=1)
+    assert inventory_service.reserve_for_order(offer_id, order["id"], 1)
+
+    assert order_service.expire_order(order["id"]) is True
+
+    item = mock_mongodb.inventory.find_one({"offer_id": offer_id})
+    assert item["status"] == "available"
+    assert item["reserved_order_id"] is None
+
+
 def test_transition_order(mock_mongodb):
     """Vérifie la validation des transitions de statut d'une commande."""
     db.add_service("Discord", "🎮")

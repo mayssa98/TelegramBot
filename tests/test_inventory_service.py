@@ -95,6 +95,10 @@ def test_deliver_for_order(mock_mongodb):
     db_order = db.get_order(10)
     assert db_order["status"] == OrderStatus.DELIVERED
 
+    # Une deuxième livraison ne révèle ni ne modifie de nouveau le contenu.
+    assert inventory_service.deliver_for_order(order_id=10) is None
+    assert conn.inventory.count_documents({"delivered_order_id": 10}) == 1
+
 
 def test_mask_content():
     """Vérifie l'algorithme de masquage des données sensibles."""
