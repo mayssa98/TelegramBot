@@ -18,7 +18,7 @@ def main_menu_keyboard(lang, user_id):
     rows = [
         [t(lang, "menu_catalog")],
         [t(lang, "menu_account"), t(lang, "menu_orders")],
-        [t(lang, "menu_help")],
+        [t(lang, "menu_support"), t(lang, "menu_help")],
         [t(lang, "menu_affiliate")],
         [t(lang, "menu_lang")],
     ]

@@ -29,6 +29,47 @@ TRANSLATIONS = {
     "menu_admin": {"fr": "🛠️ Admin", "en": "🛠️ Admin", "ar": "🛠️ المشرف"},
     "menu_affiliate": {"fr": "💸 Mon affiliation", "en": "💸 My affiliate", "ar": "💸 الإحالات"},
     "menu_account": {"fr": "👤 Mon compte", "en": "👤 My account", "ar": "👤 حسابي"},
+    "menu_support": {"fr": "🎫 Support", "en": "🎫 Support", "ar": "🎫 الدعم"},
+    "support_prompt": {
+        "fr": "🎫 Décrivez votre problème. Vous pourrez continuer la conversation dans ce ticket.",
+        "en": "🎫 Describe your issue. You will be able to continue the conversation in this ticket.",
+        "ar": "🎫 اشرح مشكلتك. يمكنك متابعة المحادثة داخل هذه التذكرة.",
+    },
+    "support_order_prompt": {
+        "fr": "⚠️ Décrivez le problème rencontré avec la commande #{oid}.",
+        "en": "⚠️ Describe the problem with order #{oid}.",
+        "ar": "⚠️ اشرح المشكلة المتعلقة بالطلب #{oid}.",
+    },
+    "ticket_created": {
+        "fr": "✅ Ticket #{tid} créé. Envoyez simplement un autre message pour compléter la conversation.",
+        "en": "✅ Ticket #{tid} created. Send another message to continue the conversation.",
+        "ar": "✅ تم إنشاء التذكرة #{tid}. أرسل رسالة أخرى لمتابعة المحادثة.",
+    },
+    "ticket_message_added": {
+        "fr": "✅ Message ajouté au ticket #{tid}.",
+        "en": "✅ Message added to ticket #{tid}.",
+        "ar": "✅ تمت إضافة الرسالة إلى التذكرة #{tid}.",
+    },
+    "ticket_unavailable": {
+        "fr": "Ce ticket est fermé ou indisponible. Utilisez /support pour en créer un nouveau.",
+        "en": "This ticket is closed or unavailable. Use /support to create a new one.",
+        "ar": "هذه التذكرة مغلقة أو غير متاحة. استخدم /support لإنشاء تذكرة جديدة.",
+    },
+    "delivery_confirmed": {
+        "fr": "✅ Merci pour votre confirmation. La commande est terminée.",
+        "en": "✅ Thank you for confirming. The order is complete.",
+        "ar": "✅ شكرًا لتأكيدك. اكتمل الطلب.",
+    },
+    "terms_text": {
+        "fr": "📄 *Conditions d’utilisation*\n\nLes produits numériques sont livrés après confirmation du paiement. Vérifiez l’offre et le réseau de paiement avant de confirmer. Contactez le support en cas de problème.",
+        "en": "📄 *Terms of service*\n\nDigital products are delivered after payment confirmation. Verify the offer and payment network before confirming. Contact support if you encounter an issue.",
+        "ar": "📄 *شروط الاستخدام*\n\nيتم تسليم المنتجات الرقمية بعد تأكيد الدفع. تحقق من العرض وشبكة الدفع قبل التأكيد. تواصل مع الدعم عند وجود مشكلة.",
+    },
+    "privacy_text": {
+        "fr": "🔐 *Confidentialité*\n\nLa boutique conserve uniquement les données nécessaires aux commandes, paiements, livraisons et tickets. Les secrets d’inventaire sont chiffrés et ne sont pas inscrits dans les journaux.",
+        "en": "🔐 *Privacy*\n\nThe store only keeps data required for orders, payments, deliveries and tickets. Inventory secrets are encrypted and are never written to logs.",
+        "ar": "🔐 *الخصوصية*\n\nيحتفظ المتجر فقط بالبيانات اللازمة للطلبات والمدفوعات والتسليم والتذاكر. بيانات المخزون السرية مشفرة ولا تُكتب في السجلات.",
+    },
     "affiliate_title": {
         "fr": "💸 *Programme d'affiliation*\n\n👥 Filleuls : *{count}*\n🎯 Progression : *{progress}/{target}*\n💰 Solde : *{balance}$*\n\nInvitez {target} nouvelles personnes avec votre lien et recevez *{reward}$*. Chaque personne ne peut compter qu'une fois.\n\n🔗 Votre lien :\n`{link}`",
         "en": "💸 *Affiliate program*\n\n👥 Referrals: *{count}*\n🎯 Progress: *{progress}/{target}*\n💰 Balance: *{balance}$*\n\nInvite {target} new people with your link and receive *{reward}$*. Each person counts only once.\n\n🔗 Your link:\n`{link}`",

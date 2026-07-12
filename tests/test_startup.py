@@ -28,3 +28,21 @@ def test_bot_application_builds_with_mock_database(mock_mongodb, monkeypatch):
     application = build_app()
 
     assert application.bot.token
+
+    command_names = {
+        command
+        for group in application.handlers.values()
+        for registered in group
+        for command in getattr(registered, "commands", ())
+    }
+    assert {
+        "start",
+        "catalog",
+        "orders",
+        "account",
+        "support",
+        "language",
+        "affiliate",
+        "terms",
+        "privacy",
+    } <= command_names

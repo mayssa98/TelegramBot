@@ -23,7 +23,7 @@ from telegram.ext import (
 import admin
 import database as db
 import keyboards as kb
-from app.domain import order_service, payment_service
+from app.domain import order_service, payment_service, support_service
 from config import (
     ADMIN_ID,
     AFFILIATE_REWARD_CENTS,
@@ -145,8 +145,32 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = lang_of(update.effective_user.id)
     PENDING[update.effective_user.id] = ("support", 0)
-    await update.message.reply_text("🎫 Décrivez votre problème dans un seul message. L'administrateur le recevra.")
+    await update.message.reply_text(t(lang, "support_prompt"))
+
+
+async def cmd_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_catalog(update, context, lang_of(update.effective_user.id))
+
+
+async def cmd_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_my_orders(update, context, lang_of(update.effective_user.id))
+
+
+async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = lang_of(update.effective_user.id)
+    await update.effective_message.reply_text(t(lang, "choose_lang"), reply_markup=kb.lang_keyboard())
+
+
+async def cmd_terms(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = lang_of(update.effective_user.id)
+    await update.effective_message.reply_text(t(lang, "terms_text"), parse_mode=ParseMode.MARKDOWN)
+
+
+async def cmd_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = lang_of(update.effective_user.id)
+    await update.effective_message.reply_text(t(lang, "privacy_text"), parse_mode=ParseMode.MARKDOWN)
 
 
 async def show_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -237,6 +261,8 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                         reply_markup=kb.lang_keyboard())
     elif text == t(lang, "menu_affiliate"):
         await show_affiliate(update, context)
+    elif text == t(lang, "menu_support"):
+        await cmd_support(update, context)
     elif text == t(lang, "menu_admin") and uid == ADMIN_ID:
         await update.message.reply_text("🛠️ *Panneau Admin*", parse_mode=ParseMode.MARKDOWN,
                                         reply_markup=admin.admin_panel_keyboard())
@@ -322,6 +348,25 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      binance_id=BINANCE_PAY_ID)
             await q.message.reply_text(text, parse_mode=ParseMode.MARKDOWN,
                                        reply_markup=kb.paid_keyboard(lang, oid))
+        return
+    if data.startswith("delivery_ok:"):
+        order_id = int(data.split(":")[1])
+        order = db.get_order(order_id)
+        if not order or order.get("user_id") != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        db.audit_event("order.delivery_confirmed", actor_id=uid, details={"order_id": order_id})
+        await q.edit_message_reply_markup(reply_markup=None)
+        await q.message.reply_text(t(lang, "delivery_confirmed"))
+        return
+    if data.startswith("delivery_problem:"):
+        order_id = int(data.split(":")[1])
+        order = db.get_order(order_id)
+        if not order or order.get("user_id") != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        PENDING[uid] = ("support_order", order_id)
+        await q.message.reply_text(t(lang, "support_order_prompt", oid=order_id))
         return
 
 
@@ -497,10 +542,46 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "support":
-        ticket_id = db.create_ticket(uid, text)
-        PENDING.pop(uid, None)
-        await update.message.reply_text(f"✅ Ticket #{ticket_id} créé. L'administrateur vous répondra bientôt.")
-        await context.bot.send_message(ADMIN_ID, f"🎫 Nouveau ticket #{ticket_id}\nUtilisateur: `{uid}`\n\n{text[:2000]}", parse_mode=ParseMode.MARKDOWN)
+        ticket = support_service.create_ticket(uid, text)
+        PENDING[uid] = ("ticket_message", ticket["id"])
+        await update.message.reply_text(t(lang, "ticket_created", tid=ticket["id"]))
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"🎫 Nouveau ticket #{ticket['id']}\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    if kind == "support_order":
+        ticket = support_service.create_ticket(
+            uid,
+            text,
+            category="delivery",
+            order_id=int(ref),
+            priority="high",
+        )
+        PENDING[uid] = ("ticket_message", ticket["id"])
+        await update.message.reply_text(t(lang, "ticket_created", tid=ticket["id"]))
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"⚠️ Ticket livraison #{ticket['id']} — commande #{ref}\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    if kind == "ticket_message":
+        ticket = support_service.get_ticket(int(ref))
+        if not ticket or ticket.get("user_id") != uid or ticket.get("status") == "closed":
+            PENDING.pop(uid, None)
+            await update.message.reply_text(t(lang, "ticket_unavailable"))
+            return
+        support_service.add_message(int(ref), uid, text, sender_type="client")
+        await update.message.reply_text(t(lang, "ticket_message_added", tid=ref))
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"💬 Réponse client — ticket #{ref}\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
+            parse_mode=ParseMode.HTML,
+        )
         return
 
     # --- Admin : livraison ---
@@ -750,10 +831,15 @@ def build_app():
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", lambda u, c: send_main_menu(u, c, lang_of(u.effective_user.id))))
+    app.add_handler(CommandHandler("catalog", cmd_catalog))
+    app.add_handler(CommandHandler("orders", cmd_orders))
     app.add_handler(CommandHandler("admin", cmd_admin))
     app.add_handler(CommandHandler("support", cmd_support))
     app.add_handler(CommandHandler("account", show_account))
+    app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("affiliate", show_affiliate))
+    app.add_handler(CommandHandler("terms", cmd_terms))
+    app.add_handler(CommandHandler("privacy", cmd_privacy))
     app.add_handler(CallbackQueryHandler(cb_lang, pattern=r"^lang:"))
     app.add_handler(CallbackQueryHandler(cb_admin, pattern=r"^adm_"))
     app.add_handler(CallbackQueryHandler(cb_navigation))  # reste
