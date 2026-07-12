@@ -4,9 +4,9 @@ version = "1.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "python-telegram-bot==21.6",
-    "python-dotenv==1.0.1",
+    "python-dotenv==1.2.2",
     "pymongo==4.10.1",
-    "cryptography==43.0.3",
+    "cryptography==48.0.1",
 ]
 
 [project.optional-dependencies]

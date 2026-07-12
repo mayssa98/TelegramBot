@@ -23,7 +23,7 @@ from telegram.ext import (
 import admin
 import database as db
 import keyboards as kb
-from app.domain import affiliate_service, order_service, payment_service, support_service
+from app.domain import affiliate_service, inventory_service, order_service, payment_service, support_service
 from config import (
     ADMIN_ID,
     AFFILIATE_REWARD_CENTS,
@@ -545,7 +545,7 @@ async def handle_pending_input(update, context, lang):
     if kind == "adm_inventory" and uid == ADMIN_ID:
         items = [line.strip() for line in text.splitlines() if line.strip()]
         try:
-            added = db.add_inventory_items(ref, items)
+            added = inventory_service.add_items(ref, items)
         except RuntimeError as exc:
             await update.message.reply_text(f"⚠️ {exc}")
             return
