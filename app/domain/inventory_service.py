@@ -38,6 +38,7 @@ def add_items(offer_id: int, items: list[str]) -> int:
         masked = mask_content(value)
         try:
             conn.inventory.insert_one({
+                "id": db._next_id("inventory"),
                 "offer_id": offer_id,
                 "payload": cipher.encrypt(value.encode()).decode(),
                 "fingerprint": fingerprint,
@@ -246,6 +247,34 @@ def deliver_for_order(order_id: int) -> list[str] | None:
     )
     log.info("Commande #%d livrée (%d éléments)", order_id, len(values))
     return values
+
+
+def set_disabled(item_id: int, disabled: bool = True) -> bool:
+    """Disable or re-enable an available inventory item."""
+    conn = db.get_conn()
+    target = InventoryStatus.DISABLED if disabled else InventoryStatus.AVAILABLE
+    source = InventoryStatus.AVAILABLE if disabled else InventoryStatus.DISABLED
+    result = conn.inventory.update_one(
+        {"id": item_id, "status": source},
+        {"$set": {"status": target, "updated_at": int(time.time())}},
+    )
+    if result.modified_count:
+        db.audit_event(
+            "inventory.disabled" if disabled else "inventory.enabled",
+            details={"inventory_id": item_id},
+        )
+        return True
+    return False
+
+
+def reveal_item(item_id: int) -> str | None:
+    """Decrypt one item after an explicit admin action and audit the access."""
+    item = db.get_conn().inventory.find_one({"id": item_id})
+    if not item:
+        return None
+    value = db._fernet().decrypt(item["payload"].encode()).decode()
+    db.audit_event("inventory.revealed", details={"inventory_id": item_id, "offer_id": item.get("offer_id")})
+    return value
 
 
 def delivered_content(order_id: int) -> list[str]:

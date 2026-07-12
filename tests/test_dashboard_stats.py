@@ -28,3 +28,13 @@ def test_dashboard_comparisons_and_alerts(mock_mongodb):
     assert summary["paid_not_delivered"] == 1
     assert summary["failed_payments"] == 1
     assert {"paid_not_delivered", "payment_review", "recent_errors"} <= alert_types
+
+
+def test_dashboard_services_include_offers(mock_mongodb):
+    service_id = db.add_service("Streaming", "🎬")
+    db.add_offer(service_id, "Monthly", 5.0, 2, "Instant")
+
+    service = next(item for item in db.dashboard_data()["services"] if item["id"] == service_id)
+
+    assert service["offers"][0]["name"] == "Monthly"
+    assert service["offer_count"] == 1

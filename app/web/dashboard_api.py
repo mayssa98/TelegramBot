@@ -118,8 +118,13 @@ def list_inventory(params: dict[str, list[str]]) -> dict[str, Any]:
     total = collection.count_documents(query)
     projection = {"payload": 0, "fingerprint": 0}
     rows = collection.find(query, projection).sort("created_at", DESCENDING).skip((page - 1) * per_page).limit(per_page)
+    items = []
+    for row in rows:
+        item = db._public(row)
+        item["reference_id"] = item.get("id")
+        items.append(item)
     return {
-        "items": [db._public(row) for row in rows],
+        "items": items,
         "page": page,
         "per_page": per_page,
         "total": total,

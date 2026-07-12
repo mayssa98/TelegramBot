@@ -23,6 +23,7 @@ def test_add_inventory_items(mock_mongodb):
     db_items = list(mock_mongodb.inventory.find({"offer_id": offer_id}))
     assert len(db_items) == 2
     for item in db_items:
+        assert isinstance(item["id"], int)
         assert item["status"] == InventoryStatus.AVAILABLE
         assert item["masked_preview"] != "netflix1:pass123"
         assert "***" in item["masked_preview"]
@@ -111,3 +112,15 @@ def test_mask_content():
     assert inventory_service.mask_content("abc") == "a***"
     # Chaine standard
     assert inventory_service.mask_content("netflixpass") == "net***ss"
+
+
+def test_disable_and_explicit_reveal(mock_mongodb):
+    db.add_service("VOD", "🎬")
+    offer_id = db.add_offer(service_id=1, name="Netflix", price=3.0, stock=0)
+    inventory_service.add_items(offer_id, ["secret-value"])
+    item = mock_mongodb.inventory.find_one({"offer_id": offer_id})
+
+    assert inventory_service.set_disabled(item["id"], True) is True
+    assert mock_mongodb.inventory.find_one({"id": item["id"]})["status"] == InventoryStatus.DISABLED
+    assert inventory_service.reveal_item(item["id"]) == "secret-value"
+    assert mock_mongodb.audit_events.count_documents({"action": "inventory.revealed"}) == 1

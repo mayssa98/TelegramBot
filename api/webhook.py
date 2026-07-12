@@ -272,6 +272,20 @@ class handler(BaseHTTPRequestHandler):
                 count = inventory_service.add_items(oid, items)
                 db.audit_event("inventory.added", details={"offer_id": oid, "count": count})
 
+            elif action == "toggle_inventory":
+                item_id = int(form["inventory_id"])
+                disabled = form.get("disabled", "1") == "1"
+                if not inventory_service.set_disabled(item_id, disabled):
+                    raise ValueError("L'article ne peut pas changer d'état")
+
+            elif action == "reveal_inventory":
+                item_id = int(form["inventory_id"])
+                value = inventory_service.reveal_item(item_id)
+                if value is None:
+                    raise ValueError("Article introuvable")
+                self._reply(200, {"ok": True, "value": value})
+                return
+
             elif action == "toggle_ban":
                 uid = int(form["user_id"])
                 banned = bool(int(form["banned"]))

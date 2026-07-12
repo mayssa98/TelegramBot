@@ -59,6 +59,8 @@ def init_db():
     db.affiliate_rewards.create_index([("referrer_id", ASCENDING), ("milestone", ASCENDING)], unique=True)
     db.pending_states.create_index("user_id", unique=True)
     db.inventory.create_index([("offer_id", ASCENDING), ("status", ASCENDING)])
+    _backfill_inventory_ids(db)
+    db.inventory.create_index("id", unique=True, sparse=True)
     db.inventory.create_index("fingerprint", unique=True)
     db.inventory.create_index("reserved_order_id")
     db.processed_updates.create_index("created_at", expireAfterSeconds=604800)
@@ -67,6 +69,15 @@ def init_db():
     db.support_tickets.create_index("user_id")
     db.ticket_messages.create_index([("ticket_id", ASCENDING), ("created_at", ASCENDING)])
     _seed_catalog()
+
+
+def _backfill_inventory_ids(conn):
+    """Assign stable numeric IDs to inventory created before the new schema."""
+    for item in conn.inventory.find({"id": {"$exists": False}}, {"_id": 1}):
+        conn.inventory.update_one(
+            {"_id": item["_id"], "id": {"$exists": False}},
+            {"$set": {"id": _next_id("inventory")}},
+        )
 
 
 def _seed_catalog():
@@ -558,6 +569,7 @@ def dashboard_data():
     for svc in db.services.find({}).sort([("sort_order", ASCENDING), ("id", ASCENDING)]):
         svc_data = _public(svc)
         offers = list(db.offers.find({"service_id": svc["id"]}))
+        svc_data["offers"] = [_public(offer) for offer in offers]
         svc_data["offer_count"] = len(offers)
         svc_data["total_stock"] = sum(o.get("stock", 0) for o in offers)
         # Count sales
@@ -565,6 +577,11 @@ def dashboard_data():
             "offer_id": {"$in": [o["id"] for o in offers]},
             "status": {"$in": paid_statuses},
         }) if offers else 0
+        offer_ids = [offer["id"] for offer in offers]
+        svc_data["total_revenue"] = _revenue({
+            "offer_id": {"$in": offer_ids},
+            "status": {"$in": paid_statuses},
+        }) if offer_ids else 0.0
         services_enriched.append(svc_data)
 
     summary = {
