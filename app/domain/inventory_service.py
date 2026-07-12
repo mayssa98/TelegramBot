@@ -248,6 +248,23 @@ def deliver_for_order(order_id: int) -> list[str] | None:
     return values
 
 
+def delivered_content(order_id: int) -> list[str]:
+    """Return content already assigned to an order for an explicit admin resend."""
+    conn = db.get_conn()
+    items = list(conn.inventory.find({
+        "delivered_order_id": order_id,
+        "status": InventoryStatus.DELIVERED,
+    }))
+    if not items:
+        return []
+    cipher = db._fernet()
+    values: list[str] = []
+    for item in items:
+        values.append(cipher.decrypt(item["payload"].encode()).decode())
+    db.audit_event("order.delivery_accessed", details={"order_id": order_id, "items_count": len(values)})
+    return values
+
+
 # ---------------------------------------------------------------------------
 # Stats et masquage
 # ---------------------------------------------------------------------------

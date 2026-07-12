@@ -115,3 +115,17 @@ def test_transition_order(mock_mongodb):
 
     # Transition valide : awaiting_verification -> payment_confirmed
     assert order_service.transition_order(oid, OrderStatus.PAYMENT_CONFIRMED) is True
+
+
+def test_reset_for_payment_and_refund(mock_mongodb):
+    conn = db.get_conn()
+    conn.orders.insert_one({"id": 50, "status": OrderStatus.MANUAL_REVIEW, "txid": "TX123456"})
+    assert order_service.reset_for_payment(50) is True
+    reset = db.get_order(50)
+    assert reset["status"] == OrderStatus.PENDING_PAYMENT
+    assert reset["txid"] == ""
+
+    conn.orders.update_one({"id": 50}, {"$set": {"status": OrderStatus.DELIVERED}})
+    assert order_service.mark_refunded(50, "Customer request") is True
+    assert order_service.mark_refunded(50, "Customer request") is True
+    assert db.get_order(50)["status"] == OrderStatus.REFUNDED

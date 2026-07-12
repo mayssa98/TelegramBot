@@ -98,6 +98,7 @@ def test_deliver_for_order(mock_mongodb):
     # Une deuxième livraison ne révèle ni ne modifie de nouveau le contenu.
     assert inventory_service.deliver_for_order(order_id=10) is None
     assert conn.inventory.count_documents({"delivered_order_id": 10}) == 1
+    assert inventory_service.delivered_content(10) == ["netflix_cred_1234"]
 
 
 def test_mask_content():

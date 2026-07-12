@@ -355,6 +355,50 @@ class handler(BaseHTTPRequestHandler):
                     except Exception as e:
                         print(f"Failed to notify cancellation to user: {e}")
 
+            elif action == "reset_order":
+                oid = int(form["order_id"])
+                if not order_service.reset_for_payment(oid):
+                    raise ValueError("La commande ne peut pas être remise en attente")
+
+            elif action == "refund_order":
+                oid = int(form["order_id"])
+                reason = form.get("reason", "").strip()[:500]
+                if not order_service.mark_refunded(oid, reason):
+                    raise ValueError("La commande ne peut pas être remboursée")
+                order = db.get_order(oid)
+                _loop.run_until_complete(
+                    _application().bot.send_message(
+                        order["user_id"],
+                        f"💸 <b>Commande #{oid} remboursée</b>\n\n{html.escape(reason)}",
+                        parse_mode=ParseMode.HTML,
+                    )
+                )
+
+            elif action == "resend_delivery":
+                oid = int(form["order_id"])
+                order = db.get_order(oid)
+                content = inventory_service.delivered_content(oid)
+                if not order or not content:
+                    raise ValueError("Aucune livraison automatique à renvoyer")
+                _loop.run_until_complete(
+                    _application().bot.send_message(
+                        order["user_id"],
+                        f"🎁 <b>Livraison de la commande #{oid}</b>\n\n<code>{html.escape(chr(10).join(content))}</code>",
+                        parse_mode=ParseMode.HTML,
+                    )
+                )
+
+            elif action == "message_customer":
+                oid = int(form["order_id"])
+                message = form.get("message", "").strip()[:2000]
+                order = db.get_order(oid)
+                if not order or not message:
+                    raise ValueError("Commande ou message invalide")
+                _loop.run_until_complete(
+                    _application().bot.send_message(order["user_id"], html.escape(message), parse_mode=ParseMode.HTML)
+                )
+                db.audit_event("customer.message_sent", details={"order_id": oid, "user_id": order["user_id"]})
+
             elif action == "save_order_note":
                 oid = int(form["order_id"])
                 note = form.get("note", "").strip()

@@ -241,6 +241,67 @@ def transition_order(order_id: int, to_status: str, **extra_fields: Any) -> bool
     return False
 
 
+def reset_for_payment(order_id: int) -> bool:
+    """Return a failed/review payment to the payment waiting state."""
+    conn = db.get_conn()
+    result = conn.orders.update_one(
+        {
+            "id": order_id,
+            "status": {"$in": [
+                OrderStatus.AWAITING_VERIFICATION,
+                OrderStatus.VERIFICATION_FAILED,
+                OrderStatus.MANUAL_REVIEW,
+            ]},
+        },
+        {
+            "$set": {
+                "status": OrderStatus.PENDING_PAYMENT,
+                "txid": "",
+                "verify_method": "",
+                "updated_at": int(time.time()),
+            }
+        },
+    )
+    if result.modified_count:
+        db.audit_event("order.reset_for_payment", details={"order_id": order_id})
+        return True
+    return False
+
+
+def mark_refunded(order_id: int, reason: str = "") -> bool:
+    """Mark a paid or delivered order as refunded, idempotently."""
+    conn = db.get_conn()
+    existing = conn.orders.find_one({"id": order_id})
+    if not existing:
+        return False
+    if existing.get("status") == OrderStatus.REFUNDED:
+        return True
+    result = conn.orders.update_one(
+        {
+            "id": order_id,
+            "status": {"$in": [
+                OrderStatus.PAID,
+                OrderStatus.PAYMENT_CONFIRMED,
+                OrderStatus.PREPARING_DELIVERY,
+                OrderStatus.DELIVERED,
+                OrderStatus.MANUAL_REVIEW,
+            ]},
+        },
+        {
+            "$set": {
+                "status": OrderStatus.REFUNDED,
+                "refunded_at": int(time.time()),
+                "admin_note": reason or existing.get("admin_note", ""),
+                "updated_at": int(time.time()),
+            }
+        },
+    )
+    if result.modified_count:
+        db.audit_event("order.refunded", details={"order_id": order_id, "reason": reason})
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Utilitaires internes
 # ---------------------------------------------------------------------------

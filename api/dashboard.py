@@ -1489,6 +1489,16 @@ def render_dashboard(data: dict) -> str:
                         ${order.status !== 'cancelled' && order.status !== 'refunded' ? `
                             <button class="btn btn-danger" onclick="cancelOrder(${order.id})">❌ Annuler commande</button>
                         ` : ''}
+                        ${['awaiting_verification', 'verification_failed', 'manual_review'].includes(order.status) ? `
+                            <button class="btn btn-secondary" onclick="orderAction('reset_order', ${order.id})">↩️ Remettre en attente</button>
+                        ` : ''}
+                        ${['paid', 'payment_confirmed', 'preparing_delivery', 'delivered', 'manual_review'].includes(order.status) ? `
+                            <button class="btn btn-danger" onclick="orderAction('refund_order', ${order.id}, true)">💸 Rembourser</button>
+                        ` : ''}
+                        ${order.status === 'delivered' ? `
+                            <button class="btn btn-secondary" onclick="orderAction('resend_delivery', ${order.id})">📨 Renvoyer la livraison</button>
+                        ` : ''}
+                        <button class="btn btn-secondary" onclick="messageCustomer(${order.id})">💬 Écrire au client</button>
                         <button class="btn btn-secondary" onclick="saveOrderNote(${order.id})">💾 Enregistrer Notes</button>
                     </div>
                 </div>
@@ -1539,6 +1549,44 @@ def render_dashboard(data: dict) -> str:
                 }
             } catch (err) {
                 showToast("Erreur réseau", "error");
+            }
+        }
+
+        async function orderAction(action, orderId, askReason = false) {
+            if (!confirm("Confirmer cette action sur la commande #" + orderId + " ?")) return;
+            const params = new URLSearchParams({ action, order_id: orderId });
+            if (askReason) params.append("reason", prompt("Motif (optionnel) :") || "");
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: params
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Action impossible");
+                showToast("Action effectuée avec succès");
+                closeModal("order-detail-modal");
+                await refreshDashboardData();
+            } catch (err) {
+                showToast(err.message || "Erreur réseau", "error");
+            }
+        }
+
+        async function messageCustomer(orderId) {
+            const message = prompt("Message à envoyer au client :");
+            if (!message) return;
+            const params = new URLSearchParams({ action: "message_customer", order_id: orderId, message });
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: params
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Envoi impossible");
+                showToast("Message envoyé au client");
+            } catch (err) {
+                showToast(err.message || "Erreur réseau", "error");
             }
         }
 
