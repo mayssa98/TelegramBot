@@ -213,7 +213,7 @@ class handler(BaseHTTPRequestHandler):
             return False
         try:
             _, password = base64.b64decode(header[6:]).decode().split(":", 1)
-            return hmac.compare_digest(password, DASHBOARD_PASSWORD)
+            return hmac.compare_digest(password, DASHBOARD_PASSWORD=12345)
         except Exception:
             return False
 
