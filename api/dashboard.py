@@ -782,6 +782,11 @@ def render_dashboard(data: dict) -> str:
                     </tbody>
                 </table>
             </div>
+            <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:16px;">
+                <button class="btn btn-secondary" id="orders-prev" onclick="changeOrdersPage(-1)">← Précédent</button>
+                <span id="orders-page-label">Page 1</span>
+                <button class="btn btn-secondary" id="orders-next" onclick="changeOrdersPage(1)">Suivant →</button>
+            </div>
         </section>
 
         <!-- 3. CATALOGUE -->
@@ -1039,11 +1044,14 @@ def render_dashboard(data: dict) -> str:
     <!-- INJECTION DES DONNEES DANS LE SCRIPT -->
     <script>
         let dashboardData = __JSON_DATA__;
+        let ordersPagination = { page: 1, pages: 1, total: 0 };
+        let orderFilterTimer;
 
         // Au chargement de la page
         document.addEventListener("DOMContentLoaded", () => {
             setupTabNavigation();
             refreshUI();
+            refreshDashboardData();
         });
 
         function setupTabNavigation() {
@@ -1371,10 +1379,22 @@ def render_dashboard(data: dict) -> str:
         // Actions Ajax
         async function refreshDashboardData() {
             try {
-                const res = await fetch("/admin/api/data");
-                if (res.ok) {
+                const status = document.getElementById("order-filter-status")?.value || "";
+                const search = document.getElementById("order-search")?.value || "";
+                const query = new URLSearchParams({ page: ordersPagination.page, per_page: 25 });
+                if (status) query.set("status", status);
+                if (search) query.set("search", search);
+                const [res, ordersRes] = await Promise.all([
+                    fetch("/admin/api/data"),
+                    fetch("/admin/api/orders?" + query.toString())
+                ]);
+                if (res.ok && ordersRes.ok) {
                     dashboardData = await res.json();
+                    const orderData = await ordersRes.json();
+                    dashboardData.orders = orderData.items;
+                    ordersPagination = orderData;
                     refreshUI();
+                    updateOrdersPagination();
                     showToast("Données actualisées");
                 } else {
                     showToast("Échec de l'actualisation des données", "error");
@@ -1382,6 +1402,20 @@ def render_dashboard(data: dict) -> str:
             } catch (err) {
                 showToast("Erreur réseau lors de l'actualisation", "error");
             }
+        }
+
+        async function changeOrdersPage(delta) {
+            const next = Math.max(1, Math.min(ordersPagination.pages || 1, ordersPagination.page + delta));
+            if (next === ordersPagination.page) return;
+            ordersPagination.page = next;
+            await refreshDashboardData();
+        }
+
+        function updateOrdersPagination() {
+            const pages = ordersPagination.pages || 1;
+            document.getElementById("orders-page-label").textContent = `Page ${ordersPagination.page} / ${pages} (${ordersPagination.total || 0})`;
+            document.getElementById("orders-prev").disabled = ordersPagination.page <= 1;
+            document.getElementById("orders-next").disabled = ordersPagination.page >= pages;
         }
 
         async function handleFormSubmit(event, action) {
@@ -1712,22 +1746,11 @@ def render_dashboard(data: dict) -> str:
             }
         }
 
-        // Moteur de recherche et de filtres locaux
+        // Recherche et filtres serveur avec temporisation pour éviter une requête par frappe.
         function filterOrders() {
-            const query = document.getElementById("order-search").value.toLowerCase();
-            const status = document.getElementById("order-filter-status").value;
-            const rows = document.querySelectorAll("#orders-table tbody tr");
-
-            rows.forEach(row => {
-                if (row.cells.length < 5) return;
-                const text = row.innerText.toLowerCase();
-                const badge = row.querySelector(".badge").textContent;
-
-                const matchQuery = text.includes(query);
-                const matchStatus = !status || badge === status;
-
-                row.style.display = (matchQuery && matchStatus) ? "" : "none";
-            });
+            clearTimeout(orderFilterTimer);
+            ordersPagination.page = 1;
+            orderFilterTimer = setTimeout(refreshDashboardData, 250);
         }
 
         function filterCustomers() {
