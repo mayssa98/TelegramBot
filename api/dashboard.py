@@ -804,6 +804,7 @@ def render_dashboard(data: dict) -> str:
         <section id="inventory" class="panel">
             <div class="section-header">
                 <h2>Codes & Comptes chiffrés</h2>
+                <a class="btn btn-secondary" href="/admin/api/inventory-export">⬇ Export CSV masqué</a>
             </div>
             <div class="catalog-grid" id="inventory-list">
                 <!-- Injecté par JS -->

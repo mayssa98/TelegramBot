@@ -98,3 +98,4 @@ def test_dashboard_renders_mongodb_dates():
     assert 'id="inventory-table"' in page
     assert "revealInventory" in page
     assert "toggleInventory" in page
+    assert "/admin/api/inventory-export" in page

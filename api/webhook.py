@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import csv
 import hmac
 import html
+import io
 import json
 import logging
 import os
@@ -58,6 +60,15 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _reply_bytes(self, status: int, body: bytes, content_type: str, filename: str | None = None):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        if filename:
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.end_headers()
         self.wfile.write(body)
 
@@ -159,6 +170,36 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(200 if customer else 404, customer or {"ok": False, "error": "Not found"})
             else:
                 self._reply(200, dashboard_api.list_customers(params))
+            return
+
+        elif path == "/admin/api/inventory-export":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            params = parse_qs(url.query)
+            result = dashboard_api.list_inventory({**params, "page": ["1"], "per_page": ["100"]})
+            items = list(result["items"])
+            for page in range(2, result["pages"] + 1):
+                page_result = dashboard_api.list_inventory({**params, "page": [str(page)], "per_page": ["100"]})
+                items.extend(page_result["items"])
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(("reference_id", "offer_id", "masked_preview", "status", "order_id", "created_at"))
+            for item in items:
+                writer.writerow((
+                    item.get("reference_id"),
+                    item.get("offer_id"),
+                    item.get("masked_preview"),
+                    item.get("status"),
+                    item.get("reserved_order_id") or item.get("delivered_order_id") or "",
+                    item.get("created_at", ""),
+                ))
+            self._reply_bytes(
+                200,
+                output.getvalue().encode("utf-8-sig"),
+                "text/csv; charset=utf-8",
+                "inventory-masked.csv",
+            )
             return
 
         # Health check par défaut
