@@ -12,6 +12,7 @@ import os
 import threading
 import traceback
 from datetime import UTC, datetime
+from enum import Enum
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlsplit
 
@@ -22,6 +23,7 @@ import database as db
 from api.dashboard import render_dashboard
 from app import __version__
 from app.domain import inventory_service, order_service, payment_service, support_service
+from app.web import dashboard_api
 from bot import build_app
 from config import CURRENCY, DASHBOARD_PASSWORD
 
@@ -52,12 +54,20 @@ def _application():
 
 class handler(BaseHTTPRequestHandler):
     def _reply(self, status: int, payload: dict):
-        body = json.dumps(payload).encode("utf-8")
+        body = json.dumps(payload, default=self._json_default).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    @staticmethod
+    def _json_default(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, Enum):
+            return value.value
+        return str(value)
 
     def do_GET(self):
         url = urlsplit(self.path)
@@ -111,6 +121,27 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(200, messages)
             except Exception as exc:
                 self._reply(500, {"ok": False, "error": str(exc)})
+            return
+
+        elif path == "/admin/api/orders":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, dashboard_api.list_orders(parse_qs(url.query)))
+            return
+
+        elif path == "/admin/api/tickets":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, dashboard_api.list_tickets(parse_qs(url.query)))
+            return
+
+        elif path == "/admin/api/inventory":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, {"items": dashboard_api.inventory_summary()})
             return
 
         # Health check par défaut
