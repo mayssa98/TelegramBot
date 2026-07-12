@@ -118,7 +118,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def send_main_menu(update, context, lang, chat_id=None):
     uid = update.effective_user.id if update.effective_user else chat_id
-    text = t(lang, "welcome", shop=SHOP_NAME)
+    configured = db.shop_settings().get("welcome_message", "").strip()
+    text = configured or t(lang, "welcome", shop=SHOP_NAME)
     target = update.message or (update.callback_query.message if update.callback_query else None)
     if target:
         await target.reply_text(text, parse_mode=ParseMode.MARKDOWN,
@@ -140,8 +141,7 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(update.effective_user.id)
-    PENDING[update.effective_user.id] = ("support", 0)
-    await update.message.reply_text(t(lang, "support_prompt"))
+    await update.message.reply_text(t(lang, "support_choose_category"), reply_markup=kb.support_category_keyboard(lang))
 
 
 async def cmd_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -159,12 +159,14 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_terms(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(update.effective_user.id)
-    await update.effective_message.reply_text(t(lang, "terms_text"), parse_mode=ParseMode.MARKDOWN)
+    text = db.shop_settings().get("terms_message", "").strip() or t(lang, "terms_text")
+    await update.effective_message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(update.effective_user.id)
-    await update.effective_message.reply_text(t(lang, "privacy_text"), parse_mode=ParseMode.MARKDOWN)
+    text = db.shop_settings().get("privacy_message", "").strip() or t(lang, "privacy_text")
+    await update.effective_message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 
 async def show_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,7 +250,8 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == t(lang, "menu_account"):
         await show_account(update, context)
     elif text == t(lang, "menu_help"):
-        await update.message.reply_text(t(lang, "help_text", shop=SHOP_NAME),
+        help_text = db.shop_settings().get("help_message", "").strip() or t(lang, "help_text", shop=SHOP_NAME)
+        await update.message.reply_text(help_text,
                                         parse_mode=ParseMode.MARKDOWN)
     elif text == t(lang, "menu_lang"):
         await update.message.reply_text(t(lang, "choose_lang"),
@@ -364,6 +367,23 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         PENDING[uid] = ("support_order", order_id)
         await q.message.reply_text(t(lang, "support_order_prompt", oid=order_id))
+        return
+    if data.startswith("support_cat:"):
+        category = data.split(":", 1)[1]
+        PENDING[uid] = ("support_category", category)
+        if category in {"payment", "delivery", "invalid_content", "order"}:
+            orders = db.list_user_orders(uid, limit=8)
+            await q.message.reply_text(t(lang, "support_choose_order"), reply_markup=kb.support_order_keyboard(lang, orders))
+        else:
+            PENDING[uid] = ("support", category)
+            await q.message.reply_text(t(lang, "support_prompt"))
+        return
+    if data.startswith("support_order:"):
+        order_id = int(data.split(":", 1)[1])
+        pending = PENDING.get(uid)
+        category = pending[1] if pending and pending[0] == "support_category" else "other"
+        PENDING[uid] = ("support_guided", f"{category}|{order_id}")
+        await q.message.reply_text(t(lang, "support_prompt"))
         return
 
 
@@ -539,12 +559,30 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "support":
-        ticket = support_service.create_ticket(uid, text)
+        ticket = support_service.create_ticket(uid, text, category=str(ref or "other"))
         PENDING[uid] = ("ticket_message", ticket["id"])
         await update.message.reply_text(t(lang, "ticket_created", tid=ticket["id"]))
         await context.bot.send_message(
             ADMIN_ID,
             f"🎫 Nouveau ticket #{ticket['id']}\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    if kind == "support_guided":
+        category, order_id_text = str(ref).split("|", 1)
+        order_id = int(order_id_text) or None
+        if order_id:
+            order = db.get_order(order_id)
+            if not order or order.get("user_id") != uid:
+                await update.message.reply_text(t(lang, "not_for_you"))
+                return
+        ticket = support_service.create_ticket(uid, text, category=category, order_id=order_id)
+        PENDING[uid] = ("ticket_message", ticket["id"])
+        await update.message.reply_text(t(lang, "ticket_created", tid=ticket["id"]))
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"🎫 Nouveau ticket #{ticket['id']} ({html.escape(category)})\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
             parse_mode=ParseMode.HTML,
         )
         return

@@ -455,6 +455,9 @@ class handler(BaseHTTPRequestHandler):
                 affiliate_enabled = form.get("affiliate_enabled", "") == "on"
                 affiliate_target = max(1, int(form.get("affiliate_target", 10)))
                 affiliate_reward_cents = max(0, int(form.get("affiliate_reward_cents", 100)))
+                active_languages = ",".join(
+                    code for code in ("fr", "en", "ar") if code in form.get("active_languages", "fr,en,ar").split(",")
+                ) or "fr"
 
                 db.set_setting("shop_name", shop_name)
                 db.set_setting("currency", currency)
@@ -466,6 +469,11 @@ class handler(BaseHTTPRequestHandler):
                 db.set_setting("affiliate_enabled", affiliate_enabled)
                 db.set_setting("affiliate_target", affiliate_target)
                 db.set_setting("affiliate_reward_cents", affiliate_reward_cents)
+                db.set_setting("welcome_message", form.get("welcome_message", "").strip()[:2000])
+                db.set_setting("help_message", form.get("help_message", "").strip()[:4000])
+                db.set_setting("terms_message", form.get("terms_message", "").strip()[:4000])
+                db.set_setting("privacy_message", form.get("privacy_message", "").strip()[:4000])
+                db.set_setting("active_languages", active_languages)
                 db.audit_event("settings.updated")
 
             else:

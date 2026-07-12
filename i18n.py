@@ -35,6 +35,23 @@ TRANSLATIONS = {
         "en": "🎫 Describe your issue. You will be able to continue the conversation in this ticket.",
         "ar": "🎫 اشرح مشكلتك. يمكنك متابعة المحادثة داخل هذه التذكرة.",
     },
+    "support_choose_category": {
+        "fr": "🎫 Choisissez la catégorie de votre demande :",
+        "en": "🎫 Choose the category of your request:",
+        "ar": "🎫 اختر فئة طلبك:",
+    },
+    "support_choose_order": {
+        "fr": "Sélectionnez la commande concernée, ou choisissez « Aucune » :",
+        "en": "Select the related order, or choose “None”:",
+        "ar": "اختر الطلب المعني أو اختر «لا يوجد»:",
+    },
+    "support_no_order": {"fr": "Aucune commande", "en": "No order", "ar": "لا يوجد طلب"},
+    "support_category_payment": {"fr": "💳 Paiement", "en": "💳 Payment", "ar": "💳 الدفع"},
+    "support_category_delivery": {"fr": "📦 Livraison", "en": "📦 Delivery", "ar": "📦 التسليم"},
+    "support_category_invalid_content": {"fr": "⚠️ Code ou compte invalide", "en": "⚠️ Invalid code or account", "ar": "⚠️ رمز أو حساب غير صالح"},
+    "support_category_order": {"fr": "🧾 Commande", "en": "🧾 Order", "ar": "🧾 الطلب"},
+    "support_category_affiliation": {"fr": "👥 Affiliation", "en": "👥 Affiliate", "ar": "👥 الإحالة"},
+    "support_category_other": {"fr": "💬 Autre", "en": "💬 Other", "ar": "💬 أخرى"},
     "support_order_prompt": {
         "fr": "⚠️ Décrivez le problème rencontré avec la commande #{oid}.",
         "en": "⚠️ Describe the problem with order #{oid}.",

@@ -403,6 +403,11 @@ def shop_settings():
         "affiliate_reward_cents": AFFILIATE_REWARD_CENTS,
         "maintenance_enabled": False,
         "maintenance_message": "La boutique est temporairement en maintenance.",
+        "welcome_message": "",
+        "help_message": "",
+        "terms_message": "",
+        "privacy_message": "",
+        "active_languages": "fr,en,ar",
     }
     rows = {row["key"]: row.get("value") for row in get_conn().settings.find({"key": {"$in": list(defaults)}})}
     result = defaults | rows

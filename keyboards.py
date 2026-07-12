@@ -7,11 +7,34 @@ from i18n import t
 
 
 def lang_keyboard():
+    active = set(db.shop_settings().get("active_languages", "fr,en,ar").split(","))
+    choices = [
+        ("fr", "🇫🇷 Français"),
+        ("en", "🇬🇧 English"),
+        ("ar", "🇸🇦 العربية"),
+    ]
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang:fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang:en")],
-        [InlineKeyboardButton("🇸🇦 العربية", callback_data="lang:ar")],
+        [InlineKeyboardButton(label, callback_data=f"lang:{code}")]
+        for code, label in choices
+        if code in active
     ])
+
+
+def support_category_keyboard(lang):
+    categories = ("payment", "delivery", "invalid_content", "order", "affiliation", "other")
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(lang, f"support_category_{category}"), callback_data=f"support_cat:{category}")]
+        for category in categories
+    ])
+
+
+def support_order_keyboard(lang, orders):
+    rows = [
+        [InlineKeyboardButton(f"#{order['id']} — {order['offer_name']}", callback_data=f"support_order:{order['id']}")]
+        for order in orders[:8]
+    ]
+    rows.append([InlineKeyboardButton(t(lang, "support_no_order"), callback_data="support_order:0")])
+    return InlineKeyboardMarkup(rows)
 
 
 def main_menu_keyboard(lang, user_id):

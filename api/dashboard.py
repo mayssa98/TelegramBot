@@ -953,6 +953,11 @@ def render_dashboard(data: dict) -> str:
                         <label for="maintenance-message-input">Message de maintenance</label>
                         <textarea id="maintenance-message-input" name="maintenance_message" maxlength="500"></textarea>
                     </div>
+                    <div class="form-group"><label>Message d'accueil personnalisé</label><textarea id="welcome-message-input" name="welcome_message"></textarea></div>
+                    <div class="form-group"><label>Message d'aide personnalisé</label><textarea id="help-message-input" name="help_message"></textarea></div>
+                    <div class="form-group"><label>Conditions</label><textarea id="terms-message-input" name="terms_message"></textarea></div>
+                    <div class="form-group"><label>Confidentialité</label><textarea id="privacy-message-input" name="privacy_message"></textarea></div>
+                    <div class="form-group"><label>Langues actives (fr,en,ar)</label><input id="active-languages-input" name="active_languages" value="fr,en,ar"></div>
                     <button class="btn btn-primary" type="submit">💾 Enregistrer la configuration</button>
                 </form>
             </div>
@@ -1518,6 +1523,11 @@ def render_dashboard(data: dict) -> str:
             document.getElementById("affiliate-reward-input").value = dashboardData.affiliate_reward_cents || 100;
             document.getElementById("maintenance-enabled-input").checked = dashboardData.maintenance_enabled === true;
             document.getElementById("maintenance-message-input").value = dashboardData.maintenance_message || "";
+            document.getElementById("welcome-message-input").value = dashboardData.welcome_message || "";
+            document.getElementById("help-message-input").value = dashboardData.help_message || "";
+            document.getElementById("terms-message-input").value = dashboardData.terms_message || "";
+            document.getElementById("privacy-message-input").value = dashboardData.privacy_message || "";
+            document.getElementById("active-languages-input").value = dashboardData.active_languages || "fr,en,ar";
         }
 
         // Actions Ajax

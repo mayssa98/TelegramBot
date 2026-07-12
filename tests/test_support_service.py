@@ -72,3 +72,17 @@ def test_close_and_reopen_ticket(mock_mongodb):
     ticket = support_service.get_ticket(ticket_id=1)
     assert ticket["status"] == TicketStatus.OPEN
     assert support_service.count_open_tickets() == 1
+
+
+def test_guided_ticket_keeps_category_and_order(mock_mongodb):
+    ticket = support_service.create_ticket(
+        user_id=321,
+        message="Payment issue",
+        category=TicketCategory.PAYMENT,
+        order_id=77,
+        priority=TicketPriority.HIGH,
+    )
+
+    assert ticket["category"] == TicketCategory.PAYMENT
+    assert ticket["order_id"] == 77
+    assert ticket["priority"] == TicketPriority.HIGH
