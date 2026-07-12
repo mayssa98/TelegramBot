@@ -158,3 +158,26 @@ def test_temporary_verifier_error_enters_manual_review(mock_mongodb, monkeypatch
     order = db.get_order(20)
     assert order["status"] == OrderStatus.MANUAL_REVIEW
     assert order["txid"] == "TXID_123456"
+
+
+def test_payment_qualifies_referral_only_after_confirmation(mock_mongodb, mock_payment_verifier):
+    from app.domain import affiliate_service
+
+    mock_mongodb.users.insert_many([{"telegram_id": 999}, {"telegram_id": 111}])
+    assert affiliate_service.register_referral_link(111, 999) is True
+    offer_id = db.add_offer(1, "Digital", 5.0, 1)
+    conn = db.get_conn()
+    conn.orders.insert_one({
+        "id": 30,
+        "user_id": 111,
+        "offer_id": offer_id,
+        "qty": 1,
+        "total_price": 5.0,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "",
+    })
+
+    result = payment_service.submit_payment(30, "TXID_QUALIFIED", 111)
+
+    assert result["affiliate"]["referrer_id"] == 999
+    assert mock_mongodb.referrals.find_one({"referred_id": 111})["first_payment"] is True

@@ -12,7 +12,7 @@ from typing import Any
 
 import database as db
 from app.constants import OrderStatus
-from app.domain import inventory_service
+from app.domain import affiliate_service, inventory_service
 from config import CURRENCY
 from payment_verifier import verify_payment
 
@@ -93,6 +93,7 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
         "delivered_content": None,
         "error_code": None,
         "error_message": None,
+        "affiliate": None,
     }
 
     # 1. Valider le format
@@ -158,6 +159,7 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
         # Paiement confirmé — marquer comme payé
         if db.mark_order_paid(order_id, "auto"):
             result["status"] = "confirmed"
+            result["affiliate"] = affiliate_service.on_first_payment(user_id)
 
             # Tenter la livraison automatique
             delivered = inventory_service.deliver_for_order(order_id)

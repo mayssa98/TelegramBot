@@ -23,7 +23,7 @@ from telegram.ext import (
 import admin
 import database as db
 import keyboards as kb
-from app.domain import order_service, payment_service, support_service
+from app.domain import affiliate_service, order_service, payment_service, support_service
 from config import (
     ADMIN_ID,
     AFFILIATE_REWARD_CENTS,
@@ -105,24 +105,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_new and context.args and context.args[0].startswith("ref_"):
         try:
             referrer_id = int(context.args[0][4:])
-            result = db.register_referral(
-                u.id, referrer_id, AFFILIATE_TARGET, AFFILIATE_REWARD_CENTS
-            )
-            if result["accepted"]:
-                ref_lang = lang_of(referrer_id)
-                if result["rewarded"]:
-                    await context.bot.send_message(
-                        referrer_id,
-                        t(ref_lang, "affiliate_rewarded", count=result["referrals"],
-                          reward=f"{AFFILIATE_REWARD_CENTS / 100:.2f}"),
-                        parse_mode=ParseMode.MARKDOWN,
-                    )
-                else:
-                    await context.bot.send_message(
-                        referrer_id,
-                        f"👥 Nouveau filleul ! Progression : "
-                        f"{result['progress']}/{AFFILIATE_TARGET}.",
-                    )
+            affiliate_service.register_referral_link(u.id, referrer_id)
         except (ValueError, TypeError):
             pass
     lang = db.get_user_lang(u.id)
@@ -213,11 +196,11 @@ async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(user_id)
     me = context.bot.username or (await context.bot.get_me()).username
     link = f"https://t.me/{me}?start=ref_{user_id}"
-    stats = db.affiliate_stats(user_id, AFFILIATE_TARGET)
+    stats = affiliate_service.get_stats(user_id)
     reward = AFFILIATE_REWARD_CENTS / 100
     balance = stats["balance_cents"] / 100
     message = t(
-        lang, "affiliate_title", count=stats["referrals"],
+        lang, "affiliate_title", count=stats["paid_referrals"],
         progress=stats["progress"], target=AFFILIATE_TARGET,
         balance=f"{balance:.2f}", reward=f"{reward:.2f}", link=link,
     )
@@ -617,6 +600,26 @@ async def process_txid(update, context, lang, order_id, txid):
     )
 
     if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery"):
+        affiliate = result.get("affiliate")
+        if affiliate:
+            referrer_id = affiliate["referrer_id"]
+            ref_lang = lang_of(referrer_id)
+            if affiliate["rewarded"]:
+                await context.bot.send_message(
+                    referrer_id,
+                    t(
+                        ref_lang,
+                        "affiliate_rewarded",
+                        count=affiliate["paid_count"],
+                        reward=f"{affiliate['reward_amount']:.2f}",
+                    ),
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+            else:
+                await context.bot.send_message(
+                    referrer_id,
+                    t(ref_lang, "affiliate_payment_progress", count=affiliate["paid_count"], target=AFFILIATE_TARGET),
+                )
         if result["delivered_content"]:
             content = "\n\n".join(result["delivered_content"])
             paid_order = db.get_order(order_id)

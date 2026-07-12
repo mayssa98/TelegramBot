@@ -178,6 +178,11 @@ TRANSLATIONS = {
         "en": "❌ Payment was not automatically confirmed for order #{oid}. Check the TXID, amount and currency, then tap *I have paid* again to retry.",
         "ar": "❌ لم يتم تأكيد دفع الطلب #{oid} تلقائياً. تحقق من رقم المعاملة والمبلغ والعملة ثم حاول مرة أخرى.",
     },
+    "affiliate_payment_progress": {
+        "fr": "👥 Un filleul a effectué son premier paiement. Progression : {count}/{target}.",
+        "en": "👥 A referral completed their first payment. Progress: {count}/{target}.",
+        "ar": "👥 أكمل أحد الإحالات أول دفعة. التقدم: {count}/{target}.",
+    },
     "payment_manual_review": {
         "fr": "🔎 Le paiement de la commande #{oid} nécessite une vérification manuelle. Votre TXID est conservé et l’administrateur a été prévenu.",
         "en": "🔎 Payment for order #{oid} requires manual review. Your transaction ID was saved and the administrator was notified.",
