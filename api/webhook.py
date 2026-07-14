@@ -11,6 +11,7 @@ import io
 import json
 import logging
 import os
+from pathlib import Path
 import threading
 import traceback
 from datetime import UTC, datetime
@@ -140,6 +141,20 @@ class handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path == "/assets/chatgpt-plus-benefits.png":
+            asset_path = Path(__file__).resolve().parent.parent / "assets" / "chatgpt-plus-benefits.png"
+            if asset_path.exists():
+                body = asset_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
         admin_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "activity", "settings"}

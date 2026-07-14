@@ -46,3 +46,27 @@ def test_french_quantity_prompt_mentions_stock_limit():
     assert "Choisissez la quantité" in message
     assert "Stock disponible : *9*" in message
     assert "1.23 USDT" in message
+
+
+def test_offer_detail_template_has_premium_sections():
+    message = t(
+        "fr",
+        "offer_detail",
+        emoji="🌀",
+        service="Chat GPT",
+        offer="Chat GPT Plus",
+        price="4.50",
+        cur="USDT",
+        stock=5,
+        note="Full",
+        duration="30 Days",
+        mail="iCloud",
+        access="Ready-made account",
+        delivery="Instantané",
+        description="• Premium tools",
+    )
+
+    assert "*Warranty*" in message
+    assert "*Duration*" in message
+    assert "*Mail*" in message
+    assert "*Access*" in message

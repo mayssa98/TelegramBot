@@ -98,6 +98,41 @@ def lang_of(user_id):
     return db.get_user_lang(user_id) or DEFAULT_LANG
 
 
+def offer_detail_fields(description: str, note: str) -> dict[str, str]:
+    fields = {
+        "note": note or "Full warranty",
+        "duration": "30 Days",
+        "mail": "Included",
+        "access": "Ready-made account",
+        "description": "",
+    }
+    remaining = []
+    aliases = {
+        "warranty": "note",
+        "duration": "duration",
+        "mail": "mail",
+        "email": "mail",
+        "access": "access",
+        "type": "access",
+    }
+    for raw_line in (description or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if ":" in line:
+            key, value = [part.strip() for part in line.split(":", 1)]
+            normalized = key.lower().replace(" ", "_")
+            target = aliases.get(normalized)
+            if target and value:
+                fields[target] = value
+                continue
+        remaining.append(line)
+    fields["description"] = "\n".join(f"\u2022 {item}" for item in remaining)
+    if not fields["description"]:
+        fields["description"] = "\U0001f525 Premium benefits included"
+    return fields
+
+
 # ---------------- /start ----------------
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
@@ -337,13 +372,33 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         off = db.get_offer(oid)
         svc = db.get_service(off["service_id"])
         price = t(lang, "price_tbd") if off["price"] is None else f"{off['price']:.2f}"
-        note = f"📝 {off['note']}" if off["note"] else ""
+        note = off["note"] if off["note"] else ""
         description = off.get("description") or ""
         delivery = off.get("delivery_delay") or ""
+        fields = offer_detail_fields(description, note)
+        detail_text = t(lang, "offer_detail", emoji=svc["emoji"], service=svc["name"],
+                        offer=off["name"], price=price, cur=off.get("currency", CURRENCY),
+                        stock=off["stock"], note=fields["note"], description=fields["description"],
+                        delivery=delivery or "Instantane apres confirmation",
+                        duration=fields["duration"], mail=fields["mail"], access=fields["access"])
+        is_chatgpt_offer = "chat" in off["name"].lower() and "gpt" in off["name"].lower()
+        if is_chatgpt_offer:
+            base_url = os.environ.get("HP_PUBLIC_BASE_URL", "https://telegram-bot-mayssa98s-projects.vercel.app").rstrip("/")
+            await q.message.reply_photo(
+                photo=f"{base_url}/assets/chatgpt-plus-benefits.png",
+                caption="\U0001f525 *ChatGPT Plus Benefits*",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            await q.message.reply_text(
+                detail_text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=kb.offer_detail_keyboard(lang, off),
+            )
+            with contextlib.suppress(Exception):
+                await q.message.delete()
+            return
         await q.edit_message_text(
-            t(lang, "offer_detail", emoji=svc["emoji"], service=svc["name"],
-              offer=off["name"], price=price, cur=off.get("currency", CURRENCY),
-              stock=off["stock"], note=note, description=description, delivery=delivery),
+            detail_text,
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=kb.offer_detail_keyboard(lang, off),
         )
