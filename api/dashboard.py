@@ -10,8 +10,10 @@ import html
 import json
 
 
-def render_dashboard(data: dict) -> str:
+def render_dashboard(data: dict, active_tab: str = "overview") -> str:
     """Génère la page HTML complète du dashboard administrateur."""
+    allowed_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "activity", "settings"}
+    active_tab = active_tab if active_tab in allowed_tabs else "overview"
     summary = data.get("summary", {})
     alerts = data.get("alerts", [])
     currency = data.get("currency", "USDT")
@@ -146,7 +148,7 @@ def render_dashboard(data: dict) -> str:
             flex-grow: 1;
         }
 
-        nav button {
+        nav a {
             background: transparent;
             border: none;
             color: var(--text-muted);
@@ -160,15 +162,16 @@ def render_dashboard(data: dict) -> str:
             display: flex;
             align-items: center;
             gap: 12px;
+            text-decoration: none;
             transition: all 0.2s ease;
         }
 
-        nav button:hover {
+        nav a:hover {
             background-color: rgba(103, 232, 249, 0.05);
             color: var(--text-main);
         }
 
-        nav button.active {
+        nav a.active {
             background-color: var(--btn-primary);
             color: white;
             box-shadow: 0 4px 12px rgba(8, 145, 178, 0.2);
@@ -670,7 +673,7 @@ def render_dashboard(data: dict) -> str:
                 overflow-x: auto;
                 padding-bottom: 4px;
             }
-            nav button {
+            nav a {
                 white-space: nowrap;
                 flex: 0 0 auto;
             }
@@ -744,14 +747,14 @@ def render_dashboard(data: dict) -> str:
             <h2>__SHOP_NAME__</h2>
         </div>
         <nav>
-            <button data-tab="overview" class="active">📊 Vue d'ensemble</button>
-            <button data-tab="orders">🧾 Commandes</button>
-            <button data-tab="catalog">📦 Catalogue</button>
-            <button data-tab="inventory">🔐 Inventaire</button>
-            <button data-tab="customers">👤 Clients</button>
-            <button data-tab="support">🎫 Support</button>
-            <button data-tab="activity">📝 Activité</button>
-            <button data-tab="settings">⚙️ Paramètres</button>
+            <a href="/admin" data-tab="overview" class="__ACTIVE_OVERVIEW__">Overview</a>
+            <a href="/admin/orders" data-tab="orders" class="__ACTIVE_ORDERS__">Commandes</a>
+            <a href="/admin/catalog" data-tab="catalog" class="__ACTIVE_CATALOG__">Catalogue</a>
+            <a href="/admin/inventory" data-tab="inventory" class="__ACTIVE_INVENTORY__">Inventaire</a>
+            <a href="/admin/customers" data-tab="customers" class="__ACTIVE_CUSTOMERS__">Clients</a>
+            <a href="/admin/support" data-tab="support" class="__ACTIVE_SUPPORT__">Support</a>
+            <a href="/admin/activity" data-tab="activity" class="__ACTIVE_ACTIVITY__">Activite</a>
+            <a href="/admin/settings" data-tab="settings" class="__ACTIVE_SETTINGS__">Parametres</a>
         </nav>
     </aside>
 
@@ -771,7 +774,7 @@ def render_dashboard(data: dict) -> str:
         <div class="toast-container" id="toast-container"></div>
 
         <!-- 1. VUE D'ENSEMBLE -->
-        <section id="overview" class="panel active">
+        <section id="overview" class="panel __PANEL_OVERVIEW__">
             <div class="alerts-section">
                 <h2>Alertes système</h2>
                 <div style="margin-top:12px;" id="alerts-container">__ALERTS_HTML__</div>
@@ -781,7 +784,7 @@ def render_dashboard(data: dict) -> str:
         </section>
 
         <!-- 2. GESTION DES COMMANDES -->
-        <section id="orders" class="panel">
+        <section id="orders" class="panel __PANEL_ORDERS__">
             <div class="filters">
                 <div class="search-box">
                     <input type="text" id="order-search" placeholder="Rechercher par ID, client ou produit..." oninput="filterOrders()">
@@ -832,7 +835,7 @@ def render_dashboard(data: dict) -> str:
         </section>
 
         <!-- 3. CATALOGUE -->
-        <section id="catalog" class="panel">
+        <section id="catalog" class="panel __PANEL_CATALOG__">
             <div class="section-header">
                 <h2>Services & Offres</h2>
                 <button class="btn btn-primary" onclick="openModal('add-service-modal')">➕ Nouveau service</button>
@@ -843,7 +846,7 @@ def render_dashboard(data: dict) -> str:
         </section>
 
         <!-- 4. INVENTAIRE -->
-        <section id="inventory" class="panel">
+        <section id="inventory" class="panel __PANEL_INVENTORY__">
             <div class="section-header">
                 <h2>Codes & Comptes chiffrés</h2>
                 <a class="btn btn-secondary" href="/admin/api/inventory-export">⬇ Export CSV masqué</a>
@@ -875,7 +878,7 @@ def render_dashboard(data: dict) -> str:
         </section>
 
         <!-- 5. CLIENTS -->
-        <section id="customers" class="panel">
+        <section id="customers" class="panel __PANEL_CUSTOMERS__">
             <div class="filters">
                 <div class="search-box">
                     <input type="text" id="customer-search" placeholder="Rechercher par Telegram ID, nom ou prénom..." oninput="filterCustomers()">
@@ -903,7 +906,7 @@ def render_dashboard(data: dict) -> str:
         </section>
 
         <!-- 6. SUPPORT -->
-        <section id="support" class="panel">
+        <section id="support" class="panel __PANEL_SUPPORT__">
             <div class="filters">
                 <select id="ticket-filter-status" onchange="filterTickets()">
                     <option value="">Tous les tickets</option>
@@ -934,7 +937,7 @@ def render_dashboard(data: dict) -> str:
         </section>
 
         <!-- 7. ACTIVITE -->
-        <section id="activity" class="panel">
+        <section id="activity" class="panel __PANEL_ACTIVITY__">
             <h2>Journal d'audit système</h2>
             <div class="table-wrap" style="margin-top:20px;">
                 <table id="audit-table">
@@ -954,7 +957,7 @@ def render_dashboard(data: dict) -> str:
         </section>
 
         <!-- 8. CONFIGURATION -->
-        <section id="settings" class="panel">
+        <section id="settings" class="panel __PANEL_SETTINGS__">
             <h2>Paramètres de la boutique</h2>
             <div class="table-wrap" style="margin-top:20px; padding:28px;">
                 <form id="settings-form" onsubmit="saveSettings(event)">
@@ -1159,7 +1162,7 @@ def render_dashboard(data: dict) -> str:
         });
 
         function setupTabNavigation() {
-            const buttons = document.querySelectorAll("nav button");
+            const buttons = document.querySelectorAll("nav a[data-tab]");
             const panels = document.querySelectorAll(".panel");
             const title = document.getElementById("panel-title");
 
@@ -1182,13 +1185,28 @@ def render_dashboard(data: dict) -> str:
             }
 
             buttons.forEach(btn => {
-                btn.addEventListener("click", () => activateTab(btn));
+                btn.addEventListener("click", event => {
+                    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    history.pushState(null, "", btn.getAttribute("href"));
+                    activateTab(btn);
+                });
+            });
+
+            window.addEventListener("popstate", () => {
+                const tabId = location.pathname.replace("/admin/", "") || "overview";
+                const button = document.querySelector(`nav a[data-tab="${tabId}"]`);
+                if (button) activateTab(button);
             });
 
             // Gérer le hash initial
             if (location.hash) {
                 const tabId = location.hash.substring(1);
-                const button = document.querySelector(`nav button[data-tab="${tabId}"]`);
+                const button = document.querySelector(`nav a[data-tab="${tabId}"]`);
+                if (button) activateTab(button);
+            } else if (location.pathname.startsWith("/admin/")) {
+                const tabId = location.pathname.replace("/admin/", "");
+                const button = document.querySelector(`nav a[data-tab="${tabId}"]`);
                 if (button) activateTab(button);
             }
         }
@@ -2092,9 +2110,13 @@ def render_dashboard(data: dict) -> str:
 """
 
     # Remplacements de chaînes simples pour éviter les syntax errors f-string
-    return (
+    page = (
         html_template.replace("__SHOP_NAME__", html.escape(shop_name))
         .replace("__ALERTS_HTML__", alerts_html)
         .replace("__KPIS_HTML__", kpis_html)
         .replace("__JSON_DATA__", json_data_str)
     )
+    for tab in allowed_tabs:
+        page = page.replace(f"__ACTIVE_{tab.upper()}__", "active" if tab == active_tab else "")
+        page = page.replace(f"__PANEL_{tab.upper()}__", "active" if tab == active_tab else "")
+    return page

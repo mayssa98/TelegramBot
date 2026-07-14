@@ -112,3 +112,12 @@ def test_dashboard_renders_mongodb_dates():
     assert "revealInventory" in page
     assert "toggleInventory" in page
     assert "/admin/api/inventory-export" in page
+
+
+def test_dashboard_support_tab_has_real_page_link():
+    page = render_dashboard({"summary": {}, "alerts": []}, active_tab="support")
+
+    assert 'href="/admin/support" data-tab="support" class="active"' in page
+    assert 'id="support" class="panel active"' in page
+    assert "__ACTIVE_" not in page
+    assert "__PANEL_" not in page

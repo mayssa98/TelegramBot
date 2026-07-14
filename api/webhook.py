@@ -84,7 +84,8 @@ class handler(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         path = url.path.rstrip("/")
 
-        if path == "/admin":
+        admin_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "activity", "settings"}
+        if path == "/admin" or path.startswith("/admin/") and path.removeprefix("/admin/") in admin_tabs:
             if not self._dashboard_authorized():
                 self.send_response(401)
                 self.send_header("WWW-Authenticate", 'Basic realm="TelegramBot Admin"')
@@ -93,10 +94,11 @@ class handler(BaseHTTPRequestHandler):
 
             # Servir le dashboard HTML
             try:
+                active_tab = path.removeprefix("/admin/") if path.startswith("/admin/") else "overview"
                 data = db.dashboard_data()
                 data["shop_name"] = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip()
                 data["currency"] = CURRENCY
-                body = render_dashboard(data).encode("utf-8")
+                body = render_dashboard(data, active_tab=active_tab).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store, max-age=0")
