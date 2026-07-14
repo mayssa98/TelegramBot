@@ -108,7 +108,11 @@ def offer_detail_keyboard(lang, offer):
 
 def paid_keyboard(lang, order_id):
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(lang, "btn_copy_binance_id"), callback_data=f"copy_binance_id:{order_id}")],
+        [InlineKeyboardButton(t(lang, "btn_copy_amount"), callback_data=f"copy_amount:{order_id}")],
         [InlineKeyboardButton(t(lang, "btn_paid"), callback_data=f"paid:{order_id}")],
+        [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{order_id}")],
+        [InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")],
     ])
 
 

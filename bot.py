@@ -338,6 +338,24 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("cancel_buy:"):
         await q.edit_message_text(t(lang, "cancelled_msg"))
         return
+    if data.startswith("copy_binance_id:"):
+        oid = int(data.split(":")[1])
+        order = db.get_order(oid)
+        if order and order["user_id"] == uid:
+            await q.message.reply_text(
+                t(lang, "copy_binance_id_msg", binance_id=BINANCE_PAY_ID),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        return
+    if data.startswith("copy_amount:"):
+        oid = int(data.split(":")[1])
+        order = db.get_order(oid)
+        if order and order["user_id"] == uid:
+            await q.message.reply_text(
+                t(lang, "copy_amount_msg", total=f"{order['total_price']:.2f}", cur=CURRENCY),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        return
     if data.startswith("paid:"):
         oid = int(data.split(":")[1])
         PENDING[uid] = ("await_txid", oid)
