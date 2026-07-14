@@ -64,3 +64,52 @@ def verify_payment(txid, amount, currency=None, created_at=None):
         return {"status": "failed", "code": "not_found", "reason": "Transaction absente de l'historique Binance Pay"}
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
         return {"status": "manual_review", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
+
+
+def _transaction_time_ms(transaction):
+    for key in ("transactionTime", "createTime", "time", "insertTime", "timestamp"):
+        value = transaction.get(key)
+        if value is None:
+            continue
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            continue
+        return value if value > 10_000_000_000 else value * 1000
+    return None
+
+
+def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=None):
+    if not BINANCE_API_KEY or not BINANCE_API_SECRET:
+        return {"status": "manual_review", "code": "not_configured", "reason": "Vérification automatique non configurée"}
+
+    created_at = int(created_at or time.time())
+    start_ms = (created_at * 1000) - 30_000
+    used_txids = {str(item).strip() for item in (used_txids or []) if item}
+    try:
+        expected = Decimal(str(amount)).quantize(Decimal("0.00000001"))
+        expected_asset = str(currency or PAY_CURRENCY).upper()
+        transactions = _fetch_pay_transactions(start_ms)
+        for transaction in transactions:
+            txid = str(transaction.get("transactionId", "")).strip()
+            if not txid or txid in used_txids:
+                continue
+            transaction_ms = _transaction_time_ms(transaction)
+            if transaction_ms is not None and transaction_ms < start_ms:
+                continue
+            received = Decimal(str(transaction.get("amount", "0"))).quantize(
+                Decimal("0.00000001")
+            )
+            asset = str(transaction.get("currency", "")).upper()
+            if received <= 0 or asset != expected_asset:
+                continue
+            if received == expected:
+                return {
+                    "status": "confirmed",
+                    "code": "confirmed",
+                    "txid": txid,
+                    "reason": "Paiement Binance Pay confirmé par montant exact",
+                }
+        return {"status": "failed", "code": "not_found", "reason": "Aucun paiement exact récent détecté"}
+    except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
+        return {"status": "manual_review", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}

@@ -370,8 +370,9 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      offer=order["offer_name"], qty=order["qty"],
                      total=f"{order['total_price']:.2f}", cur=CURRENCY,
                      binance_id=BINANCE_PAY_ID)
-            await q.message.reply_text(text, parse_mode=ParseMode.MARKDOWN,
-                                       reply_markup=kb.paid_keyboard(lang, oid))
+            payment_message = await q.message.reply_text(text, parse_mode=ParseMode.MARKDOWN,
+                                                         reply_markup=kb.paid_keyboard(lang, oid))
+            await run_auto_payment_check(payment_message, context, lang, oid, uid)
         return
     if data.startswith("delivery_ok:"):
         order_id = int(data.split(":")[1])
@@ -474,6 +475,7 @@ async def handle_buy_confirmed(update, context, lang):
              binance_id=BINANCE_PAY_ID)
     await q.edit_message_text(text, parse_mode=ParseMode.MARKDOWN,
                               reply_markup=kb.paid_keyboard(lang, order["id"]))
+    await run_auto_payment_check(q.message, context, lang, order["id"], uid)
 
 
 # ---------------- Saisie en attente (txid / admin) ----------------
@@ -650,17 +652,8 @@ async def handle_pending_input(update, context, lang):
         return
 
 
-# ---------------- Traitement de l'ID de transaction ----------------
-async def process_txid(update, context, lang, order_id, txid):
-    uid = update.effective_user.id
-
-    await update.message.reply_text(t(lang, "verifying"))
-
-    # Vérification via le service de paiement (idempotent)
-    result = await asyncio.to_thread(
-        payment_service.submit_payment, order_id, txid, uid
-    )
-
+# ---------------- Traitement de paiement ----------------
+async def send_payment_result(message, context, lang, order_id, result, uid):
     if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery"):
         affiliate = result.get("affiliate")
         if affiliate:
@@ -685,7 +678,7 @@ async def process_txid(update, context, lang, order_id, txid):
         if result["delivered_content"]:
             content = "\n\n".join(result["delivered_content"])
             paid_order = db.get_order(order_id)
-            await update.message.reply_text(
+            await message.reply_text(
                 t(lang, "delivery_received", oid=order_id,
                   service=paid_order["service_name"], offer=paid_order["offer_name"],
                   content=html.escape(content)),
@@ -693,20 +686,24 @@ async def process_txid(update, context, lang, order_id, txid):
                 reply_markup=kb.post_delivery_keyboard(lang, order_id),
             )
         else:
-            await update.message.reply_text(t(lang, "verify_ok", oid=order_id),
-                                            parse_mode=ParseMode.MARKDOWN)
+            await message.reply_text(t(lang, "verify_ok", oid=order_id),
+                                     parse_mode=ParseMode.MARKDOWN)
             await admin.notify_new_order(context, db.get_order(order_id))
     elif result["status"] == "already_paid":
-        await update.message.reply_text(t(lang, "already_paid", oid=order_id),
-                                        parse_mode=ParseMode.MARKDOWN)
+        await message.reply_text(t(lang, "already_paid", oid=order_id),
+                                 parse_mode=ParseMode.MARKDOWN)
     elif result["status"] == "manual_review":
-        await update.message.reply_text(t(lang, "payment_manual_review", oid=order_id))
+        await message.reply_text(t(lang, "payment_manual_review", oid=order_id),
+                                 parse_mode=ParseMode.MARKDOWN)
+        await message.reply_text(t(lang, "payment_contact_admin", oid=order_id),
+                                 parse_mode=ParseMode.MARKDOWN,
+                                 reply_markup=kb.support_keyboard(lang))
         await admin.notify_new_order(context, db.get_order(order_id))
     else:
         error_code = result.get("error_code", "unknown")
         if error_code == "too_short":
-            await update.message.reply_text(t(lang, "txid_too_short"))
-            PENDING[uid] = ("await_txid", order_id)  # garder l'état
+            await message.reply_text(t(lang, "txid_too_short"))
+            PENDING[uid] = ("await_txid", order_id)
             return
         error_key = {
             "wrong_amount": "payment_wrong_amount",
@@ -714,8 +711,33 @@ async def process_txid(update, context, lang, order_id, txid):
             "not_found": "payment_not_found",
             "already_used": "payment_txid_used",
         }.get(error_code, "verify_failed")
-        await update.message.reply_text(t(lang, error_key, oid=order_id),
-                                        parse_mode=ParseMode.MARKDOWN)
+        await message.reply_text(t(lang, error_key, oid=order_id),
+                                 parse_mode=ParseMode.MARKDOWN)
+        await message.reply_text(t(lang, "payment_contact_admin", oid=order_id),
+                                 parse_mode=ParseMode.MARKDOWN,
+                                 reply_markup=kb.support_keyboard(lang))
+
+
+async def run_auto_payment_check(message, context, lang, order_id, uid):
+    await message.reply_text(t(lang, "auto_check_started", seconds=15), parse_mode=ParseMode.MARKDOWN)
+    deadline = asyncio.get_running_loop().time() + 15
+    while asyncio.get_running_loop().time() < deadline:
+        result = await asyncio.to_thread(payment_service.auto_check_payment, order_id, uid)
+        if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery", "already_paid"):
+            await send_payment_result(message, context, lang, order_id, result, uid)
+            return
+        await asyncio.sleep(3)
+    PENDING[uid] = ("await_txid", order_id)
+    await message.reply_text(t(lang, "auto_check_timeout", oid=order_id), parse_mode=ParseMode.MARKDOWN)
+
+
+async def process_txid(update, context, lang, order_id, txid):
+    uid = update.effective_user.id
+    await update.message.reply_text(t(lang, "verifying"))
+    result = await asyncio.to_thread(
+        payment_service.submit_payment, order_id, txid, uid
+    )
+    await send_payment_result(update.message, context, lang, order_id, result, uid)
 
 # ---------------- Mes commandes ----------------
 async def show_my_orders(update, context, lang):

@@ -180,9 +180,24 @@ TRANSLATIONS = {
         "ar": '\U0001f525 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u062f\u0641\u0639',
     },
     "ask_txid": {
-        "fr": "✍️ Veuillez envoyer l'*ID de transaction Binance* de votre paiement pour la commande #{oid} :",
-        "en": "✍️ Please send the *Binance transaction ID* of your payment for order #{oid}:",
-        "ar": "✍️ الرجاء إرسال *رقم معاملة Binance* الخاص بدفعتك للطلب #{oid}:",
+        "fr": "\u270d\ufe0f Veuillez envoyer l'*ID de transaction Binance* de votre paiement pour la commande #{oid}. Si cela \u00e9choue, contactez le support avec une capture du paiement :",
+        "en": "\u270d\ufe0f Please send the *Binance transaction ID* for order #{oid}. If it fails, contact support with a payment screenshot:",
+        "ar": "\u270d\ufe0f \u0627\u0644\u0631\u062c\u0627\u0621 \u0625\u0631\u0633\u0627\u0644 *\u0631\u0642\u0645 \u0645\u0639\u0627\u0645\u0644\u0629 Binance* \u0644\u0644\u0637\u0644\u0628 #{oid}. \u0625\u0630\u0627 \u0641\u0634\u0644 \u0627\u0644\u062a\u062d\u0642\u0642\u060c \u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u062f\u0639\u0645 \u0645\u0639 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0644\u0644\u062f\u0641\u0639:",
+    },
+    "auto_check_started": {
+        "fr": "\U0001f680 V\u00e9rification automatique lanc\u00e9e pendant *{seconds} secondes*... Le bot cherche un paiement avec le montant exact.",
+        "en": "\U0001f680 Automatic verification started for *{seconds} seconds*... The bot is looking for a payment with the exact amount.",
+        "ar": "\U0001f680 \u0628\u062f\u0623 \u0627\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u062a\u0644\u0642\u0627\u0626\u064a \u0644\u0645\u062f\u0629 *{seconds} \u062b\u0627\u0646\u064a\u0629*... \u064a\u0628\u062d\u062b \u0627\u0644\u0628\u0648\u062a \u0639\u0646 \u062f\u0641\u0639\u0629 \u0628\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0635\u062d\u064a\u062d.",
+    },
+    "auto_check_timeout": {
+        "fr": "\u231b V\u00e9rification automatique termin\u00e9e pour la commande #{oid}.\n\nEnvoyez maintenant l'*ID de transaction Binance* pour v\u00e9rifier manuellement votre paiement.",
+        "en": "\u231b Automatic verification ended for order #{oid}.\n\nNow send the *Binance transaction ID* to manually verify your payment.",
+        "ar": "\u231b \u0627\u0646\u062a\u0647\u0649 \u0627\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u062a\u0644\u0642\u0627\u0626\u064a \u0644\u0644\u0637\u0644\u0628 #{oid}.\n\n\u0623\u0631\u0633\u0644 \u0627\u0644\u0622\u0646 *\u0631\u0642\u0645 \u0645\u0639\u0627\u0645\u0644\u0629 Binance* \u0644\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u064a\u062f\u0648\u064a \u0645\u0646 \u0627\u0644\u062f\u0641\u0639.",
+    },
+    "payment_contact_admin": {
+        "fr": "\U0001f4f8 Si la v\u00e9rification \u00e9choue encore, contactez le support et envoyez une capture du paiement pour la commande #{oid}.",
+        "en": "\U0001f4f8 If verification still fails, contact support and send a payment screenshot for order #{oid}.",
+        "ar": "\U0001f4f8 \u0625\u0630\u0627 \u0641\u0634\u0644 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649\u060c \u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u062f\u0639\u0645 \u0648\u0623\u0631\u0633\u0644 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0644\u0644\u062f\u0641\u0639 \u0644\u0644\u0637\u0644\u0628 #{oid}.",
     },
     "verifying": {
         "fr": "🔎 Vérification automatique de votre paiement en cours... Merci de patienter quelques instants.",

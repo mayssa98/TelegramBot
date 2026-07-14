@@ -73,6 +73,39 @@ def test_submit_payment_success(mock_mongodb, mock_payment_verifier):
     assert db_order["txid"] == "TXID_VALID_123"
 
 
+def test_auto_check_payment_by_exact_amount_delivers(mock_mongodb, monkeypatch):
+    db.add_service("VOD", "🎬")
+    offer_id = db.add_offer(service_id=1, name="Netflix", price=5.0, stock=3)
+    db.add_inventory_items(offer_id, ["code_netflix_auto"])
+    conn = db.get_conn()
+    conn.orders.insert_one({
+        "id": 11,
+        "user_id": 123,
+        "offer_id": offer_id,
+        "service_name": "VOD",
+        "offer_name": "Netflix",
+        "qty": 1,
+        "total_price": 5.0,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "",
+        "created_at": 100,
+        "expires_at": 9999999999,
+    })
+    monkeypatch.setattr(
+        payment_service,
+        "verify_payment_by_amount",
+        lambda *args, **kwargs: {"status": "confirmed", "txid": "AUTO_TX_123456"},
+    )
+
+    result = payment_service.auto_check_payment(11, 123)
+
+    assert result["status"] == "delivered"
+    assert result["delivered_content"] == ["code_netflix_auto"]
+    order = db.get_order(11)
+    assert order["status"] == OrderStatus.DELIVERED
+    assert order["txid"] == "AUTO_TX_123456"
+
+
 def test_submit_payment_duplicate_txid(mock_mongodb):
     """Vérifie qu'on ne peut pas réutiliser le même TXID pour une autre commande."""
     conn = db.get_conn()

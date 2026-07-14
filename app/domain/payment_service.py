@@ -14,7 +14,7 @@ import database as db
 from app.constants import OrderStatus
 from app.domain import affiliate_service, inventory_service
 from config import CURRENCY
-from payment_verifier import verify_payment
+from payment_verifier import verify_payment, verify_payment_by_amount
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +67,37 @@ def check_txid_uniqueness(txid: str, order_id: int) -> None:
             "already_used",
             f"Ce TXID a déjà été utilisé pour la commande #{existing['id']}.",
         )
+
+
+def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: str) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "status": "failed",
+        "order": db.get_order(order_id),
+        "delivered_content": None,
+        "error_code": None,
+        "error_message": None,
+        "affiliate": None,
+    }
+    if txid:
+        db.update_order(order_id, txid=txid)
+    if db.mark_order_paid(order_id, method):
+        result["status"] = "confirmed"
+        result["affiliate"] = affiliate_service.on_first_payment(user_id)
+        delivered = inventory_service.deliver_for_order(order_id)
+        if delivered:
+            result["delivered_content"] = delivered
+            result["status"] = "delivered"
+        else:
+            result["status"] = "confirmed_no_delivery"
+        db.audit_event(
+            "payment.confirmed",
+            actor_id=user_id,
+            details={"order_id": order_id, "txid": txid, "method": method},
+        )
+    else:
+        result["error_code"] = "payment_failed"
+        result["error_message"] = "Le paiement n'a pas pu etre enregistre (stock insuffisant ou erreur)."
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -156,29 +187,7 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
     )
 
     if verification["status"] == "confirmed":
-        # Paiement confirmé — marquer comme payé
-        if db.mark_order_paid(order_id, "auto"):
-            result["status"] = "confirmed"
-            result["affiliate"] = affiliate_service.on_first_payment(user_id)
-
-            # Tenter la livraison automatique
-            delivered = inventory_service.deliver_for_order(order_id)
-            if delivered:
-                result["delivered_content"] = delivered
-                result["status"] = "delivered"
-            else:
-                # Livraison impossible — l'admin doit intervenir
-                result["status"] = "confirmed_no_delivery"
-
-            db.audit_event(
-                "payment.confirmed",
-                actor_id=user_id,
-                details={"order_id": order_id, "txid": txid, "method": "auto"},
-            )
-        else:
-            # mark_order_paid a échoué (race condition ou stock insuffisant)
-            result["error_code"] = "payment_failed"
-            result["error_message"] = "Le paiement n'a pas pu être enregistré (stock insuffisant ou erreur)."
+        result.update(_finalize_confirmed_payment(order_id, user_id, txid, "auto_txid"))
     elif verification["status"] == "manual_review":
         reason = verification.get("reason", "Vérification automatique indisponible")
         mark_manual_review(order_id, reason)
@@ -208,6 +217,66 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
             details={"order_id": order_id, "txid": txid, "reason": reason},
         )
 
+    return result
+
+
+def auto_check_payment(order_id: int, user_id: int) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "status": "failed",
+        "order": None,
+        "delivered_content": None,
+        "error_code": None,
+        "error_message": None,
+        "affiliate": None,
+    }
+    order = db.get_order(order_id)
+    if not order:
+        result["error_code"] = "order_not_found"
+        result["error_message"] = "Commande introuvable."
+        return result
+    result["order"] = order
+    if order["user_id"] != user_id:
+        result["error_code"] = "not_owner"
+        result["error_message"] = "Cette commande ne vous appartient pas."
+        return result
+    if order["status"] in (OrderStatus.PAID, OrderStatus.PAYMENT_CONFIRMED, OrderStatus.DELIVERED):
+        result["status"] = "already_paid"
+        return result
+    if order["status"] not in (OrderStatus.PENDING_PAYMENT, OrderStatus.AWAITING_VERIFICATION, OrderStatus.VERIFICATION_FAILED):
+        result["error_code"] = "invalid_status"
+        result["error_message"] = f"La commande est en statut {order['status']} et ne peut pas recevoir de paiement."
+        return result
+    if order.get("expires_at") and order["expires_at"] < int(time.time()):
+        from app.domain.order_service import expire_order
+        expire_order(order_id)
+        result["error_code"] = "expired"
+        result["error_message"] = "Cette commande a expire. Veuillez en creer une nouvelle."
+        return result
+
+    used_txids = [
+        item.get("txid")
+        for item in db.get_conn().orders.find({"txid": {"$nin": ["", None]}, "id": {"$ne": order_id}}, {"txid": 1})
+    ]
+    verification = verify_payment_by_amount(
+        order["total_price"], CURRENCY, order.get("created_at"), used_txids=used_txids
+    )
+    if verification["status"] == "confirmed":
+        txid = verification.get("txid", "")
+        try:
+            if txid:
+                check_txid_uniqueness(txid, order_id)
+        except TxidValidationError as exc:
+            result["error_code"] = exc.code
+            result["error_message"] = exc.message
+            return result
+        result.update(_finalize_confirmed_payment(order_id, user_id, txid, "auto_amount"))
+    elif verification["status"] == "manual_review":
+        result["status"] = "manual_review"
+        result["error_code"] = verification.get("code", "temporary_error")
+        result["error_message"] = verification.get("reason", "Verification automatique indisponible")
+    else:
+        result["error_code"] = verification.get("code", "not_found")
+        result["error_message"] = verification.get("reason", "Aucun paiement exact recent detecte")
     return result
 
 

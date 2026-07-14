@@ -35,3 +35,6 @@ def test_french_payment_message_matches_binance_style():
     assert "Copier Binance ID" in t("fr", "btn_copy_binance_id")
     assert "Copier le montant exact" in t("fr", "btn_copy_amount")
     assert "`904169573`" in t("fr", "copy_binance_id_msg", binance_id="904169573")
+    assert "15 secondes" in t("fr", "auto_check_started", seconds=15)
+    assert "ID de transaction Binance" in t("fr", "auto_check_timeout", oid=6074)
+    assert "capture du paiement" in t("fr", "payment_contact_admin", oid=6074)

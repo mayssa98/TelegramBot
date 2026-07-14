@@ -37,6 +37,13 @@ def support_order_keyboard(lang, orders):
     return InlineKeyboardMarkup(rows)
 
 
+def support_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(lang, "menu_support"), callback_data="support_cat:payment")],
+        [InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")],
+    ])
+
+
 def main_menu_keyboard(lang, user_id):
     rows = [
         [t(lang, "menu_catalog")],
