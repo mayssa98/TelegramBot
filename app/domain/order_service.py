@@ -302,6 +302,91 @@ def mark_refunded(order_id: int, reason: str = "") -> bool:
     return False
 
 
+def admin_update_order(
+    order_id: int,
+    *,
+    status: str | None = None,
+    txid: str | None = None,
+    qty: int | None = None,
+    unit_price: float | None = None,
+    total_price: float | None = None,
+    admin_note: str | None = None,
+) -> dict | None:
+    """Update editable order fields from the admin dashboard."""
+    conn = db.get_conn()
+    order = conn.orders.find_one({"id": order_id})
+    if not order:
+        return None
+
+    update: dict[str, Any] = {"updated_at": int(time.time())}
+    if status is not None:
+        valid_statuses = {item.value for item in OrderStatus}
+        paid_statuses = {str(item) for item in PAID_STATUSES}
+        if status not in valid_statuses:
+            raise ValueError("Statut de commande invalide")
+        update["status"] = status
+        if status in paid_statuses and not order.get("paid_at"):
+            update["paid_at"] = int(time.time())
+        if status == OrderStatus.DELIVERED.value and not order.get("delivered_at"):
+            update["delivered_at"] = int(time.time())
+        if status == OrderStatus.CANCELLED.value and not order.get("cancelled_at"):
+            update["cancelled_at"] = int(time.time())
+
+    if txid is not None:
+        txid = txid.strip()
+        if txid:
+            duplicate = conn.orders.find_one({"txid": txid, "id": {"$ne": order_id}}, {"id": 1})
+            if duplicate:
+                raise ValueError(f"TXID dÃ©jÃ  utilisÃ© par la commande #{duplicate['id']}")
+        update["txid"] = txid
+
+    if qty is not None:
+        if qty < 1:
+            raise ValueError("La quantitÃ© doit Ãªtre supÃ©rieure Ã  0")
+        update["qty"] = qty
+
+    if unit_price is not None:
+        if unit_price < 0:
+            raise ValueError("Le prix unitaire ne peut pas Ãªtre nÃ©gatif")
+        update["unit_price"] = round(unit_price, 2)
+
+    if total_price is not None:
+        if total_price < 0:
+            raise ValueError("Le total ne peut pas Ãªtre nÃ©gatif")
+        update["total_price"] = round(total_price, 2)
+
+    if admin_note is not None:
+        update["admin_note"] = admin_note.strip()[:2000]
+
+    conn.orders.update_one({"id": order_id}, {"$set": update})
+    db.audit_event("order.admin_updated", details={"order_id": order_id, "fields": sorted(update)})
+    return db.get_order(order_id)
+
+
+def manual_deliver_order(order_id: int, content: str) -> dict | None:
+    """Mark an order delivered with administrator-provided content."""
+    content = content.strip()
+    if not content:
+        raise ValueError("Le contenu de livraison est obligatoire")
+
+    conn = db.get_conn()
+    result = conn.orders.update_one(
+        {"id": order_id},
+        {
+            "$set": {
+                "status": OrderStatus.DELIVERED,
+                "delivery_text": content,
+                "delivered_at": int(time.time()),
+                "updated_at": int(time.time()),
+            }
+        },
+    )
+    if result.matched_count != 1:
+        return None
+    db.audit_event("order.manual_delivered", details={"order_id": order_id})
+    return db.get_order(order_id)
+
+
 # ---------------------------------------------------------------------------
 # Utilitaires internes
 # ---------------------------------------------------------------------------

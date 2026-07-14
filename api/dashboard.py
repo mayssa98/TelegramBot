@@ -1153,6 +1153,19 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
         let inventoryPagination = { page: 1, pages: 1, total: 0 };
         let orderFilterTimer;
         let inventoryFilterTimer;
+        const ORDER_STATUSES = [
+            "pending_payment",
+            "awaiting_verification",
+            "payment_confirmed",
+            "preparing_delivery",
+            "delivered",
+            "verification_failed",
+            "manual_review",
+            "cancelled",
+            "refunded",
+            "expired",
+            "paid"
+        ];
 
         // Au chargement de la page
         document.addEventListener("DOMContentLoaded", () => {
@@ -1835,41 +1848,52 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             if (!order) return;
 
             const body = document.getElementById("order-detail-body");
+            const statusOptions = ORDER_STATUSES.map(status =>
+                `<option value="${status}" ${status === order.status ? "selected" : ""}>${status}</option>`
+            ).join("");
             body.innerHTML = `
                 <div style="display:flex; flex-direction:column; gap:16px;">
                     <div><strong>ID Commande:</strong> #${order.id}</div>
                     <div><strong>Date:</strong> ${formatDateTime(order.created_at)}</div>
                     <div><strong>Client (Telegram ID):</strong> <code>${order.user_id}</code></div>
-                    <div><strong>Produit:</strong> ${order.service_name} — ${order.offer_name}</div>
-                    <div><strong>Total:</strong> ${order.total_price.toFixed(2)} ${dashboardData.currency}</div>
-                    <div><strong>Statut:</strong> <span class="badge badge-${order.status}">${order.status}</span></div>
-                    <div><strong>Identifiant Transaction (TXID):</strong> <code>${order.txid || '—'}</code></div>
-                    <div><strong>Méthode de vérification:</strong> <code>${order.verify_method || '—'}</code></div>
-                    <div><strong>Notes Administrateur:</strong> <textarea style="width:100%; margin-top:8px;" id="order-admin-note" rows="3" placeholder="Notes optionnelles...">${order.admin_note || ''}</textarea></div>
-                    <div style="display:flex; gap:12px; margin-top:12px;">
+                    <div><strong>Produit:</strong> ${escapeHtml(order.service_name || "")} - ${escapeHtml(order.offer_name || "")}</div>
+                    <div><strong>Verification:</strong> <code>${escapeHtml(order.verify_method || "-")}</code></div>
+                    <form id="order-admin-form" onsubmit="updateOrderAdmin(event, ${order.id})" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+                        <div class="form-group"><label>Statut</label><select name="status">${statusOptions}</select></div>
+                        <div class="form-group"><label>TXID</label><input name="txid" value="${escapeHtml(order.txid || "")}" placeholder="Transaction ID"></div>
+                        <div class="form-group"><label>Quantite</label><input type="number" min="1" name="qty" value="${order.qty || 1}"></div>
+                        <div class="form-group"><label>Prix unitaire</label><input type="number" min="0" step="0.01" name="unit_price" value="${order.unit_price ?? 0}"></div>
+                        <div class="form-group"><label>Total</label><input type="number" min="0" step="0.01" name="total_price" value="${order.total_price ?? 0}"></div>
+                        <div class="form-group" style="grid-column:1 / -1;"><label>Notes admin</label><textarea name="admin_note" id="order-admin-note" rows="3" placeholder="Notes optionnelles...">${escapeHtml(order.admin_note || "")}</textarea></div>
+                        <button class="btn btn-primary" type="submit">Enregistrer la commande</button>
+                    </form>
+                    <div class="form-group">
+                        <label>Livraison manuelle</label>
+                        <textarea id="manual-delivery-text" rows="4" placeholder="Contenu a envoyer au client...">${escapeHtml(order.delivery_text || "")}</textarea>
+                        <button class="btn btn-primary" style="margin-top:8px;" onclick="manualDeliverOrder(${order.id})">Livrer manuellement</button>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:12px;">
                         ${order.status === 'awaiting_verification' || order.status === 'pending_payment' || order.status === 'manual_review' ? `
-                            <button class="btn btn-primary" onclick="confirmPaymentManual(${order.id})">✅ Confirmer paiement</button>
+                            <button class="btn btn-primary" onclick="confirmPaymentManual(${order.id})">Confirmer paiement</button>
                         ` : ''}
                         ${order.status !== 'cancelled' && order.status !== 'refunded' ? `
-                            <button class="btn btn-danger" onclick="cancelOrder(${order.id})">❌ Annuler commande</button>
+                            <button class="btn btn-danger" onclick="cancelOrder(${order.id})">Annuler commande</button>
                         ` : ''}
                         ${['awaiting_verification', 'verification_failed', 'manual_review'].includes(order.status) ? `
-                            <button class="btn btn-secondary" onclick="orderAction('reset_order', ${order.id})">↩️ Remettre en attente</button>
+                            <button class="btn btn-secondary" onclick="orderAction('reset_order', ${order.id})">Remettre en attente</button>
                         ` : ''}
                         ${['paid', 'payment_confirmed', 'preparing_delivery', 'delivered', 'manual_review'].includes(order.status) ? `
-                            <button class="btn btn-danger" onclick="orderAction('refund_order', ${order.id}, true)">💸 Rembourser</button>
+                            <button class="btn btn-danger" onclick="orderAction('refund_order', ${order.id}, true)">Rembourser</button>
                         ` : ''}
                         ${order.status === 'delivered' ? `
-                            <button class="btn btn-secondary" onclick="orderAction('resend_delivery', ${order.id})">📨 Renvoyer la livraison</button>
+                            <button class="btn btn-secondary" onclick="orderAction('resend_delivery', ${order.id})">Renvoyer la livraison auto</button>
                         ` : ''}
-                        <button class="btn btn-secondary" onclick="messageCustomer(${order.id})">💬 Écrire au client</button>
-                        <button class="btn btn-secondary" onclick="saveOrderNote(${order.id})">💾 Enregistrer Notes</button>
+                        <button class="btn btn-secondary" onclick="messageCustomer(${order.id})">Ecrire au client</button>
                     </div>
                 </div>
             `;
             openModal("order-detail-modal");
         }
-
         async function confirmPaymentManual(orderId) {
             if (!confirm("Confirmer manuellement le paiement de cette commande ?")) return;
             const params = new URLSearchParams();
@@ -1889,6 +1913,61 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                 }
             } catch (err) {
                 showToast("Erreur réseau", "error");
+            }
+        }
+
+        async function updateOrderAdmin(event, orderId) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const params = new URLSearchParams();
+            params.append("action", "update_order_admin");
+            params.append("order_id", orderId);
+            for (const pair of formData.entries()) {
+                params.append(pair[0], pair[1]);
+            }
+
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: params
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Mise a jour impossible");
+                showToast("Commande mise a jour");
+                closeModal("order-detail-modal");
+                await refreshDashboardData();
+            } catch (err) {
+                showToast(err.message || "Erreur reseau", "error");
+            }
+        }
+
+        async function manualDeliverOrder(orderId) {
+            const content = document.getElementById("manual-delivery-text").value.trim();
+            if (!content) {
+                showToast("Ajoute le contenu de livraison", "error");
+                return;
+            }
+            if (!confirm("Livrer cette commande et envoyer le contenu au client ?")) return;
+
+            const params = new URLSearchParams({
+                action: "manual_deliver_order",
+                order_id: orderId,
+                delivery_text: content
+            });
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: params
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Livraison impossible");
+                showToast("Commande livree");
+                closeModal("order-detail-modal");
+                await refreshDashboardData();
+            } catch (err) {
+                showToast(err.message || "Erreur reseau", "error");
             }
         }
 

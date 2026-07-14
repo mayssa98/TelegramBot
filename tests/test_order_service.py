@@ -129,3 +129,50 @@ def test_reset_for_payment_and_refund(mock_mongodb):
     assert order_service.mark_refunded(50, "Customer request") is True
     assert order_service.mark_refunded(50, "Customer request") is True
     assert db.get_order(50)["status"] == OrderStatus.REFUNDED
+
+
+def test_admin_update_order_fields(mock_mongodb):
+    conn = db.get_conn()
+    conn.orders.insert_one({
+        "id": 77,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "",
+        "qty": 1,
+        "unit_price": 10.0,
+        "total_price": 10.0,
+    })
+
+    updated = order_service.admin_update_order(
+        77,
+        status=OrderStatus.MANUAL_REVIEW,
+        txid="TX-ADMIN-77",
+        qty=2,
+        unit_price=8.5,
+        total_price=17.0,
+        admin_note="Needs manual review",
+    )
+
+    assert updated is not None
+    assert updated["status"] == OrderStatus.MANUAL_REVIEW
+    assert updated["txid"] == "TX-ADMIN-77"
+    assert updated["qty"] == 2
+    assert updated["unit_price"] == 8.5
+    assert updated["total_price"] == 17.0
+    assert updated["admin_note"] == "Needs manual review"
+
+
+def test_manual_deliver_order(mock_mongodb):
+    conn = db.get_conn()
+    conn.orders.insert_one({
+        "id": 78,
+        "user_id": 123,
+        "status": OrderStatus.PAYMENT_CONFIRMED,
+        "delivery_text": "",
+    })
+
+    delivered = order_service.manual_deliver_order(78, "account:password")
+
+    assert delivered is not None
+    assert delivered["status"] == OrderStatus.DELIVERED
+    assert delivered["delivery_text"] == "account:password"
+    assert delivered["delivered_at"]

@@ -494,6 +494,35 @@ class handler(BaseHTTPRequestHandler):
                 db.get_conn().orders.update_one({"id": oid}, {"$set": {"admin_note": note}})
                 db.audit_event("order.note_updated", details={"order_id": oid})
 
+            elif action == "update_order_admin":
+                oid = int(form["order_id"])
+                updated = order_service.admin_update_order(
+                    oid,
+                    status=form.get("status", "").strip() or None,
+                    txid=form.get("txid", "").strip(),
+                    qty=int(form["qty"]) if form.get("qty", "").strip() else None,
+                    unit_price=float(form["unit_price"]) if form.get("unit_price", "").strip() else None,
+                    total_price=float(form["total_price"]) if form.get("total_price", "").strip() else None,
+                    admin_note=form.get("admin_note", ""),
+                )
+                if not updated:
+                    raise ValueError("Commande introuvable")
+
+            elif action == "manual_deliver_order":
+                oid = int(form["order_id"])
+                content = form.get("delivery_text", "").strip()
+                order = order_service.manual_deliver_order(oid, content)
+                if not order:
+                    raise ValueError("Commande introuvable")
+                _loop.run_until_complete(
+                    _application().bot.send_message(
+                        order["user_id"],
+                        f"ðŸŽ <b>Votre commande #{oid} est livrÃ©e !</b>\n\n"
+                        f"<code>{html.escape(content)}</code>",
+                        parse_mode=ParseMode.HTML,
+                    )
+                )
+
             elif action == "save_settings":
                 shop_name = form.get("shop_name", "BlackMarket").strip()
                 currency = form.get("currency", "USDT").strip()

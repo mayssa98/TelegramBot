@@ -121,3 +121,12 @@ def test_dashboard_support_tab_has_real_page_link():
     assert 'id="support" class="panel active"' in page
     assert "__ACTIVE_" not in page
     assert "__PANEL_" not in page
+
+
+def test_dashboard_contains_order_management_controls():
+    page = render_dashboard({"summary": {}, "alerts": []}, active_tab="orders")
+
+    assert "updateOrderAdmin" in page
+    assert "manualDeliverOrder" in page
+    assert "manual_deliver_order" in page
+    assert "update_order_admin" in page
