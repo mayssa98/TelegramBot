@@ -1169,11 +1169,16 @@ def render_dashboard(data: dict) -> str:
                 if (!panel) return;
 
                 buttons.forEach(b => b.classList.remove("active"));
-                panels.forEach(p => p.classList.remove("active"));
+                panels.forEach(p => {
+                    p.classList.remove("active");
+                    p.style.display = "none";
+                });
                 btn.classList.add("active");
                 panel.classList.add("active");
+                panel.style.display = "block";
                 title.textContent = btn.textContent.substring(3);
                 location.hash = tabId;
+                document.querySelector("main").scrollIntoView({ behavior: "smooth", block: "start" });
             }
 
             buttons.forEach(btn => {
