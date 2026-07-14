@@ -2,8 +2,25 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 import database as db
-from config import ADMIN_ID, CURRENCY
+from config import ADMIN_ID
 from i18n import t
+
+
+def compact_offer_name(name, max_len=34):
+    clean_name = " ".join(str(name or "").split())
+    if len(clean_name) <= max_len:
+        return clean_name
+    return clean_name[: max_len - 3].rstrip() + "..."
+
+
+def offer_button_label(lang, offer):
+    price_str = t(lang, "price_tbd") if offer["price"] is None else f"${offer['price']:.2f}"
+    stock = int(offer.get("stock") or 0)
+    stock_str = f"\U0001f4e6 {stock}" if stock > 0 else "\U0001f534 0 manual"
+    warranty = (offer.get("note") or "").strip()
+    if not warranty:
+        warranty = "Full Warranty"
+    return f"\U0001f7e9 {compact_offer_name(offer['name'])} | {warranty} | {price_str} | {stock_str}"
 
 
 def lang_keyboard():
@@ -94,10 +111,7 @@ def services_keyboard(lang):
 def offers_keyboard(lang, service_id):
     buttons = []
     for off in db.list_offers(service_id):
-        price_str = t(lang, "price_tbd") if off["price"] is None else f"{off['price']:.2f} {CURRENCY}"
-        stock_str = "🔴 Épuisé" if off["stock"] <= 0 else f"🟢 Stock {off['stock']}"
-        label = f"{off['name']} • {price_str} • {stock_str}"
-        buttons.append([InlineKeyboardButton(label, callback_data=f"off:{off['id']}")])
+        buttons.append([InlineKeyboardButton(offer_button_label(lang, off), callback_data=f"off:{off['id']}")])
     buttons.append([InlineKeyboardButton(t(lang, "btn_back_services"), callback_data="catalog")])
     buttons.append([InlineKeyboardButton(t(lang, "btn_refresh"), callback_data=f"svc:{service_id}")])
     return InlineKeyboardMarkup(buttons)
