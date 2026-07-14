@@ -1054,10 +1054,11 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                     <input type="number" name="stock" value="0" min="0">
                 </div>
                 <div class="form-group">
-                    <label>Note / Description</label>
+                    <label>Note courte</label>
                     <textarea name="note"></textarea>
                 </div>
                 <div class="form-group"><label>Description détaillée</label><textarea name="description"></textarea></div>
+                <div class="form-group"><label>Contenu de commande initial</label><textarea name="initial_inventory" placeholder="Un contenu livrable par ligne&#10;compte1:motdepasse&#10;code-cadeau-123"></textarea></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" value="Instantané après confirmation"></div>
                 <div class="form-group"><label>Seuil de stock faible</label><input type="number" name="low_stock_threshold" value="5" min="0"></div>
                 <div class="form-group"><label><input type="checkbox" name="auto_delivery" checked> Livraison automatique</label></div>
@@ -1072,7 +1073,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             <form onsubmit="handleFormSubmit(event, 'update_offer')">
                 <input type="hidden" name="offer_id" id="edit-offer-id">
                 <div class="form-group"><label>Nom</label><input name="name" id="edit-offer-name" required></div>
-                <div class="form-group"><label>Description</label><textarea name="description" id="edit-offer-description"></textarea></div>
+                <div class="form-group"><label>Description du produit</label><textarea name="description" id="edit-offer-description"></textarea></div>
                 <div class="form-group"><label>Note</label><textarea name="note" id="edit-offer-note"></textarea></div>
                 <div class="form-group"><label>Prix</label><input type="number" step="0.01" min="0" name="price" id="edit-offer-price" required></div>
                 <div class="form-group"><label>Stock affiché</label><input type="number" min="0" name="stock" id="edit-offer-stock" required></div>
@@ -1399,10 +1400,12 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                         row.innerHTML = `
                             <div class="offer-info">
                                 <div class="offer-name">${offer.name}</div>
+                                ${offer.description ? `<div style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">${escapeHtml(offer.description)}</div>` : ''}
                                 <div class="offer-meta">
                                     <span>💵 Prix : ${offer.price !== null ? offer.price.toFixed(2) : '—'} ${dashboardData.currency}</span>
                                     <span>📦 Stock : ${offer.stock}</span>
                                     <span>📝 Note : ${offer.note || '—'}</span>
+                                    <span>Livraison : ${offer.delivery_delay || '-'}</span>
                                 </div>
                             </div>
                             <div class="offer-actions">
@@ -1447,6 +1450,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                         row.innerHTML = `
                             <div class="offer-info">
                                 <div class="offer-name">${offer.name}</div>
+                                ${offer.description ? `<div style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">${escapeHtml(offer.description)}</div>` : ''}
                                 <div class="offer-meta">
                                     <span>📦 Dispo : ${offer.stock}</span>
                                 </div>

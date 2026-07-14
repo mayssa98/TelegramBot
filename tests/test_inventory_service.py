@@ -102,6 +102,18 @@ def test_deliver_for_order(mock_mongodb):
     assert inventory_service.delivered_content(10) == ["netflix_cred_1234"]
 
 
+def test_initial_inventory_content_increases_offer_stock(mock_mongodb):
+    db.add_service("Accounts", "A")
+    offer_id = db.add_offer(1, "Test product", 2.0, 0, description="Visible description")
+
+    added = inventory_service.add_items(offer_id, ["login:pass", "code-123"])
+
+    offer = db.get_offer(offer_id)
+    assert added == 2
+    assert offer["stock"] == 2
+    assert mock_mongodb.inventory.count_documents({"offer_id": offer_id, "status": "available"}) == 2
+
+
 def test_mask_content():
     """Vérifie l'algorithme de masquage des données sensibles."""
     # Emails

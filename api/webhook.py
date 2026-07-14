@@ -364,6 +364,8 @@ class handler(BaseHTTPRequestHandler):
                     low_stock_threshold=low_stock_threshold,
                     delivery_delay=delivery_delay,
                 )
+                initial_inventory = form.get("initial_inventory", "").splitlines()
+                inventory_count = inventory_service.add_items(oid, initial_inventory) if initial_inventory else 0
                 db.audit_event("offer.created", details={"offer_id": oid, "name": name})
 
             elif action == "update_offer":
