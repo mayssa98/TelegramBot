@@ -1465,7 +1465,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             });
 
             if (!hasOffers) {
-                list.innerHTML = '<div class="empty-state">Créez d\'abord des offres dans le catalogue.</div>';
+                list.innerHTML = `<div class="empty-state">Créez d'abord des offres dans le catalogue.</div>`;
             }
         }
 
@@ -1584,7 +1584,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             tbody.innerHTML = "";
 
             if (!dashboardData.audits || dashboardData.audits.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucun événement d\'audit disponible.</td></tr>';
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Aucun événement d'audit disponible.</td></tr>`;
                 return;
             }
 

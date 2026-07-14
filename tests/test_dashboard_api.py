@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import re
+import shutil
+import subprocess
 from datetime import UTC, datetime
+
+import pytest
 
 from api.dashboard import render_dashboard
 from app.web import dashboard_api
@@ -141,3 +146,17 @@ def test_dashboard_contains_product_sync_fields():
     assert 'name="initial_inventory"' in page
     assert "Contenu de commande initial" in page
     assert "Livraison :" in page
+
+
+def test_dashboard_javascript_syntax_is_valid(tmp_path):
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+
+    page = render_dashboard({"summary": {}, "alerts": [], "services": []}, active_tab="catalog")
+    script = re.search(r"<script>(.*?)</script>", page, flags=re.S).group(1)
+    script_path = tmp_path / "dashboard.js"
+    script_path.write_text(script, encoding="utf-8")
+
+    result = subprocess.run(["node", "--check", str(script_path)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
