@@ -1,4 +1,5 @@
 """MongoDB persistence for users, catalogue, orders, and affiliate data."""
+import os
 import time
 from datetime import UTC, datetime
 
@@ -68,7 +69,8 @@ def init_db():
     db.support_tickets.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
     db.support_tickets.create_index("user_id")
     db.ticket_messages.create_index([("ticket_id", ASCENDING), ("created_at", ASCENDING)])
-    _seed_catalog()
+    if os.environ.get("HP_SEED_DEFAULT_CATALOG", "").strip().lower() in {"1", "true", "yes"}:
+        _seed_catalog()
 
 
 def _backfill_inventory_ids(conn):

@@ -133,11 +133,13 @@ def test_submit_payment_duplicate_txid(mock_mongodb):
 
 def test_confirm_payment_manual(mock_mongodb):
     """Vérifie l'idempotence et la confirmation manuelle par l'admin."""
+    db.add_service("Manual", "M")
+    offer_id = db.add_offer(service_id=1, name="Manual product", price=5.0, stock=1)
     conn = db.get_conn()
     conn.orders.insert_one({
         "id": 1,
         "user_id": 123,
-        "offer_id": 1,
+        "offer_id": offer_id,
         "qty": 1,
         "total_price": 5.0,
         "status": OrderStatus.PENDING_PAYMENT,
