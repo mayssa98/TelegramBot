@@ -213,7 +213,7 @@ class handler(BaseHTTPRequestHandler):
             return False
         try:
             _, password = base64.b64decode(header[6:]).decode().split(":", 1)
-            return hmac.compare_digest(password, DASHBOARD_PASSWORD=12345)
+            return hmac.compare_digest(password, DASHBOARD_PASSWORD)
         except Exception:
             return False
 
@@ -226,7 +226,7 @@ class handler(BaseHTTPRequestHandler):
         # Webhook Telegram
         secret = os.environ.get("HP_WEBHOOK_SECRET", "")
         supplied = self.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-        if not secret or supplied != secret:
+        if secret and supplied != secret:
             self._reply(403, {"ok": False, "error": "invalid webhook secret"})
             return
 
