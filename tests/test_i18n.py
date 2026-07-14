@@ -38,3 +38,11 @@ def test_french_payment_message_matches_binance_style():
     assert "15 secondes" in t("fr", "auto_check_started", seconds=15)
     assert "ID de transaction Binance" in t("fr", "auto_check_timeout", oid=6074)
     assert "capture du paiement" in t("fr", "payment_contact_admin", oid=6074)
+
+
+def test_french_quantity_prompt_mentions_stock_limit():
+    message = t("fr", "choose_quantity", offer="Chat GPT Plus", stock=9, price="1.23", cur="USDT")
+
+    assert "Choisissez la quantité" in message
+    assert "Stock disponible : *9*" in message
+    assert "1.23 USDT" in message

@@ -330,6 +330,12 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     if data.startswith("buy:"):
+        await handle_quantity_selection(update, context, lang)
+        return
+    if data.startswith("qty_page:"):
+        await handle_quantity_selection(update, context, lang)
+        return
+    if data.startswith("buyq:"):
         await handle_buy_confirmation(update, context, lang)
         return
     if data.startswith("confirm_buy:"):
@@ -413,18 +419,50 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------- Confirmation avant achat ----------------
-async def handle_buy_confirmation(update, context, lang):
-    """Affiche un résumé avant de créer la commande."""
+async def handle_quantity_selection(update, context, lang):
+    """Demande au client combien de comptes/produits il veut acheter."""
     q = update.callback_query
-    uid = q.from_user.id
-    offer_id = int(q.data.split(":")[1])
+    parts = q.data.split(":")
+    offer_id = int(parts[1])
+    page = int(parts[2]) if len(parts) > 2 and parts[0] == "qty_page" else 0
     offer = db.get_offer(offer_id)
 
     if not offer or offer["price"] is None or offer["stock"] <= 0:
         await q.answer(t(lang, "out_of_stock"), show_alert=True)
         return
 
-    # Vérifier s'il y a déjà une commande pending pour cette offre
+    if offer["stock"] == 1:
+        q.data = f"buyq:{offer_id}:1"
+        await handle_buy_confirmation(update, context, lang)
+        return
+
+    await q.edit_message_text(
+        t(
+            lang,
+            "choose_quantity",
+            offer=offer["name"],
+            stock=offer["stock"],
+            price=f"{offer['price']:.2f}",
+            cur=CURRENCY,
+        ),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.quantity_keyboard(lang, offer, page=page),
+    )
+
+
+async def handle_buy_confirmation(update, context, lang):
+    """Affiche un r?sum? avant de cr?er la commande."""
+    q = update.callback_query
+    uid = q.from_user.id
+    parts = q.data.split(":")
+    offer_id = int(parts[1])
+    qty = int(parts[2]) if len(parts) > 2 else 1
+    offer = db.get_offer(offer_id)
+
+    if not offer or offer["price"] is None or offer["stock"] <= 0 or qty < 1 or qty > offer["stock"]:
+        await q.answer(t(lang, "out_of_stock"), show_alert=True)
+        return
+
     existing = order_service.check_duplicate_pending_order(uid, offer_id)
     if existing:
         await q.edit_message_text(
@@ -432,39 +470,40 @@ async def handle_buy_confirmation(update, context, lang):
               offer=existing["offer_name"],
               total=f"{existing['total_price']:.2f}", cur=CURRENCY),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.duplicate_order_keyboard(lang, existing["id"], offer_id),
+            reply_markup=kb.duplicate_order_keyboard(lang, existing["id"], offer_id, qty),
         )
         return
 
     svc = db.get_service(offer["service_id"])
-    # Afficher le résumé de confirmation
     await q.edit_message_text(
         t(lang, "confirm_purchase",
-          emoji=svc["emoji"] if svc else "📦",
+          emoji=svc["emoji"] if svc else "??",
           service=svc["name"] if svc else "",
           offer=offer["name"],
           price=f"{offer['price']:.2f}",
           cur=CURRENCY,
-          qty=1,
-          total=f"{offer['price']:.2f}"),
+          qty=qty,
+          total=f"{offer['price'] * qty:.2f}"),
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=kb.confirm_buy_keyboard(lang, offer_id),
+        reply_markup=kb.confirm_buy_keyboard(lang, offer_id, qty),
     )
 
 
 async def handle_buy_confirmed(update, context, lang):
-    """Crée la commande après confirmation de l'utilisateur."""
+    """Cr?e la commande apr?s confirmation de l'utilisateur."""
     q = update.callback_query
     uid = q.from_user.id
-    offer_id = int(q.data.split(":")[1])
+    parts = q.data.split(":")
+    offer_id = int(parts[1])
+    qty = int(parts[2]) if len(parts) > 2 else 1
     offer = db.get_offer(offer_id)
 
-    if not offer or offer["price"] is None or offer["stock"] <= 0:
+    if not offer or offer["price"] is None or offer["stock"] <= 0 or qty < 1 or qty > offer["stock"]:
         await q.answer(t(lang, "out_of_stock"), show_alert=True)
         return
 
     try:
-        order = order_service.create_order(uid, offer, qty=1)
+        order = order_service.create_order(uid, offer, qty=qty)
     except ValueError as exc:
         await q.answer(str(exc), show_alert=True)
         return
@@ -940,7 +979,7 @@ def build_app():
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(
-        CallbackQueryHandler(block_maintenance_purchases, pattern=r"^(buy|confirm_buy):"),
+        CallbackQueryHandler(block_maintenance_purchases, pattern=r"^(buy|buyq|qty_page|confirm_buy):"),
         group=-1,
     )
     app.add_handler(CommandHandler("start", cmd_start))

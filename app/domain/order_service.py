@@ -48,6 +48,10 @@ def create_order(user_id: int, offer: dict, qty: int = 1) -> dict:
         raise ValueError("Cette offre n'est pas disponible à l'achat.")
     if offer.get("stock", 0) <= 0:
         raise ValueError("Cette offre est en rupture de stock.")
+    if qty < 1:
+        raise ValueError("La quantité doit être au minimum 1.")
+    if qty > offer.get("stock", 0):
+        raise ValueError("La quantité demandée dépasse le stock disponible.")
 
     now = int(time.time())
     unit_price = offer["price"]

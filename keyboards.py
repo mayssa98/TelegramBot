@@ -113,6 +113,32 @@ def offer_detail_keyboard(lang, offer):
     return InlineKeyboardMarkup(buttons)
 
 
+def quantity_keyboard(lang, offer, page=0, page_size=20):
+    stock = max(1, int(offer.get("stock", 1)))
+    total_pages = max(1, (stock + page_size - 1) // page_size)
+    page = max(0, min(int(page), total_pages - 1))
+    start = page * page_size + 1
+    end = min(stock, start + page_size - 1)
+    rows = []
+    row = []
+    for qty in range(start, end + 1):
+        row.append(InlineKeyboardButton(str(qty), callback_data=f"buyq:{offer['id']}:{qty}"))
+        if len(row) == 5:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("◀️", callback_data=f"qty_page:{offer['id']}:{page - 1}"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton("▶️", callback_data=f"qty_page:{offer['id']}:{page + 1}"))
+    if nav:
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(t(lang, "btn_back"), callback_data=f"off:{offer['id']}")])
+    return InlineKeyboardMarkup(rows)
+
+
 def paid_keyboard(lang, order_id):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(t(lang, "btn_copy_binance_id"), callback_data=f"copy_binance_id:{order_id}")],
@@ -123,19 +149,19 @@ def paid_keyboard(lang, order_id):
     ])
 
 
-def confirm_buy_keyboard(lang, offer_id):
+def confirm_buy_keyboard(lang, offer_id, qty=1):
     """Clavier de confirmation avant achat."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "btn_confirm"), callback_data=f"confirm_buy:{offer_id}")],
+        [InlineKeyboardButton(t(lang, "btn_confirm"), callback_data=f"confirm_buy:{offer_id}:{qty}")],
         [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{offer_id}")],
     ])
 
 
-def duplicate_order_keyboard(lang, existing_order_id, offer_id):
+def duplicate_order_keyboard(lang, existing_order_id, offer_id, qty=1):
     """Clavier lorsqu'une commande identique existe déjà."""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(t(lang, "btn_continue_payment"), callback_data=f"continue_pay:{existing_order_id}")],
-        [InlineKeyboardButton(t(lang, "btn_new_order"), callback_data=f"confirm_buy:{offer_id}")],
+        [InlineKeyboardButton(t(lang, "btn_new_order"), callback_data=f"confirm_buy:{offer_id}:{qty}")],
         [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{offer_id}")],
     ])
 

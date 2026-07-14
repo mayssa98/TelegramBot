@@ -153,6 +153,11 @@ TRANSLATIONS = {
     "btn_delivery_problem": {"fr": "⚠️ Signaler un problème", "en": "⚠️ Report a problem", "ar": "⚠️ الإبلاغ عن مشكلة"},
     "cat_other": {"fr": "📦 Autres services", "en": "📦 Other services", "ar": "📦 خدمات أخرى"},
     # ---------------- Confirmation d'achat ----------------
+    "choose_quantity": {
+        "fr": "\U0001f9ee *Choisissez la quantit\u00e9*\n\nProduit : *{offer}*\nStock disponible : *{stock}*\nPrix unitaire : *{price} {cur}*\n\nS\u00e9lectionnez le nombre de comptes \u00e0 acheter :",
+        "en": "\U0001f9ee *Choose quantity*\n\nProduct: *{offer}*\nAvailable stock: *{stock}*\nUnit price: *{price} {cur}*\n\nSelect how many accounts to buy:",
+        "ar": "\U0001f9ee *\u0627\u062e\u062a\u0631 \u0627\u0644\u0643\u0645\u064a\u0629*\n\n\u0627\u0644\u0645\u0646\u062a\u062c: *{offer}*\n\u0627\u0644\u0645\u062e\u0632\u0648\u0646 \u0627\u0644\u0645\u062a\u0627\u062d: *{stock}*\n\u0633\u0639\u0631 \u0627\u0644\u0648\u062d\u062f\u0629: *{price} {cur}*\n\n\u0627\u062e\u062a\u0631 \u0639\u062f\u062f \u0627\u0644\u062d\u0633\u0627\u0628\u0627\u062a \u0627\u0644\u062a\u064a \u062a\u0631\u064a\u062f \u0634\u0631\u0627\u0621\u0647\u0627:",
+    },
     "confirm_purchase": {
         "fr": "🧾 *Résumé de votre commande*\n\n{emoji} Service : *{service}*\n📋 Offre : *{offer}*\n💵 Prix unitaire : *{price} {cur}*\n📦 Quantité : *{qty}*\n💰 Total : *{total} {cur}*\n\nConfirmez-vous cet achat ?",
         "en": "🧾 *Order summary*\n\n{emoji} Service: *{service}*\n📋 Offer: *{offer}*\n💵 Unit price: *{price} {cur}*\n📦 Quantity: *{qty}*\n💰 Total: *{total} {cur}*\n\nDo you confirm this purchase?",

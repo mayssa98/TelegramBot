@@ -49,6 +49,15 @@ def test_create_order_out_of_stock(mock_mongodb):
         order_service.create_order(user_id=12345, offer=offer, qty=1)
 
 
+def test_create_order_rejects_quantity_above_stock(mock_mongodb):
+    db.add_service("Discord", "🎮")
+    offer_id = db.add_offer(service_id=1, name="Nitro 1 Year", price=9.99, stock=2)
+    offer = db.get_offer(offer_id)
+
+    with pytest.raises(ValueError, match="stock disponible"):
+        order_service.create_order(user_id=12345, offer=offer, qty=3)
+
+
 def test_check_duplicate_pending_order(mock_mongodb):
     """Vérifie la détection de commandes en cours dupliquées."""
     db.add_service("Discord", "🎮")
