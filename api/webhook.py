@@ -344,7 +344,16 @@ class handler(BaseHTTPRequestHandler):
                 db.audit_event("service.toggled", details={"service_id": sid, "active": not service["active"]})
 
             elif action == "add_offer":
-                sid = int(form["service_id"])
+                service_id_raw = form.get("service_id", "").strip()
+                if service_id_raw:
+                    sid = int(service_id_raw)
+                else:
+                    default_service = db.get_conn().services.find_one({"name": "Catalogue"})
+                    if default_service:
+                        sid = int(default_service["id"])
+                    else:
+                        sid = db.add_service("Catalogue", "🛒")
+                        db.audit_event("service.created", details={"service_id": sid, "name": "Catalogue"})
                 name = form["name"].strip()[:120]
                 price = float(form["price"])
                 stock = int(form.get("stock", 0))

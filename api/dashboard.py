@@ -838,7 +838,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
         <section id="catalog" class="panel __PANEL_CATALOG__">
             <div class="section-header">
                 <h2>Services & Offres</h2>
-                <button class="btn btn-primary" onclick="openModal('add-service-modal')">➕ Nouveau service</button>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;"><button class="btn btn-primary" onclick="openAddOfferModal()">+ Nouveau produit</button><button class="btn btn-secondary" onclick="openModal('add-service-modal')">+ Nouveau service</button></div>
             </div>
             <div class="catalog-grid" id="catalog-list">
                 <!-- Injecté par JS -->
@@ -1040,7 +1040,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                 <button class="close-btn" onclick="closeModal('add-offer-modal')">&times;</button>
             </div>
             <form onsubmit="handleFormSubmit(event, 'add_offer')">
-                <input type="hidden" name="service_id" id="add-offer-service-id">
+                <div class="form-group"><label>Service</label><select name="service_id" id="add-offer-service-id"></select></div>
                 <div class="form-group">
                     <label>Nom de l'offre</label>
                     <input type="text" name="name" required>
@@ -1780,8 +1780,13 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             return offerAction("duplicate_offer", offerId, "Dupliquer cette offre sans copier son inventaire ?");
         }
 
-        function openAddOfferModal(serviceId) {
-            document.getElementById("add-offer-service-id").value = serviceId;
+        function openAddOfferModal(serviceId = null) {
+            const select = document.getElementById("add-offer-service-id");
+            const services = dashboardData.services || [];
+            select.innerHTML = services.length
+                ? services.map(service => `<option value="${service.id}">${escapeHtml(service.name)}</option>`).join("")
+                : '<option value="">Catalogue par defaut</option>';
+            if (serviceId !== null) select.value = String(serviceId);
             openModal("add-offer-modal");
         }
 

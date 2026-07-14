@@ -135,6 +135,8 @@ def test_dashboard_contains_order_management_controls():
 def test_dashboard_contains_product_sync_fields():
     page = render_dashboard({"summary": {}, "alerts": []}, active_tab="catalog")
 
+    assert "Nouveau produit" in page
+    assert "Catalogue par defaut" in page
     assert 'name="description"' in page
     assert 'name="initial_inventory"' in page
     assert "Contenu de commande initial" in page
