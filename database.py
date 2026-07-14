@@ -1,4 +1,6 @@
 """MongoDB persistence for users, catalogue, orders, and affiliate data."""
+import base64
+import hashlib
 import os
 import time
 from datetime import UTC, datetime
@@ -467,9 +469,18 @@ def release_update(update_id):
 
 
 def _fernet():
-    if not INVENTORY_KEY:
-        raise RuntimeError("HP_INVENTORY_KEY is required for automatic inventory")
-    return Fernet(INVENTORY_KEY.encode())
+    key = INVENTORY_KEY
+    if not key:
+        secret = (
+            os.environ.get("HP_BOT_TOKEN", "")
+            or os.environ.get("HP_WEBHOOK_SECRET", "")
+            or os.environ.get("HP_DASHBOARD_PASSWORD", "")
+            or os.environ.get("HP_MONGODB_URI", "")
+        ).strip()
+        if not secret:
+            raise RuntimeError("HP_INVENTORY_KEY or another deployment secret is required for automatic inventory")
+        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest()).decode()
+    return Fernet(key.encode())
 
 
 def add_inventory_items(offer_id, items):

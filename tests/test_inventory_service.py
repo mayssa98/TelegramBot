@@ -114,6 +114,18 @@ def test_initial_inventory_content_increases_offer_stock(mock_mongodb):
     assert mock_mongodb.inventory.count_documents({"offer_id": offer_id, "status": "available"}) == 2
 
 
+def test_inventory_key_can_fallback_to_deployment_secret(mock_mongodb, monkeypatch):
+    monkeypatch.setattr(db, "INVENTORY_KEY", "")
+    monkeypatch.setenv("HP_BOT_TOKEN", "123456:stable-secret-token")
+    db.add_service("Accounts", "A")
+    offer_id = db.add_offer(1, "Fallback product", 1.0, 0)
+
+    added = inventory_service.add_items(offer_id, ["fallback-secret"])
+
+    assert added == 1
+    assert inventory_service.reveal_item(mock_mongodb.inventory.find_one({"offer_id": offer_id})["id"]) == "fallback-secret"
+
+
 def test_mask_content():
     """Vérifie l'algorithme de masquage des données sensibles."""
     # Emails
