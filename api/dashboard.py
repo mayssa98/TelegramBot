@@ -103,7 +103,6 @@ def render_dashboard(data: dict) -> str:
             color: var(--text-main);
             min-height: 100vh;
             display: flex;
-            overflow-x: hidden;
         }
 
         /* Navigation latérale desktop */
@@ -114,8 +113,10 @@ def render_dashboard(data: dict) -> str:
             display: flex;
             flex-direction: column;
             padding: 24px 16px;
-            position: fixed;
+            position: sticky;
+            top: 0;
             height: 100vh;
+            flex: 0 0 260px;
             z-index: 10;
         }
 
@@ -175,11 +176,11 @@ def render_dashboard(data: dict) -> str:
 
         /* Zone de contenu principal */
         main {
-            margin-left: 260px;
             flex-grow: 1;
             padding: 40px;
             max-width: 1400px;
-            width: calc(100% - 260px);
+            min-width: 0;
+            width: 100%;
         }
 
         header {
@@ -1162,24 +1163,28 @@ def render_dashboard(data: dict) -> str:
             const panels = document.querySelectorAll(".panel");
             const title = document.getElementById("panel-title");
 
-            buttons.forEach(btn => {
-                btn.addEventListener("click", () => {
-                    buttons.forEach(b => b.classList.remove("active"));
-                    panels.forEach(p => p.classList.remove("active"));
+            function activateTab(btn) {
+                const tabId = btn.dataset.tab;
+                const panel = document.getElementById(tabId);
+                if (!panel) return;
 
-                    btn.classList.add("active");
-                    const tabId = btn.dataset.tab;
-                    document.getElementById(tabId).classList.add("active");
-                    title.textContent = btn.textContent.substring(3); // Enlever l'émoji
-                    location.hash = tabId;
-                });
+                buttons.forEach(b => b.classList.remove("active"));
+                panels.forEach(p => p.classList.remove("active"));
+                btn.classList.add("active");
+                panel.classList.add("active");
+                title.textContent = btn.textContent.substring(3);
+                location.hash = tabId;
+            }
+
+            buttons.forEach(btn => {
+                btn.addEventListener("click", () => activateTab(btn));
             });
 
             // Gérer le hash initial
             if (location.hash) {
                 const tabId = location.hash.substring(1);
                 const button = document.querySelector(`nav button[data-tab="${tabId}"]`);
-                if (button) button.click();
+                if (button) activateTab(button);
             }
         }
 
