@@ -17,7 +17,7 @@ TRANSLATIONS = {
         "ar": "✅ تم تعيين اللغة: العربية",
     },
     "welcome": {
-        "fr": "👋 Bienvenue sur *{shop}* !\n\nVotre boutique de services numériques premium à prix imbattables. Paiement rapide via Binance Pay et livraison assurée.\n\nUtilisez le menu ci-dessous :",
+        "fr": "\u2728 Bienvenue sur *{shop}* !\n\nAcc\u00e9dez rapidement \u00e0 une s\u00e9lection de services num\u00e9riques fiables, v\u00e9rifi\u00e9s et disponibles \u00e0 prix comp\u00e9titifs.\n\n\u2705 Paiement s\u00e9curis\u00e9 via Binance Pay\n\u26a1 Livraison rapide apr\u00e8s confirmation\n\U0001f3af Support disponible en cas de besoin\n\nChoisissez une option ci-dessous pour commencer :",
         "en": "👋 Welcome to *{shop}*!\n\nYour premium digital services store at unbeatable prices. Fast payment via Binance Pay and guaranteed delivery.\n\nUse the menu below:",
         "ar": "👋 مرحباً بك في *{shop}*!\n\nمتجرك للخدمات الرقمية المميزة بأسعار لا تُقاوم. دفع سريع عبر Binance Pay وتسليم مضمون.\n\nاستخدم القائمة أدناه:",
     },
