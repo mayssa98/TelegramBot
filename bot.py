@@ -242,35 +242,54 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     lang = lang_of(uid)
     text = update.message.text.strip()
+    pending = PENDING.get(uid)
 
-    # 1) états de saisie en cours (txid, admin prix/stock/livraison)
-    if uid in PENDING:
-        await handle_pending_input(update, context, lang)
-        return
+    def clear_support_pending():
+        if pending and pending[0].startswith(("support", "ticket_")):
+            PENDING.pop(uid, None)
 
-    # 2) menu reply
+    blocking_states = {
+        "await_txid",
+        "adm_setprice",
+        "adm_setstock",
+        "adm_svcname",
+        "adm_svcemoji",
+        "adm_offname",
+        "adm_offnote",
+        "adm_addsvc",
+        "adm_addoff",
+        "adm_inventory",
+        "adm_deliver",
+    }
+
     if text == t(lang, "menu_catalog"):
+        clear_support_pending()
         await show_catalog(update, context, lang)
     elif text == t(lang, "menu_orders"):
+        clear_support_pending()
         await show_my_orders(update, context, lang)
     elif text == t(lang, "menu_account"):
+        clear_support_pending()
         await show_account(update, context)
     elif text == t(lang, "menu_help"):
+        clear_support_pending()
         help_text = db.shop_settings().get("help_message", "").strip() or t(lang, "help_text", shop=SHOP_NAME)
-        await update.message.reply_text(help_text,
-                                        parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
     elif text == t(lang, "menu_lang"):
-        await update.message.reply_text(t(lang, "choose_lang"),
-                                        reply_markup=kb.lang_keyboard())
+        clear_support_pending()
+        await update.message.reply_text(t(lang, "choose_lang"), reply_markup=kb.lang_keyboard())
     elif text == t(lang, "menu_affiliate"):
+        clear_support_pending()
         await show_affiliate(update, context)
     elif text == t(lang, "menu_support"):
         await cmd_support(update, context)
     elif text == t(lang, "menu_admin") and uid == ADMIN_ID:
-        await update.message.reply_text("🛠️ *Panneau Admin*", parse_mode=ParseMode.MARKDOWN,
+        clear_support_pending()
+        await update.message.reply_text("\U0001f6e0\ufe0f *Panneau Admin*", parse_mode=ParseMode.MARKDOWN,
                                         reply_markup=admin.admin_panel_keyboard())
+    elif pending and (pending[0] in blocking_states or pending[0].startswith(("support", "ticket_"))):
+        await handle_pending_input(update, context, lang)
     else:
-        # message libre non reconnu -> renvoyer menu
         await send_main_menu(update, context, lang)
 
 
@@ -616,9 +635,12 @@ async def handle_pending_input(update, context, lang):
             return
         PENDING.pop(uid, None)
         stats = db.inventory_stats(ref)
+        preview = "\n".join(f"{index}. {item}" for index, item in enumerate(items[:20], 1))
+        extra = "" if len(items) <= 20 else f"\n... +{len(items) - 20} autre(s)"
         await update.message.reply_text(
-            f"✅ {added} code(s) ajouté(s) et chiffré(s).\n"
-            f"Disponible : {stats['available']} • Vendus : {stats['sold']}",
+            f"\u2705 {added} compte(s) ajoute(s) et chiffre(s).\n"
+            f"Disponible : {stats['available']} - Vendus : {stats['sold']}\n\n"
+            f"Comptes recus :\n{preview}{extra}",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
         return
