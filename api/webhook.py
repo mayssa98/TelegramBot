@@ -45,6 +45,54 @@ def health_payload() -> dict:
     }
 
 
+def public_site_html() -> str:
+    bot_username = os.environ.get("HP_BOT_USERNAME", "blackmarketa_bot").strip().lstrip("@")
+    shop_name = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip() or "BlackMarket"
+    bot_url = f"https://t.me/{html.escape(bot_username)}"
+    return f"""<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html.escape(shop_name)} - Bot Telegram</title>
+  <style>
+    :root {{ color-scheme: dark; --bg:#07101d; --panel:#101d2f; --line:#26364d; --text:#e8eef8; --muted:#9fb0c9; --brand:#0891b2; --brand2:#22d3ee; }}
+    * {{ box-sizing:border-box; }}
+    body {{ margin:0; min-height:100vh; font-family:Inter,Arial,sans-serif; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; padding:24px; }}
+    main {{ width:min(920px,100%); }}
+    .hero {{ border:1px solid var(--line); background:var(--panel); border-radius:18px; padding:34px; box-shadow:0 24px 80px rgba(0,0,0,.35); }}
+    h1 {{ margin:0 0 10px; font-size:clamp(32px,6vw,58px); line-height:1; }}
+    p {{ color:var(--muted); font-size:18px; line-height:1.6; margin:0 0 26px; max-width:720px; }}
+    .grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-top:22px; }}
+    a {{ text-decoration:none; color:var(--text); }}
+    .btn {{ display:flex; align-items:center; justify-content:center; min-height:54px; border:1px solid var(--line); border-radius:12px; background:#0b1728; font-weight:700; }}
+    .btn.primary {{ background:linear-gradient(135deg,var(--brand),var(--brand2)); color:white; border-color:transparent; }}
+    .btn:hover {{ transform:translateY(-1px); border-color:var(--brand2); }}
+    .status {{ display:inline-flex; gap:8px; align-items:center; padding:8px 12px; border-radius:999px; background:#0b1728; color:var(--muted); border:1px solid var(--line); margin-bottom:18px; }}
+    .dot {{ width:10px; height:10px; border-radius:50%; background:#22c55e; box-shadow:0 0 18px #22c55e; }}
+    footer {{ color:var(--muted); margin-top:16px; font-size:13px; text-align:center; }}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="status"><span class="dot"></span> Site connecte directement au bot Telegram</div>
+      <h1>{html.escape(shop_name)}</h1>
+      <p>Choisis une action. Chaque bouton ouvre le bot Telegram officiel pour commander, consulter le catalogue, suivre les commandes ou contacter le support.</p>
+      <div class="grid">
+        <a class="btn primary" href="{bot_url}" target="_blank" rel="noopener">Ouvrir le bot</a>
+        <a class="btn" href="{bot_url}?start=catalog" target="_blank" rel="noopener">Catalogue</a>
+        <a class="btn" href="{bot_url}?start=orders" target="_blank" rel="noopener">Mes commandes</a>
+        <a class="btn" href="{bot_url}?start=support" target="_blank" rel="noopener">Support</a>
+        <a class="btn" href="/admin/orders">Dashboard commandes</a>
+      </div>
+    </section>
+    <footer>Bot: @{html.escape(bot_username)} - Webhook actif</footer>
+  </main>
+</body>
+</html>"""
+
+
 def _application():
     global _app
     if _app is None:
@@ -83,6 +131,16 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
         path = url.path.rstrip("/")
+
+        if path in ("", "/"):
+            body = public_site_html().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
         admin_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "activity", "settings"}
         if path == "/admin" or path.startswith("/admin/") and path.removeprefix("/admin/") in admin_tabs:

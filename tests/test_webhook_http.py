@@ -35,6 +35,15 @@ def test_public_health_endpoint():
     assert payload["timestamp"]
 
 
+def test_public_homepage_is_site():
+    with running_server() as base_url, urlopen(f"{base_url}/", timeout=5) as response:
+        body = response.read().decode()
+
+    assert response.status == 200
+    assert "text/html" in response.headers["Content-Type"]
+    assert "https://t.me/blackmarketa_bot" in body
+
+
 def test_admin_requires_authentication(monkeypatch):
     monkeypatch.setattr("api.webhook.DASHBOARD_PASSWORD", "secret")
     with running_server() as base_url:

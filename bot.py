@@ -112,6 +112,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not lang:
         await update.message.reply_text(t(DEFAULT_LANG, "choose_lang"),
                                         reply_markup=kb.lang_keyboard())
+    elif context.args and context.args[0] == "catalog":
+        await show_catalog(update, context, lang)
+    elif context.args and context.args[0] == "orders":
+        await show_my_orders(update, context, lang)
+    elif context.args and context.args[0] == "support":
+        await cmd_support(update, context)
     else:
         await send_main_menu(update, context, lang)
 

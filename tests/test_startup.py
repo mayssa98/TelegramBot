@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import database as db
-from api.webhook import handler, health_payload
+from api.webhook import handler, health_payload, public_site_html
 from bot import build_app
 
 
@@ -20,6 +20,16 @@ def test_public_health_payload():
 
 def test_webhook_handler_is_importable():
     assert handler.__name__ == "handler"
+
+
+def test_public_site_links_to_bot():
+    page = public_site_html()
+
+    assert "<!doctype html>" in page.lower()
+    assert "https://t.me/blackmarketa_bot" in page
+    assert "?start=catalog" in page
+    assert "?start=orders" in page
+    assert "?start=support" in page
 
 
 def test_bot_application_builds_with_mock_database(mock_mongodb, monkeypatch):
