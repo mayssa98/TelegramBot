@@ -16,11 +16,17 @@ def compact_offer_name(name, max_len=34):
 def offer_button_label(lang, offer):
     price_str = t(lang, "price_tbd") if offer["price"] is None else f"${offer['price']:.2f}"
     stock = int(offer.get("stock") or 0)
+    if stock >= 10:
+        stock_status = "\U0001f7e9"
+    elif stock > 0:
+        stock_status = "\U0001f7e8"
+    else:
+        stock_status = "\U0001f7e5"
     stock_str = f"\U0001f4e6 {stock}" if stock > 0 else "\U0001f534 0 manual"
     warranty = (offer.get("note") or "").strip()
     if not warranty:
         warranty = "Full Warranty"
-    return f"\U0001f7e9 {compact_offer_name(offer['name'])} | {warranty} | {price_str} | {stock_str}"
+    return f"{stock_status} {compact_offer_name(offer['name'])} | {warranty} | {price_str} | {stock_str}"
 
 
 def lang_keyboard():

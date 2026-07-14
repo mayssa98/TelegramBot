@@ -42,11 +42,25 @@ def test_offer_button_label_uses_store_style():
             "name": "SuperGrok 12 Months",
             "note": "Full Warranty",
             "price": 30.0,
+            "stock": 12,
+        },
+    )
+
+    assert label == "\U0001f7e9 SuperGrok 12 Months | Full Warranty | $30.00 | \U0001f4e6 12"
+
+
+def test_offer_button_label_uses_yellow_for_low_stock():
+    label = offer_button_label(
+        "en",
+        {
+            "name": "Low Stock Product",
+            "note": "Full Warranty",
+            "price": 5.0,
             "stock": 2,
         },
     )
 
-    assert label == "\U0001f7e9 SuperGrok 12 Months | Full Warranty | $30.00 | \U0001f4e6 2"
+    assert label.startswith("\U0001f7e8 Low Stock Product")
 
 
 def test_offer_button_label_truncates_long_names():
@@ -60,5 +74,5 @@ def test_offer_button_label_truncates_long_names():
         },
     )
 
-    assert label.startswith("\U0001f7e9 Very Long Product Name With Man...")
+    assert label.startswith("\U0001f7e5 Very Long Product Name With Man...")
     assert label.endswith("| Full Warranty | $2.50 | \U0001f534 0 manual")
