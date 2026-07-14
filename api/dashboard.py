@@ -649,13 +649,48 @@ def render_dashboard(data: dict) -> str:
 
         /* Responsive */
         @media (max-width: 1024px) {
+            body {
+                flex-direction: column;
+            }
             aside {
-                display: none;
+                position: sticky;
+                top: 0;
+                width: 100%;
+                height: auto;
+                padding: 12px;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .brand {
+                margin-bottom: 12px;
+            }
+            nav {
+                flex-direction: row;
+                overflow-x: auto;
+                padding-bottom: 4px;
+            }
+            nav button {
+                white-space: nowrap;
+                flex: 0 0 auto;
             }
             main {
                 margin-left: 0;
                 width: 100%;
                 padding: 24px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            main {
+                padding: 16px;
+            }
+            header {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 16px;
+            }
+            .kpi-grid {
+                grid-template-columns: 1fr;
             }
         }
 
