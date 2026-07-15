@@ -76,9 +76,8 @@ def test_webhook_rejects_missing_secret(monkeypatch):
             raise AssertionError("Webhook accepted a request without its secret")
 
 
-def test_webhook_allows_missing_secret_when_not_configured(monkeypatch):
+def test_webhook_rejects_requests_when_secret_not_configured(monkeypatch):
     monkeypatch.delenv("HP_WEBHOOK_SECRET", raising=False)
-    monkeypatch.setattr("api.webhook.db.claim_update", lambda update_id: False)
     request = Request(
         "http://placeholder/api/webhook",
         data=json.dumps({"update_id": 1}).encode(),
@@ -87,8 +86,29 @@ def test_webhook_allows_missing_secret_when_not_configured(monkeypatch):
     )
     with running_server() as base_url:
         request.full_url = f"{base_url}/api/webhook"
-        with urlopen(request, timeout=5) as response:
-            payload = json.load(response)
+        try:
+            urlopen(request, timeout=5)
+        except HTTPError as exc:
+            payload = json.load(exc)
+            assert exc.code == 503
+            assert payload["error"] == "webhook_not_configured"
+        else:
+            raise AssertionError("Webhook accepted a request without a configured secret")
 
-    assert response.status == 200
-    assert payload["ok"] is True
+
+def test_webhook_requires_json_content_type(monkeypatch):
+    monkeypatch.setenv("HP_WEBHOOK_SECRET", "expected-secret")
+    request = Request(
+        "http://placeholder/api/webhook",
+        data=b"update_id=1",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "expected-secret"},
+        method="POST",
+    )
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/api/webhook"
+        try:
+            urlopen(request, timeout=5)
+        except HTTPError as exc:
+            assert exc.code == 415
+        else:
+            raise AssertionError("Webhook accepted a non-JSON request")

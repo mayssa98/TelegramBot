@@ -68,3 +68,20 @@ LOW_STOCK_THRESHOLD: int = int(os.environ.get("HP_LOW_STOCK_THRESHOLD", "5"))
 
 # Délai (secondes) max d'attente d'une vérification automatique avant repli manuel.
 VERIFY_TIMEOUT: int = int(os.environ.get("HP_VERIFY_TIMEOUT", "120"))
+
+
+def configuration_issues(*, webhook: bool = False, inventory: bool = False) -> list[str]:
+    """Return actionable configuration problems without exposing secret values."""
+    required = {
+        "HP_BOT_TOKEN": BOT_TOKEN,
+        "HP_ADMIN_ID": ADMIN_ID,
+        "HP_MONGODB_URI": MONGODB_URI,
+    }
+    if inventory:
+        required["HP_INVENTORY_KEY"] = INVENTORY_KEY
+    if webhook:
+        required.update({
+            "HP_WEBHOOK_SECRET": os.environ.get("HP_WEBHOOK_SECRET", "").strip(),
+            "HP_DASHBOARD_PASSWORD": DASHBOARD_PASSWORD,
+        })
+    return [name for name, value in required.items() if not value]

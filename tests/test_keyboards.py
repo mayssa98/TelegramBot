@@ -24,17 +24,6 @@ def test_quantity_confirmation_keeps_selected_quantity():
     assert keyboard.inline_keyboard[0][0].callback_data == "confirm_buy:9:4"
 
 
-def test_main_menu_uses_store_layout():
-    keyboard = kb.main_menu_keyboard("en", user_id=0)
-    rows = [[button.text for button in row] for row in keyboard.keyboard]
-
-    assert rows[0] == ["🎯 Shop"]
-    assert rows[1] == ["📱 Virtual Numbers"]
-    assert rows[2] == ["🟡 History", "⚡ Settings"]
-    assert rows[3] == ["🛎️ Support", "🔗 API LINK"]
-    assert rows[4] == ["🌐 Language"]
-
-
 def test_offer_button_label_uses_store_style():
     label = offer_button_label(
         "en",

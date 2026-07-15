@@ -22,13 +22,13 @@ TRANSLATIONS = {
         "ar": "👋 مرحباً بك في *{shop}*!\n\nمتجرك للخدمات الرقمية المميزة بأسعار لا تُقاوم. دفع سريع عبر Binance Pay وتسليم مضمون.\n\nاستخدم القائمة أدناه:",
     },
     # ---------------- Menu principal ----------------
-    "menu_catalog": {"fr": "🎯 Shop", "en": "🎯 Shop", "ar": "🎯 Shop"},
-    "menu_orders": {"fr": "🟡 Historique", "en": "🟡 History", "ar": "🟡 History"},
+    "menu_catalog": {"fr": "🛍️ Catalogue", "en": "🛍️ Catalog", "ar": "🛍️ المتجر"},
+    "menu_orders": {"fr": "🧾 Mes commandes", "en": "🧾 My orders", "ar": "🧾 طلباتي"},
     "menu_lang": {"fr": "🌐 Langue", "en": "🌐 Language", "ar": "🌐 Language"},
-    "menu_help": {"fr": "⚡ Paramètres", "en": "⚡ Settings", "ar": "⚡ Settings"},
+    "menu_help": {"fr": "❓ Aide", "en": "❓ Help", "ar": "❓ المساعدة"},
     "menu_admin": {"fr": "🛠️ Admin", "en": "🛠️ Admin", "ar": "🛠️ المشرف"},
-    "menu_affiliate": {"fr": "🔗 API LINK", "en": "🔗 API LINK", "ar": "🔗 API LINK"},
-    "menu_account": {"fr": "📱 Numéros virtuels", "en": "📱 Virtual Numbers", "ar": "📱 Virtual Numbers"},
+    "menu_affiliate": {"fr": "🎁 Affiliation", "en": "🎁 Affiliate", "ar": "🎁 الإحالة"},
+    "menu_account": {"fr": "👤 Mon compte", "en": "👤 My account", "ar": "👤 حسابي"},
     "menu_support": {"fr": "🛎️ Support", "en": "🛎️ Support", "ar": "🛎️ Support"},
     "support_prompt": {
         "fr": "🎫 Décrivez votre problème. Vous pourrez continuer la conversation dans ce ticket.",
@@ -101,9 +101,9 @@ TRANSLATIONS = {
     },
     # ---------------- Catalogue ----------------
     "catalog_title": {
-        "fr": "🛍️ *Catalogue {shop}*\n\nChoisissez un service :",
-        "en": "🛍️ *{shop} Catalog*\n\nChoose a service:",
-        "ar": "🛍️ *كتالوج {shop}*\n\nاختر خدمة:",
+        "fr": "🛍️ *CATALOGUE {shop}*\n\n🟢 Boutique opérationnelle\n⚡ Livraison rapide ou instantanée\n🛡️ Produits vérifiés et support inclus\n\nChoisissez votre univers :",
+        "en": "🛍️ *{shop} CATALOG*\n\n🟢 Store operational\n⚡ Fast or instant delivery\n🛡️ Verified products with support\n\nChoose your category:",
+        "ar": "🛍️ *كتالوج {shop}*\n\n🟢 المتجر يعمل\n⚡ تسليم سريع أو فوري\n🛡️ منتجات موثوقة مع الدعم\n\nاختر الفئة:",
     },
     "service_title": {
         "fr": "{emoji} *{name}*\n\nChoisissez une offre :",
@@ -141,6 +141,9 @@ TRANSLATIONS = {
     },
     "btn_main_menu": {"fr": "🖤 Retour à BlackMarket", "en": "🖤 Return to BlackMarket", "ar": "🖤 العودة إلى BlackMarket"},
     "btn_refresh": {"fr": "🔄 Actualiser les services", "en": "🔄 Refresh services", "ar": "🔄 تحديث الخدمات"},
+    "btn_refresh_short": {"fr": "🔄 Actualiser", "en": "🔄 Refresh", "ar": "🔄 تحديث"},
+    "btn_main_menu_short": {"fr": "🏠 Accueil", "en": "🏠 Home", "ar": "🏠 الرئيسية"},
+    "btn_cancel_short": {"fr": "✖️ Annuler", "en": "✖️ Cancel", "ar": "✖️ إلغاء"},
     "btn_confirm": {"fr": "✅ Confirmer l'achat", "en": "✅ Confirm purchase", "ar": "✅ تأكيد الشراء"},
     "btn_cancel": {"fr": '\u274c Annuler le paiement', "en": '\u274c Cancel Payment', "ar": '\u274c \u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u062f\u0641\u0639'},
     "btn_copy_binance_id": {"fr": '\U0001f9ed Copier Binance ID', "en": '\U0001f9ed Copy Binance ID', "ar": '\U0001f9ed \u0646\u0633\u062e \u0645\u0639\u0631\u0641 Binance'},
@@ -193,6 +196,53 @@ TRANSLATIONS = {
         "fr": "\U0001f680 V\u00e9rification automatique lanc\u00e9e pendant *{seconds} secondes*... Le bot cherche un paiement avec le montant exact.",
         "en": "\U0001f680 Automatic verification started for *{seconds} seconds*... The bot is looking for a payment with the exact amount.",
         "ar": "\U0001f680 \u0628\u062f\u0623 \u0627\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u062a\u0644\u0642\u0627\u0626\u064a \u0644\u0645\u062f\u0629 *{seconds} \u062b\u0627\u0646\u064a\u0629*... \u064a\u0628\u062d\u062b \u0627\u0644\u0628\u0648\u062a \u0639\u0646 \u062f\u0641\u0639\u0629 \u0628\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0635\u062d\u064a\u062d.",
+    },
+    "onboarding_1": {
+        "fr": "✨ *Bienvenue dans l’univers {shop}*\n\nDes services numériques premium, présentés simplement et accessibles en quelques secondes.\n\n`1/3`  Découvrir",
+        "en": "✨ *Welcome to the {shop} experience*\n\nPremium digital services, clearly presented and available in seconds.\n\n`1/3`  Discover",
+        "ar": "✨ *مرحبًا بك في عالم {shop}*\n\nخدمات رقمية مميزة وواضحة ومتاحة خلال ثوانٍ.\n\n`1/3`  اكتشف",
+    },
+    "onboarding_2": {
+        "fr": "💳 *Paiement simple et sécurisé*\n\n1️⃣ Choisissez votre produit\n2️⃣ Payez le montant exact via Binance Pay\n3️⃣ Le scanner confirme automatiquement\n\n`2/3`  Paiement",
+        "en": "💳 *Simple and secure payment*\n\n1️⃣ Choose your product\n2️⃣ Pay the exact amount with Binance Pay\n3️⃣ The scanner confirms automatically\n\n`2/3`  Payment",
+        "ar": "💳 *دفع بسيط وآمن*\n\n1️⃣ اختر المنتج\n2️⃣ ادفع المبلغ الدقيق عبر Binance Pay\n3️⃣ يؤكد الماسح الدفع تلقائيًا\n\n`2/3`  الدفع",
+    },
+    "onboarding_3": {
+        "fr": "⚡ *Livraison et accompagnement*\n\n📦 Livraison rapide ou instantanée\n🛡️ Garantie indiquée sur chaque offre\n🎫 Support accessible depuis chaque étape\n\n`3/3`  Vous êtes prêt !",
+        "en": "⚡ *Delivery and assistance*\n\n📦 Fast or instant delivery\n🛡️ Warranty shown on every offer\n🎫 Support available at every step\n\n`3/3`  You are ready!",
+        "ar": "⚡ *التسليم والمساعدة*\n\n📦 تسليم سريع أو فوري\n🛡️ ضمان واضح لكل عرض\n🎫 الدعم متاح في كل خطوة\n\n`3/3`  أنت جاهز!",
+    },
+    "onboarding_next": {"fr": "Continuer  ›", "en": "Continue  ›", "ar": "متابعة  ›"},
+    "onboarding_start": {"fr": "🚀 Découvrir le catalogue", "en": "🚀 Explore the catalog", "ar": "🚀 اكتشف المتجر"},
+    "order_card": {
+        "fr": "🧾 *COMMANDE #{oid}*\n\n🛍️ Produit : *{offer}*\n📦 Quantité : *{qty}*\n💎 Total : *{total} {cur}*\n📍 Statut : *{status}*",
+        "en": "🧾 *ORDER #{oid}*\n\n🛍️ Product: *{offer}*\n📦 Quantity: *{qty}*\n💎 Total: *{total} {cur}*\n📍 Status: *{status}*",
+        "ar": "🧾 *الطلب #{oid}*\n\n🛍️ المنتج: *{offer}*\n📦 الكمية: *{qty}*\n💎 الإجمالي: *{total} {cur}*\n📍 الحالة: *{status}*",
+    },
+    "rating_prompt": {
+        "fr": "⭐ *Votre expérience compte*\n\nComment évaluez-vous cette commande ?",
+        "en": "⭐ *Your experience matters*\n\nHow would you rate this order?",
+        "ar": "⭐ *تجربتك تهمنا*\n\nكيف تقيّم هذا الطلب؟",
+    },
+    "rating_thanks": {
+        "fr": "💜 Merci ! Votre note de {score}/5 nous aide à améliorer la boutique.",
+        "en": "💜 Thank you! Your {score}/5 rating helps us improve the store.",
+        "ar": "💜 شكرًا! تقييمك {score}/5 يساعدنا على تحسين المتجر.",
+    },
+    "payment_scanner": {
+        "fr": "💳 *DÉTECTION BINANCE PAY*\n\n`{frame}`\n\n🔎 Signal de paiement en cours d’analyse\n✨ Scanner sécurisé actif\n🧾 Commande *#{oid}*",
+        "en": "💳 *BINANCE PAY DETECTION*\n\n`{frame}`\n\n🔎 Analyzing the payment signal\n✨ Secure scanner active\n🧾 Order *#{oid}*",
+        "ar": "💳 *فحص BINANCE PAY*\n\n`{frame}`\n\n🔎 جارٍ تحليل إشارة الدفع\n✨ الماسح الآمن نشط\n🧾 الطلب *#{oid}*",
+    },
+    "payment_scanner_success": {
+        "fr": "🟩🟩🟩💎🟩🟩🟩\n\n✅ *PAIEMENT DÉTECTÉ*\n📦 Préparation de la commande *#{oid}*…",
+        "en": "🟩🟩🟩💎🟩🟩🟩\n\n✅ *PAYMENT DETECTED*\n📦 Preparing order *#{oid}*…",
+        "ar": "🟩🟩🟩💎🟩🟩🟩\n\n✅ *تم اكتشاف الدفع*\n📦 جارٍ تجهيز الطلب *#{oid}*…",
+    },
+    "payment_scanner_timeout": {
+        "fr": "🟧🟧🟧⏳🟧🟧🟧\n\n⚠️ *PAIEMENT NON DÉTECTÉ*\nLa vérification manuelle reste disponible pour la commande *#{oid}*.",
+        "en": "🟧🟧🟧⏳🟧🟧🟧\n\n⚠️ *PAYMENT NOT DETECTED*\nManual verification remains available for order *#{oid}*.",
+        "ar": "🟧🟧🟧⏳🟧🟧🟧\n\n⚠️ *لم يتم اكتشاف الدفع*\nالتحقق اليدوي متاح للطلب *#{oid}*.",
     },
     "auto_check_timeout": {
         "fr": "\u231b V\u00e9rification automatique termin\u00e9e pour la commande #{oid}.\n\nEnvoyez maintenant l'*ID de transaction Binance* pour v\u00e9rifier manuellement votre paiement.",

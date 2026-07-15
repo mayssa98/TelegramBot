@@ -7,6 +7,7 @@ import contextlib
 import html
 import logging
 import os
+from pathlib import Path
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -33,6 +34,7 @@ from config import (
     CURRENCY,
     DEFAULT_LANG,
     SHOP_NAME,
+    configuration_issues,
 )
 from i18n import status_label, t
 
@@ -162,12 +164,20 @@ async def send_main_menu(update, context, lang, chat_id=None):
     configured = db.shop_settings().get("welcome_message", "").strip()
     text = configured or t(lang, "welcome", shop=SHOP_NAME)
     target = update.message or (update.callback_query.message if update.callback_query else None)
+    markup = kb.home_keyboard(lang, uid)
+    banner = Path(__file__).resolve().parent / "assets" / "blackmarket-welcome-v2.png"
     if target:
-        await target.reply_text(text, parse_mode=ParseMode.MARKDOWN,
-                                reply_markup=kb.main_menu_keyboard(lang, uid))
+        if banner.exists():
+            with banner.open("rb") as photo:
+                await target.reply_photo(photo=photo, caption=text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
+        else:
+            await target.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
     else:
-        await context.bot.send_message(chat_id, text, parse_mode=ParseMode.MARKDOWN,
-                                       reply_markup=kb.main_menu_keyboard(lang, uid))
+        if banner.exists():
+            with banner.open("rb") as photo:
+                await context.bot.send_photo(chat_id, photo=photo, caption=text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
+        else:
+            await context.bot.send_message(chat_id, text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
 
 
 async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -182,7 +192,7 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(update.effective_user.id)
-    await update.message.reply_text(t(lang, "support_choose_category"), reply_markup=kb.support_category_keyboard(lang))
+    await update.effective_message.reply_text(t(lang, "support_choose_category"), reply_markup=kb.support_category_keyboard(lang))
 
 
 async def cmd_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -231,7 +241,7 @@ async def show_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         lines.append("—")
     await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML,
-                                              reply_markup=kb.main_menu_keyboard(lang, uid))
+                                              reply_markup=kb.home_keyboard(lang, uid))
 
 
 async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -264,11 +274,10 @@ async def cb_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = q.data.split(":")[1]
     db.set_user_lang(q.from_user.id, lang)
     await q.answer()
-    await q.edit_message_text(t(lang, "lang_set"))
-    await context.bot.send_message(
-        q.from_user.id, t(lang, "welcome", shop=SHOP_NAME),
+    await q.edit_message_text(
+        t(lang, "onboarding_1", shop=SHOP_NAME),
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=kb.main_menu_keyboard(lang, q.from_user.id),
+        reply_markup=kb.onboarding_keyboard(lang, 1),
     )
 
 
@@ -343,15 +352,54 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
     await q.answer()
 
+    if data.startswith("tour:"):
+        step = max(1, min(3, int(data.split(":", 1)[1])))
+        await q.edit_message_text(
+            t(lang, f"onboarding_{step}", shop=SHOP_NAME),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.onboarding_keyboard(lang, step),
+        )
+        return
     if data == "home":
-        await q.message.reply_text(t(lang, "welcome", shop=SHOP_NAME),
-                                   parse_mode=ParseMode.MARKDOWN,
-                                   reply_markup=kb.main_menu_keyboard(lang, uid))
+        await send_main_menu(update, context, lang)
         return
     if data == "catalog":
         await q.edit_message_text(t(lang, "catalog_title", shop=SHOP_NAME),
                                   parse_mode=ParseMode.MARKDOWN,
                                   reply_markup=kb.services_keyboard(lang))
+        return
+    if data == "orders":
+        await show_my_orders(update, context, lang)
+        return
+    if data == "account":
+        await show_account(update, context)
+        return
+    if data == "affiliate":
+        await show_affiliate(update, context)
+        return
+    if data == "support":
+        await cmd_support(update, context)
+        return
+    if data == "language":
+        await q.message.reply_text(t(lang, "choose_lang"), reply_markup=kb.lang_keyboard())
+        return
+    if data == "help":
+        help_text = db.shop_settings().get("help_message", "").strip() or t(lang, "help_text", shop=SHOP_NAME)
+        await q.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb.orders_keyboard(lang))
+        return
+    if data.startswith("order_view:"):
+        oid = int(data.split(":", 1)[1])
+        order = db.get_order(oid)
+        if not order or order.get("user_id") != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        await q.message.reply_text(
+            t(lang, "order_card", oid=oid, offer=order["offer_name"], qty=order["qty"],
+              total=f"{order['total_price']:.2f}", cur=CURRENCY,
+              status=status_label(lang, order["status"])),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.orders_keyboard(lang),
+        )
         return
     if data.startswith("svc:"):
         sid = int(data.split(":")[1])
@@ -472,6 +520,23 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         PENDING[uid] = ("support_order", order_id)
         await q.message.reply_text(t(lang, "support_order_prompt", oid=order_id))
+        return
+    if data.startswith("rate:"):
+        order_id = int(data.split(":", 1)[1])
+        order = db.get_order(order_id)
+        if not order or order.get("user_id") != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        await q.message.reply_text(t(lang, "rating_prompt"), reply_markup=kb.rating_keyboard(order_id))
+        return
+    if data.startswith("rating:"):
+        _, order_id, score = data.split(":")
+        order = db.get_order(int(order_id))
+        if not order or order.get("user_id") != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        db.audit_event("order.rated", actor_id=uid, details={"order_id": int(order_id), "score": int(score)})
+        await q.edit_message_text(t(lang, "rating_thanks", score=score))
         return
     if data.startswith("support_cat:"):
         category = data.split(":", 1)[1]
@@ -834,15 +899,42 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                                  reply_markup=kb.support_keyboard(lang))
 
 
+def payment_scanner_frame(step: int, width: int = 9) -> str:
+    """Build a looping neon scanner; it represents activity, not fake progress."""
+    cycle = list(range(width)) + list(range(width - 2, 0, -1))
+    position = cycle[step % len(cycle)]
+    cells = ["⬛"] * width
+    cells[position] = "💠"
+    if position > 0:
+        cells[position - 1] = "🟦"
+    if position < width - 1:
+        cells[position + 1] = "🟪"
+    return "".join(cells)
+
+
 async def run_auto_payment_check(message, context, lang, order_id, uid):
-    await message.reply_text(t(lang, "auto_check_started", seconds=15), parse_mode=ParseMode.MARKDOWN)
+    scanner = await message.reply_text(
+        t(lang, "payment_scanner", frame=payment_scanner_frame(0), oid=order_id),
+        parse_mode=ParseMode.MARKDOWN,
+    )
     deadline = asyncio.get_running_loop().time() + 15
+    step = 0
     while asyncio.get_running_loop().time() < deadline:
         result = await asyncio.to_thread(payment_service.auto_check_payment, order_id, uid)
         if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery", "already_paid"):
+            with contextlib.suppress(Exception):
+                await scanner.edit_text(t(lang, "payment_scanner_success", oid=order_id), parse_mode=ParseMode.MARKDOWN)
             await send_payment_result(message, context, lang, order_id, result, uid)
             return
+        step += 1
+        with contextlib.suppress(Exception):
+            await scanner.edit_text(
+                t(lang, "payment_scanner", frame=payment_scanner_frame(step), oid=order_id),
+                parse_mode=ParseMode.MARKDOWN,
+            )
         await asyncio.sleep(3)
+    with contextlib.suppress(Exception):
+        await scanner.edit_text(t(lang, "payment_scanner_timeout", oid=order_id), parse_mode=ParseMode.MARKDOWN)
     PENDING[uid] = ("await_txid", order_id)
     await message.reply_text(t(lang, "auto_check_timeout", oid=order_id), parse_mode=ParseMode.MARKDOWN)
 
@@ -860,14 +952,18 @@ async def show_my_orders(update, context, lang):
     uid = update.effective_user.id
     orders = db.list_user_orders(uid, limit=15)
     if not orders:
-        await update.message.reply_text(t(lang, "no_orders"))
+        await update.effective_message.reply_text(t(lang, "no_orders"), reply_markup=kb.orders_keyboard(lang))
         return
     lines = [t(lang, "my_orders_title")]
     for o in orders:
         lines.append(t(lang, "order_line", oid=o["id"], offer=o["offer_name"],
                        total=f"{o['total_price']:.2f}", cur=CURRENCY,
                        status=status_label(lang, o["status"])))
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+    await update.effective_message.reply_text(
+        "\n".join(lines),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.orders_keyboard(lang, orders),
+    )
 
 
 # ================= ADMIN CALLBACKS =================
@@ -1046,8 +1142,9 @@ async def on_error(update, context):
 
 
 def build_app():
-    if not BOT_TOKEN:
-        raise RuntimeError("HP_BOT_TOKEN doit être défini dans les variables d'environnement")
+    issues = configuration_issues()
+    if issues:
+        raise RuntimeError(f"Configuration incomplète : {', '.join(issues)}")
     db.init_db()
     from telegram.request import HTTPXRequest
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)

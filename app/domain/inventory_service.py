@@ -10,6 +10,7 @@ import logging
 import time
 
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 import database as db
 from app.constants import InventoryStatus, OrderStatus
@@ -51,9 +52,8 @@ def add_items(offer_id: int, items: list[str]) -> int:
                 "delivered_at": None,
             })
             added += 1
-        except Exception:
-            # DuplicateKeyError ou autre — on continue
-            pass
+        except DuplicateKeyError:
+            log.info("Élément d'inventaire dupliqué ignoré pour l'offre %d", offer_id)
 
     if added:
         conn.offers.update_one({"id": offer_id}, {"$inc": {"stock": added}})

@@ -45,10 +45,12 @@ def lang_keyboard():
 
 def support_category_keyboard(lang):
     categories = ("payment", "delivery", "invalid_content", "order", "affiliation", "other")
-    return InlineKeyboardMarkup([
+    rows = [
         [InlineKeyboardButton(t(lang, f"support_category_{category}"), callback_data=f"support_cat:{category}")]
         for category in categories
-    ])
+    ]
+    rows.append([InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")])
+    return InlineKeyboardMarkup(rows)
 
 
 def support_order_keyboard(lang, orders):
@@ -69,15 +71,35 @@ def support_keyboard(lang):
 
 def main_menu_keyboard(lang, user_id):
     rows = [
-        [t(lang, "menu_catalog")],
-        [t(lang, "menu_account")],
-        [t(lang, "menu_orders"), t(lang, "menu_help")],
-        [t(lang, "menu_support"), t(lang, "menu_affiliate")],
+        [t(lang, "menu_catalog"), t(lang, "menu_orders")],
+        [t(lang, "menu_account"), t(lang, "menu_affiliate")],
+        [t(lang, "menu_support"), t(lang, "menu_help")],
         [t(lang, "menu_lang")],
     ]
     if user_id == ADMIN_ID:
         rows.append([t(lang, "menu_admin")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
+
+
+def home_keyboard(lang, user_id):
+    rows = [
+        [InlineKeyboardButton(t(lang, "menu_catalog"), callback_data="catalog")],
+        [
+            InlineKeyboardButton(t(lang, "menu_orders"), callback_data="orders"),
+            InlineKeyboardButton(t(lang, "menu_account"), callback_data="account"),
+        ],
+        [
+            InlineKeyboardButton(t(lang, "menu_affiliate"), callback_data="affiliate"),
+            InlineKeyboardButton(t(lang, "menu_support"), callback_data="support"),
+        ],
+        [
+            InlineKeyboardButton(t(lang, "menu_help"), callback_data="help"),
+            InlineKeyboardButton(t(lang, "menu_lang"), callback_data="language"),
+        ],
+    ]
+    if user_id == ADMIN_ID:
+        rows.append([InlineKeyboardButton(t(lang, "menu_admin"), callback_data="adm_panel")])
+    return InlineKeyboardMarkup(rows)
 
 
 def services_keyboard(lang):
@@ -92,16 +114,12 @@ def services_keyboard(lang):
             categories[cat] = []
         categories[cat].append(svc)
 
-    for cat, svcs in categories.items():
-        # Titre de la catégorie (bouton non cliquable ou simplement décoratif)
-        buttons.append([InlineKeyboardButton(f"─── {cat} ───", callback_data="none")])
-
-        # Services par ligne (2 par ligne pour un design plus compact et pro)
+    for _cat, svcs in categories.items():
         row = []
         for _i, svc in enumerate(svcs):
             total = db.service_total_stock(svc["id"])
             stock_badge = "🟢" if total > 0 else "🔴"
-            label = f"{stock_badge} {svc['emoji']} {svc['name']}"
+            label = f"{stock_badge} {svc['emoji']} {compact_offer_name(svc['name'], 22)}"
             row.append(InlineKeyboardButton(label, callback_data=f"svc:{svc['id']}"))
             if len(row) == 2:
                 buttons.append(row)
@@ -109,9 +127,21 @@ def services_keyboard(lang):
         if row:
             buttons.append(row)
 
-    buttons.append([InlineKeyboardButton(t(lang, "btn_refresh"), callback_data="catalog")])
-    buttons.append([InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")])
+    buttons.append([
+        InlineKeyboardButton(t(lang, "btn_refresh_short"), callback_data="catalog"),
+        InlineKeyboardButton(t(lang, "btn_main_menu_short"), callback_data="home"),
+    ])
     return InlineKeyboardMarkup(buttons)
+
+
+def onboarding_keyboard(lang, step):
+    if step < 3:
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton(t(lang, "onboarding_next"), callback_data=f"tour:{step + 1}"),
+        ]])
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(t(lang, "onboarding_start"), callback_data="catalog"),
+    ]])
 
 
 def offers_keyboard(lang, service_id):
@@ -161,12 +191,30 @@ def quantity_keyboard(lang, offer, page=0, page_size=20):
 
 def paid_keyboard(lang, order_id):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "btn_copy_binance_id"), callback_data=f"copy_binance_id:{order_id}")],
-        [InlineKeyboardButton(t(lang, "btn_copy_amount"), callback_data=f"copy_amount:{order_id}")],
+        [
+            InlineKeyboardButton(t(lang, "btn_copy_binance_id"), callback_data=f"copy_binance_id:{order_id}"),
+            InlineKeyboardButton(t(lang, "btn_copy_amount"), callback_data=f"copy_amount:{order_id}"),
+        ],
         [InlineKeyboardButton(t(lang, "btn_paid"), callback_data=f"paid:{order_id}")],
-        [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{order_id}")],
-        [InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")],
+        [
+            InlineKeyboardButton(t(lang, "btn_cancel_short"), callback_data=f"cancel_buy:{order_id}"),
+            InlineKeyboardButton(t(lang, "btn_main_menu_short"), callback_data="home"),
+        ],
     ])
+
+
+def orders_keyboard(lang, orders=None):
+    rows = []
+    for order in (orders or [])[:5]:
+        rows.append([InlineKeyboardButton(
+            f"🧾 #{order['id']} · {compact_offer_name(order['offer_name'], 24)}",
+            callback_data=f"order_view:{order['id']}",
+        )])
+    rows.append([
+        InlineKeyboardButton(t(lang, "menu_catalog"), callback_data="catalog"),
+        InlineKeyboardButton(t(lang, "btn_main_menu_short"), callback_data="home"),
+    ])
+    return InlineKeyboardMarkup(rows)
 
 
 def confirm_buy_keyboard(lang, offer_id, qty=1):
@@ -191,7 +239,18 @@ def post_delivery_keyboard(lang, order_id):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(t(lang, "btn_delivery_ok"), callback_data=f"delivery_ok:{order_id}")],
         [InlineKeyboardButton(t(lang, "btn_delivery_problem"), callback_data=f"delivery_problem:{order_id}")],
+        [
+            InlineKeyboardButton("⭐ Avis", callback_data=f"rate:{order_id}"),
+            InlineKeyboardButton(t(lang, "menu_catalog"), callback_data="catalog"),
+        ],
     ])
+
+
+def rating_keyboard(order_id):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(f"{score}⭐", callback_data=f"rating:{order_id}:{score}")
+        for score in range(1, 6)
+    ]])
 
 
 def affiliate_keyboard(lang, referral_link, share_text):

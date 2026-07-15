@@ -11,12 +11,12 @@ import io
 import json
 import logging
 import os
-from pathlib import Path
 import threading
 import traceback
 from datetime import UTC, datetime
 from enum import Enum
 from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from telegram import Update
@@ -34,6 +34,7 @@ _loop = asyncio.new_event_loop()
 _app = None
 _runtime_lock = threading.Lock()
 log = logging.getLogger(__name__)
+MAX_WEBHOOK_BODY_BYTES = 1_000_000
 
 
 def health_payload() -> dict:
@@ -299,15 +300,29 @@ class handler(BaseHTTPRequestHandler):
             return
 
         # Webhook Telegram
-        secret = os.environ.get("HP_WEBHOOK_SECRET", "")
+        secret = os.environ.get("HP_WEBHOOK_SECRET", "").strip()
         supplied = self.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-        if secret and supplied != secret:
+        if not secret:
+            log.error("HP_WEBHOOK_SECRET is not configured; refusing webhook request")
+            self._reply(503, {"ok": False, "error": "webhook_not_configured"})
+            return
+        if not hmac.compare_digest(supplied, secret):
             self._reply(403, {"ok": False, "error": "invalid webhook secret"})
             return
 
         try:
+            content_type = self.headers.get("Content-Type", "").partition(";")[0].strip().lower()
+            if content_type != "application/json":
+                self._reply(415, {"ok": False, "error": "content_type_must_be_json"})
+                return
             length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_WEBHOOK_BODY_BYTES:
+                self._reply(413, {"ok": False, "error": "invalid_body_size"})
+                return
             payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, dict):
+                self._reply(400, {"ok": False, "error": "invalid_update"})
+                return
             update_id = payload.get("update_id")
             if update_id is None or not db.claim_update(update_id):
                 self._reply(200, {"ok": True, "duplicate": True})
@@ -389,7 +404,8 @@ class handler(BaseHTTPRequestHandler):
                     delivery_delay=delivery_delay,
                 )
                 initial_inventory = form.get("initial_inventory", "").splitlines()
-                inventory_count = inventory_service.add_items(oid, initial_inventory) if initial_inventory else 0
+                if initial_inventory:
+                    inventory_service.add_items(oid, initial_inventory)
                 db.audit_event("offer.created", details={"offer_id": oid, "name": name})
 
             elif action == "update_offer":
