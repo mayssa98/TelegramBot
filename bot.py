@@ -532,6 +532,10 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_buy_confirmed(update, context, lang)
         return
     if data.startswith("cancel_buy:"):
+        order_id = int(data.split(":", 1)[1])
+        order = db.get_order(order_id)
+        if order and order.get("user_id") == uid:
+            order_service.cancel_order(order_id, reason="Cancelled by customer")
         await q.edit_message_text(t(lang, "cancelled_msg"))
         return
     if data.startswith("copy_binance_id:"):

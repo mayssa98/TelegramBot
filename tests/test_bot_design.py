@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import keyboards as kb
 from bot import cb_admin, cb_navigation, order_service_groups, orders_text_export, payment_scanner_frame
@@ -127,6 +127,48 @@ def test_admin_from_photo_caption_sends_a_new_text_panel(monkeypatch):
     message.reply_text.assert_awaited_once()
     assert "Panneau Admin" in message.reply_text.await_args.args[0]
     query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+
+
+def test_cancel_payment_button_cancels_the_customers_order(monkeypatch):
+    query = SimpleNamespace(
+        data="cancel_buy:17",
+        from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(text="Payment"),
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+    )
+    update = SimpleNamespace(callback_query=query)
+    cancelled = []
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+    monkeypatch.setattr("bot.db.get_order", lambda order_id: {"id": order_id, "user_id": 42})
+    monkeypatch.setattr(
+        "bot.order_service.cancel_order",
+        lambda order_id, reason="": cancelled.append((order_id, reason)) or True,
+    )
+
+    asyncio.run(cb_navigation(update, SimpleNamespace()))
+
+    assert cancelled == [(17, "Cancelled by customer")]
+    query.edit_message_text.assert_awaited_once()
+
+
+def test_cancel_payment_button_cannot_cancel_another_users_order(monkeypatch):
+    query = SimpleNamespace(
+        data="cancel_buy:17",
+        from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(text="Payment"),
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+    )
+    update = SimpleNamespace(callback_query=query)
+    cancel_order = Mock()
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+    monkeypatch.setattr("bot.db.get_order", lambda _order_id: {"id": 17, "user_id": 99})
+    monkeypatch.setattr("bot.order_service.cancel_order", cancel_order)
+
+    asyncio.run(cb_navigation(update, SimpleNamespace()))
+
+    cancel_order.assert_not_called()
 
 
 def test_orders_are_grouped_by_service_with_counts(monkeypatch):
