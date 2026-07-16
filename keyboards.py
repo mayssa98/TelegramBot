@@ -34,14 +34,9 @@ def stock_button_style(stock):
 
 
 def offer_button_label(lang, offer):
-    price_str = t(lang, "price_tbd") if offer["price"] is None else f"${offer['price']:.2f}"
     stock = int(offer.get("stock") or 0)
     stock_status = stock_badge(stock)
-    stock_str = f"\U0001f4e6 {stock}" if stock > 0 else "\U0001f534 0 manual"
-    warranty = (offer.get("note") or "").strip()
-    if not warranty:
-        warranty = "Full Warranty"
-    return f"{stock_status} {compact_offer_name(offer['name'])} | {warranty} | {price_str} | {stock_str}"
+    return f"{stock_status} {compact_offer_name(offer['name'], 42)} ({stock})"
 
 
 def lang_keyboard():
@@ -178,7 +173,6 @@ def offers_keyboard(lang, service_id):
             style=stock_button_style(off.get("stock")),
         )])
     buttons.append([InlineKeyboardButton(t(lang, "btn_back_services"), callback_data="catalog")])
-    buttons.append([InlineKeyboardButton(t(lang, "btn_refresh"), callback_data=f"svc:{service_id}")])
     return InlineKeyboardMarkup(buttons)
 
 

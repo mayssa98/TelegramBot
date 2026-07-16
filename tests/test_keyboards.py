@@ -35,7 +35,7 @@ def test_offer_button_label_uses_store_style():
         },
     )
 
-    assert label == "\U0001f7e9 SuperGrok 12 Months | Full Warranty | $30.00 | \U0001f4e6 12"
+    assert label == "\U0001f7e9 SuperGrok 12 Months (12)"
 
 
 def test_offer_button_label_uses_yellow_for_low_stock():
@@ -49,7 +49,7 @@ def test_offer_button_label_uses_yellow_for_low_stock():
         },
     )
 
-    assert label.startswith("\U0001f7e8 Low Stock Product")
+    assert label == "\U0001f7e8 Low Stock Product (2)"
 
 
 def test_stock_badge_uses_the_same_thresholds_for_services_and_offers():
@@ -125,5 +125,22 @@ def test_offer_button_label_truncates_long_names():
         },
     )
 
-    assert label.startswith("\U0001f7e5 Very Long Product Name With Man...")
-    assert label.endswith("| Full Warranty | $2.50 | \U0001f534 0 manual")
+    assert label == "\U0001f7e5 Very Long Product Name With Many Detail... (0)"
+
+
+def test_offers_keyboard_matches_reference_flow(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_offers", lambda _service_id: [
+        {"id": 1, "name": "Available plan", "price": 10.0, "stock": 14, "note": ""},
+        {"id": 2, "name": "Low stock plan", "price": 10.0, "stock": 4, "note": ""},
+        {"id": 3, "name": "Unavailable plan", "price": 10.0, "stock": 0, "note": ""},
+    ])
+
+    keyboard = kb.offers_keyboard("en", 7)
+
+    assert [row[0].callback_data for row in keyboard.inline_keyboard] == [
+        "off:1",
+        "off:2",
+        "off:3",
+        "catalog",
+    ]
+    assert len(keyboard.inline_keyboard) == 4

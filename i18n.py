@@ -144,9 +144,9 @@ TRANSLATIONS = {
         "ar": "🛍️ *كتالوج {shop}*\n\n🟢 المتجر يعمل\n⚡ تسليم سريع أو فوري\n🛡️ منتجات موثوقة مع الدعم\n\nاختر الفئة:",
     },
     "service_title": {
-        "fr": "{emoji} *{name}*\n\nChoisissez une offre :",
-        "en": "{emoji} *{name}*\n\nChoose an offer:",
-        "ar": "{emoji} *{name}*\n\nاختر عرضاً:",
+        "fr": "{emoji} *Choisissez l'offre {name} que vous souhaitez acheter :*",
+        "en": "{emoji} *Choose the {name} plan you want to purchase:*",
+        "ar": "{emoji} *اختر عرض {name} الذي تريد شراءه:*",
     },
     "stock_label": {"fr": "stock", "en": "stock", "ar": "المخزون"},
     "no_offers": {
@@ -173,9 +173,9 @@ TRANSLATIONS = {
     "btn_buy": {"fr": "🛒 Acheter maintenant", "en": "🛒 Buy now", "ar": "🛒 اشترِ الآن"},
     "btn_back": {"fr": "⬅️ Retour", "en": "⬅️ Back", "ar": "⬅️ رجوع"},
     "btn_back_services": {
-        "fr": "⬅️ Retour aux services",
-        "en": "⬅️ Back to services",
-        "ar": "⬅️ العودة إلى الخدمات",
+        "fr": "🔶 Services",
+        "en": "🔶 Services",
+        "ar": "🔶 الخدمات",
     },
     "btn_main_menu": {"fr": "🖤 Retour à BlackMarket", "en": "🖤 Return to BlackMarket", "ar": "🖤 العودة إلى BlackMarket"},
     "btn_refresh": {"fr": "🔄 Actualiser les services", "en": "🔄 Refresh services", "ar": "🔄 تحديث الخدمات"},
