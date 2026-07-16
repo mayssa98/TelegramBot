@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import keyboards as kb
-from bot import cb_navigation, order_service_groups, orders_text_export, payment_scanner_frame
+from bot import cb_admin, cb_navigation, order_service_groups, orders_text_export, payment_scanner_frame
 from i18n import t
 
 
@@ -107,6 +107,25 @@ def test_catalog_from_photo_caption_sends_a_new_text_screen(monkeypatch):
 
     message.reply_text.assert_awaited_once()
     assert "CATALOG" in message.reply_text.await_args.args[0]
+    query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+
+
+def test_admin_from_photo_caption_sends_a_new_text_panel(monkeypatch):
+    message = SimpleNamespace(text=None, reply_text=AsyncMock())
+    query = SimpleNamespace(
+        data="adm_panel",
+        from_user=SimpleNamespace(id=999),
+        message=message,
+        answer=AsyncMock(),
+        edit_message_reply_markup=AsyncMock(),
+    )
+    update = SimpleNamespace(callback_query=query)
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+
+    asyncio.run(cb_admin(update, SimpleNamespace()))
+
+    message.reply_text.assert_awaited_once()
+    assert "Panneau Admin" in message.reply_text.await_args.args[0]
     query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
 
 

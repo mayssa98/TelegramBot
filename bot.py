@@ -1135,8 +1135,11 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if data == "adm_panel":
-        await q.edit_message_text("🛠️ *Panneau Admin*", parse_mode=ParseMode.MARKDOWN,
-                                  reply_markup=admin.admin_panel_keyboard())
+        await show_callback_screen(
+            q,
+            "🛠️ *Panneau Admin*",
+            reply_markup=admin.admin_panel_keyboard(),
+        )
         return
 
     if data.startswith("adm_list:"):
