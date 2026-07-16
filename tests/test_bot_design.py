@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+from telegram.constants import ParseMode
+
 import keyboards as kb
 from telegram.constants import ParseMode
 
