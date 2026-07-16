@@ -35,12 +35,20 @@ def _fetch_pay_transactions(start_time):
     return payload.get("data") or []
 
 
-def verify_payment(txid, amount, currency=None, created_at=None):
+def _transaction_memo(transaction):
+    for key in ("note", "memo", "remark", "comments", "reference"):
+        value = transaction.get(key)
+        if value is not None:
+            return str(value).strip()
+    return ""
+
+
+def verify_payment(txid, amount, currency=None, created_at=None, expected_memo=None):
     txid = (txid or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
         return {"status": "failed", "code": "invalid_format", "reason": "Format de transaction invalide"}
     if not BINANCE_API_KEY or not BINANCE_API_SECRET:
-        return {"status": "manual_review", "code": "not_configured", "reason": "Vérification automatique non configurée"}
+        return {"status": "failed", "code": "not_configured", "reason": "Vérification automatique non configurée"}
 
     # Inclure une marge de 10 minutes avant la création de la commande.
     start_ms = ((created_at or int(time.time()) - 3600) * 1000) - 600_000
@@ -60,10 +68,12 @@ def verify_payment(txid, amount, currency=None, created_at=None):
                 return {"status": "failed", "code": "wrong_currency", "reason": f"Devise reçue: {asset}, attendue: {PAY_CURRENCY}"}
             if received != expected:
                 return {"status": "failed", "code": "wrong_amount", "reason": f"Montant reçu: {received}, attendu: {expected}"}
+            if expected_memo is not None and _transaction_memo(transaction) != str(expected_memo):
+                return {"status": "failed", "code": "wrong_memo", "reason": "Notes / Memo incorrect ou absent"}
             return {"status": "confirmed", "code": "confirmed", "reason": "Transaction Binance Pay confirmée"}
         return {"status": "failed", "code": "not_found", "reason": "Transaction absente de l'historique Binance Pay"}
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
-        return {"status": "manual_review", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
+        return {"status": "failed", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
 
 
 def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
@@ -72,7 +82,7 @@ def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
     if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
         return {"status": "failed", "code": "invalid_format", "reason": "Format de transaction invalide"}
     if not BINANCE_API_KEY or not BINANCE_API_SECRET:
-        return {"status": "manual_review", "code": "not_configured", "reason": "Vérification automatique non configurée"}
+        return {"status": "failed", "code": "not_configured", "reason": "Vérification automatique non configurée"}
     start_ms = ((created_at or int(time.time()) - 86400) * 1000) - 600_000
     try:
         minimum = Decimal(str(minimum_amount))
@@ -94,7 +104,7 @@ def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
             }
         return {"status": "failed", "code": "not_found", "reason": "Transaction absente de l'historique Binance Pay"}
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
-        return {"status": "manual_review", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
+        return {"status": "failed", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
 
 
 def _transaction_time_ms(transaction):
@@ -110,9 +120,9 @@ def _transaction_time_ms(transaction):
     return None
 
 
-def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=None):
+def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=None, expected_memo=None):
     if not BINANCE_API_KEY or not BINANCE_API_SECRET:
-        return {"status": "manual_review", "code": "not_configured", "reason": "Vérification automatique non configurée"}
+        return {"status": "failed", "code": "not_configured", "reason": "Vérification automatique non configurée"}
 
     created_at = int(created_at or time.time())
     start_ms = (created_at * 1000) - 30_000
@@ -135,6 +145,8 @@ def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=
             if received <= 0 or asset != expected_asset:
                 continue
             if received == expected:
+                if expected_memo is not None and _transaction_memo(transaction) != str(expected_memo):
+                    continue
                 return {
                     "status": "confirmed",
                     "code": "confirmed",
@@ -143,4 +155,4 @@ def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=
                 }
         return {"status": "failed", "code": "not_found", "reason": "Aucun paiement exact récent détecté"}
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
-        return {"status": "manual_review", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
+        return {"status": "failed", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}

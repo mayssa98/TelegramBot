@@ -231,8 +231,8 @@ TRANSLATIONS = {
     },
     # ---------------- Paiement ----------------
     "order_created": {
-        "fr": "\U0001f525\U0001f4b3 *Binance Pay*\n--------------------\n\n\U0001f680 _Auto-check activ\xe9_\n\n\U0001f6cd\ufe0f Produit : *{offer}*\n\U0001f4ab Quantit\xe9 : *{qty}*\n\U0001f4b0 Total commande : *{total} {cur}*\n\n\U0001f6a8 *ENVOYEZ EXACTEMENT : {total} {cur}*\nL'auto-v\xe9rification fonctionne uniquement avec *{total} {cur}*. Ne pas arrondir. Si le montant est diff\xe9rent, la commande peut ne pas \xeatre d\xe9tect\xe9e.\n\n\U0001f4a5 Montant \xe0 copier : `{total}` *{cur}*\n\U0001f9ed Binance ID : `{binance_id}`\n\n\U0001f6a8 *Important*\n- Copiez le montant exact et collez-le sans modification.\n- Dans Binance : Send -> Binance ID, puis collez l'ID ci-dessus.\n- La commande expire automatiquement apr\xe8s 30 minutes.\n\n\U0001f3af Payment ID : *#{oid}*\nApr\xe8s le paiement, appuyez sur *V\xe9rifier le paiement* et envoyez l'ID de transaction Binance.",
-        "en": '\U0001f525\U0001f4b3 *Binance Pay*\n--------------------\n\n\U0001f680 _Auto-check is live_\n\n\U0001f6cd\ufe0f Product: *{offer}*\n\U0001f4ab Quantity: *{qty}*\n\U0001f4b0 Order total: *{total} {cur}*\n\n\U0001f6a8 *SEND EXACTLY: {total} {cur}*\nAuto-check works only with *{total} {cur}*. Do not round. If the amount is different, the order may not be detected.\n\n\U0001f4a5 Amount to copy: `{total}` *{cur}*\n\U0001f9ed Binance ID: `{binance_id}`\n\n\U0001f6a8 *Important*\n- Copy the exact amount and paste it unchanged.\n- In Binance: Send -> Binance ID, then paste the ID above.\n- The order expires automatically after 30 minutes.\n\n\U0001f3af Payment ID: *#{oid}*\nAfter payment, tap *Check Payment* and send the Binance transaction ID.',
+        "fr": "\U0001f525\U0001f4b3 *Binance Pay*\n--------------------\n\n\U0001f6cd\ufe0f Produit : *{offer}*\n\U0001f4ab Quantit\xe9 : *{qty}*\n\n\U0001f6a8 *ENVOYEZ EXACTEMENT : {total} {cur}*\n\U0001f9ed Binance ID : `{binance_id}`\n\U0001f4dd Notes / M\xe9mo obligatoire : `{telegram_id}`\n\nLe scanner automatique fonctionne pendant *20 secondes*. Le montant et le m\xe9mo doivent correspondre exactement.\n\nSi le paiement n'est pas d\xe9tect\xe9, appuyez sur *V\xe9rifier le paiement* puis collez votre TXID.\n\n\U0001f3af Commande : *#{oid}*",
+        "en": "\U0001f525\U0001f4b3 *Binance Pay*\n--------------------\n\n\U0001f6cd\ufe0f Product: *{offer}*\n\U0001f4ab Quantity: *{qty}*\n\n\U0001f6a8 *SEND EXACTLY: {total} {cur}*\n\U0001f9ed Binance ID: `{binance_id}`\n\U0001f4dd Required Notes / Memo: `{telegram_id}`\n\nThe automatic scanner runs for *20 seconds*. The amount and memo must match exactly.\n\nIf the payment is not detected, tap *Check Payment* and paste your TXID.\n\n\U0001f3af Order: *#{oid}*",
         "ar": "🧾 *تم إنشاء الطلب #{oid}*\n\nالخدمة: *{service}*\nالعرض: *{offer}*\nالكمية: *{qty}*\nالمبلغ الإجمالي: *{total} {cur}*\n\n💳 *الدفع عبر Binance Pay*\n\n1️⃣ أرسل *{total} {cur}* إلى معرّف Binance Pay:\n`{binance_id}`\n\n2️⃣ بعد الدفع، اضغط الزر أدناه وأرسل *رقم معاملة Binance*.",
     },
     "btn_paid": {
@@ -249,6 +249,16 @@ TRANSLATIONS = {
         "fr": "\U0001f680 V\u00e9rification automatique lanc\u00e9e pendant *{seconds} secondes*... Le bot cherche un paiement avec le montant exact.",
         "en": "\U0001f680 Automatic verification started for *{seconds} seconds*... The bot is looking for a payment with the exact amount.",
         "ar": "\U0001f680 \u0628\u062f\u0623 \u0627\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u062a\u0644\u0642\u0627\u0626\u064a \u0644\u0645\u062f\u0629 *{seconds} \u062b\u0627\u0646\u064a\u0629*... \u064a\u0628\u062d\u062b \u0627\u0644\u0628\u0648\u062a \u0639\u0646 \u062f\u0641\u0639\u0629 \u0628\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0635\u062d\u064a\u062d.",
+    },
+    "btn_pay_wallet": {
+        "fr": "💳 Payer avec mon solde",
+        "en": "💳 Pay with my balance",
+        "ar": "💳 الدفع من الرصيد",
+    },
+    "btn_pay_binance": {
+        "fr": "🟡 Payer avec Binance Pay",
+        "en": "🟡 Pay with Binance Pay",
+        "ar": "🟡 الدفع عبر Binance Pay",
     },
     "onboarding_1": {
         "fr": "✨ *Bienvenue dans l’univers {shop}*\n\nDes services numériques premium, présentés simplement et accessibles en quelques secondes.\n\n`1/3`  Découvrir",
@@ -362,6 +372,11 @@ TRANSLATIONS = {
         "fr": "📦 *Vos commandes*",
         "en": "📦 *Your orders*",
         "ar": "📦 *طلباتك*",
+    },
+    "payment_wrong_memo": {
+        "fr": "❌ Le Notes / Mémo ne correspond pas à votre Telegram ID pour la commande #{oid}.",
+        "en": "❌ The Notes / Memo does not match your Telegram ID for order #{oid}.",
+        "ar": "❌ الملاحظات لا تطابق معرف تيليغرام للطلب #{oid}.",
     },
     "orders_choose_service": {
         "fr": "📋 *Mes commandes*\n\nSélectionnez un service pour consulter vos commandes :",

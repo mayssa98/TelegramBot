@@ -21,7 +21,8 @@ def test_quantity_keyboard_uses_stock_as_maximum():
 def test_quantity_confirmation_keeps_selected_quantity():
     keyboard = kb.confirm_buy_keyboard("fr", 9, 4)
 
-    assert keyboard.inline_keyboard[0][0].callback_data == "confirm_buy:9:4"
+    assert keyboard.inline_keyboard[0][0].callback_data == "pay_wallet:9:4"
+    assert keyboard.inline_keyboard[1][0].callback_data == "pay_binance:9:4"
 
 
 def test_offer_button_label_uses_store_style():

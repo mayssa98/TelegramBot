@@ -39,7 +39,7 @@ def check_duplicate_pending_order(user_id: int, offer_id: int) -> dict | None:
     return None
 
 
-def create_order(user_id: int, offer: dict, qty: int = 1) -> dict:
+def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = "binance") -> dict:
     """Crée une commande avec expiration et renvoie l'objet complet.
 
     Raises:
@@ -60,7 +60,15 @@ def create_order(user_id: int, offer: dict, qty: int = 1) -> dict:
     discount = loyalty_service.discount_for_order(user_id, gross_total)
     discount_amount = discount["amount"]
     after_discount = round(max(0, gross_total - discount_amount), 2)
-    wallet_used = wallet_service.apply_balance(user_id, after_discount)
+    wallet_used = 0.0
+    if payment_method == "wallet":
+        available = wallet_service.balance_cents(user_id) / 100
+        if available < after_discount:
+            raise ValueError(
+                f"Solde insuffisant : {available:.2f} {CURRENCY} disponible, "
+                f"{after_discount:.2f} {CURRENCY} requis."
+            )
+        wallet_used = wallet_service.apply_balance(user_id, after_discount)
     service = db.get_service(offer["service_id"])
 
     order_id = db._next_id("orders")
@@ -78,6 +86,7 @@ def create_order(user_id: int, offer: dict, qty: int = 1) -> dict:
         "loyalty_discount_amount": discount_amount,
         "wallet_amount": wallet_used,
         "wallet_refunded": False,
+        "payment_method": payment_method,
         "total_price": round(max(0, after_discount - wallet_used), 2),
         "currency": CURRENCY,
         "status": OrderStatus.PENDING_PAYMENT,

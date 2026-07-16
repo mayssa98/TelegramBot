@@ -27,10 +27,10 @@ def test_topup_txid_cannot_be_used_twice(mock_mongodb, monkeypatch):
 def test_wallet_pays_order_and_reduces_external_total(mock_mongodb):
     db.add_service("AI", "🤖")
     offer_id = db.add_offer(1, "Premium", 10.0, 1)
-    mock_mongodb.wallets.insert_one({"user_id": 42, "balance_cents": 600})
+    mock_mongodb.wallets.insert_one({"user_id": 42, "balance_cents": 1000})
 
-    order = order_service.create_order(42, db.get_offer(offer_id))
+    order = order_service.create_order(42, db.get_offer(offer_id), payment_method="wallet")
 
-    assert order["wallet_amount"] == 6.0
-    assert order["total_price"] == 4.0
+    assert order["wallet_amount"] == 10.0
+    assert order["total_price"] == 0.0
     assert wallet_service.balance_cents(42) == 0

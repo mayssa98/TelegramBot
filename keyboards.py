@@ -257,7 +257,8 @@ def orders_keyboard(lang, orders=None):
 def confirm_buy_keyboard(lang, offer_id, qty=1):
     """Clavier de confirmation avant achat."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "btn_confirm"), callback_data=f"confirm_buy:{offer_id}:{qty}")],
+        [InlineKeyboardButton(t(lang, "btn_pay_wallet"), callback_data=f"pay_wallet:{offer_id}:{qty}")],
+        [InlineKeyboardButton(t(lang, "btn_pay_binance"), callback_data=f"pay_binance:{offer_id}:{qty}")],
         [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{offer_id}")],
     ])
 

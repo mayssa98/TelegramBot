@@ -26,14 +26,16 @@ def test_french_payment_message_matches_binance_style():
         total="0.65",
         cur="USDT",
         binance_id="904169573",
+        telegram_id=123456,
     )
 
     assert "*Binance Pay*" in message
-    assert "Auto-check activé" in message
+    assert "20 secondes" in message
+    assert "123456" in message
     assert "Produit : *Gemini AI Pro 18m*" in message
     assert "ENVOYEZ EXACTEMENT : 0.65 USDT" in message
     assert "Binance ID : `904169573`" in message
-    assert "Payment ID : *#6074*" in message
+    assert "Commande : *#6074*" in message
     assert "Copier Binance ID" in t("fr", "btn_copy_binance_id")
     assert "Copier le montant exact" in t("fr", "btn_copy_amount")
     assert "`904169573`" in t("fr", "copy_binance_id_msg", binance_id="904169573")

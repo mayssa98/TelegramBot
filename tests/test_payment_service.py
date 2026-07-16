@@ -14,7 +14,7 @@ def mock_payment_verifier(monkeypatch):
     """Permet d'injecter une réponse simulée de verify_payment."""
     state = {"status": "confirmed", "reason": "Transaction Binance Pay confirmée"}
 
-    def _mock(txid, amount, currency=None, created_at=None):
+    def _mock(txid, amount, currency=None, created_at=None, expected_memo=None):
         return state
 
     monkeypatch.setattr(payment_service, "verify_payment", _mock)
@@ -172,7 +172,7 @@ def test_confirm_payment_from_manual_review(mock_mongodb):
     assert db.get_order(7)["status"] == OrderStatus.PAYMENT_CONFIRMED
 
 
-def test_temporary_verifier_error_enters_manual_review(mock_mongodb, monkeypatch):
+def test_temporary_verifier_error_never_enters_manual_review(mock_mongodb, monkeypatch):
     conn = db.get_conn()
     conn.orders.insert_one({
         "id": 20,
@@ -189,10 +189,10 @@ def test_temporary_verifier_error_enters_manual_review(mock_mongodb, monkeypatch
 
     result = payment_service.submit_payment(20, "TXID_123456", 123)
 
-    assert result["status"] == "manual_review"
+    assert result["status"] == "failed"
     order = db.get_order(20)
-    assert order["status"] == OrderStatus.MANUAL_REVIEW
-    assert order["txid"] == "TXID_123456"
+    assert order["status"] == OrderStatus.PENDING_PAYMENT
+    assert order["txid"] == ""
 
 
 def test_payment_qualifies_referral_only_after_confirmation(mock_mongodb, mock_payment_verifier):

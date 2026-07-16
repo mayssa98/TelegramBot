@@ -545,8 +545,9 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("buyq:"):
         await handle_buy_confirmation(update, context, lang)
         return
-    if data.startswith("confirm_buy:"):
-        await handle_buy_confirmed(update, context, lang)
+    if data.startswith(("confirm_buy:", "pay_wallet:", "pay_binance:")):
+        payment_method = "wallet" if data.startswith("pay_wallet:") else "binance"
+        await handle_buy_confirmed(update, context, lang, payment_method=payment_method)
         return
     if data.startswith("cancel_buy:"):
         order_id = int(data.split(":", 1)[1])
@@ -730,7 +731,7 @@ async def handle_buy_confirmation(update, context, lang):
     )
 
 
-async def handle_buy_confirmed(update, context, lang):
+async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
     """Cr?e la commande apr?s confirmation de l'utilisateur."""
     q = update.callback_query
     uid = q.from_user.id
@@ -744,7 +745,7 @@ async def handle_buy_confirmed(update, context, lang):
         return
 
     try:
-        order = order_service.create_order(uid, offer, qty=qty)
+        order = order_service.create_order(uid, offer, qty=qty, payment_method=payment_method)
     except ValueError as exc:
         await q.answer(str(exc), show_alert=True)
         return
@@ -758,7 +759,7 @@ async def handle_buy_confirmed(update, context, lang):
     text = t(lang, "order_created", oid=order["id"], service=order["service_name"],
              offer=order["offer_name"], qty=order["qty"],
              total=f"{order['total_price']:.2f}", cur=CURRENCY,
-             binance_id=BINANCE_PAY_ID)
+             binance_id=BINANCE_PAY_ID, telegram_id=uid)
     await q.edit_message_text(text, parse_mode=ParseMode.MARKDOWN,
                               reply_markup=kb.paid_keyboard(lang, order["id"]))
     await run_auto_payment_check(q.message, context, lang, order["id"], uid)
@@ -1011,13 +1012,6 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
     elif result["status"] == "already_paid":
         await message.reply_text(t(lang, "already_paid", oid=order_id),
                                  parse_mode=ParseMode.MARKDOWN)
-    elif result["status"] == "manual_review":
-        await message.reply_text(t(lang, "payment_manual_review", oid=order_id),
-                                 parse_mode=ParseMode.MARKDOWN)
-        await message.reply_text(t(lang, "payment_contact_admin", oid=order_id),
-                                 parse_mode=ParseMode.MARKDOWN,
-                                 reply_markup=kb.support_keyboard(lang))
-        await admin.notify_new_order(context, db.get_order(order_id))
     else:
         error_code = result.get("error_code", "unknown")
         if error_code == "too_short":
@@ -1027,14 +1021,13 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
         error_key = {
             "wrong_amount": "payment_wrong_amount",
             "wrong_currency": "payment_wrong_currency",
+            "wrong_memo": "payment_wrong_memo",
             "not_found": "payment_not_found",
             "already_used": "payment_txid_used",
         }.get(error_code, "verify_failed")
         await message.reply_text(t(lang, error_key, oid=order_id),
                                  parse_mode=ParseMode.MARKDOWN)
-        await message.reply_text(t(lang, "payment_contact_admin", oid=order_id),
-                                 parse_mode=ParseMode.MARKDOWN,
-                                 reply_markup=kb.support_keyboard(lang))
+        PENDING[uid] = ("await_txid", order_id)
 
 
 def payment_scanner_frame(step: int, width: int = 9) -> str:
@@ -1055,7 +1048,7 @@ async def run_auto_payment_check(message, context, lang, order_id, uid):
         t(lang, "payment_scanner", frame=payment_scanner_frame(0), oid=order_id),
         parse_mode=ParseMode.MARKDOWN,
     )
-    deadline = asyncio.get_running_loop().time() + 15
+    deadline = asyncio.get_running_loop().time() + 20
     step = 0
     while asyncio.get_running_loop().time() < deadline:
         result = await asyncio.to_thread(payment_service.auto_check_payment, order_id, uid)
@@ -1070,7 +1063,7 @@ async def run_auto_payment_check(message, context, lang, order_id, uid):
                 t(lang, "payment_scanner", frame=payment_scanner_frame(step), oid=order_id),
                 parse_mode=ParseMode.MARKDOWN,
             )
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
     with contextlib.suppress(Exception):
         await scanner.edit_text(t(lang, "payment_scanner_timeout", oid=order_id), parse_mode=ParseMode.MARKDOWN)
     PENDING[uid] = ("await_txid", order_id)
@@ -1353,7 +1346,10 @@ def build_app():
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(
-        CallbackQueryHandler(block_maintenance_purchases, pattern=r"^(buy|buyq|qty_page|confirm_buy):"),
+        CallbackQueryHandler(
+            block_maintenance_purchases,
+            pattern=r"^(buy|buyq|qty_page|confirm_buy|pay_wallet|pay_binance):",
+        ),
         group=-1,
     )
     app.add_handler(CommandHandler("start", cmd_start))

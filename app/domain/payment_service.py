@@ -191,19 +191,24 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
 
     # 5. Vérification automatique
     verification = verify_payment(
-        txid, order["total_price"], CURRENCY, order.get("created_at")
+        txid, order["total_price"], CURRENCY, order.get("created_at"), expected_memo=user_id
     )
 
     if verification["status"] == "confirmed":
         result.update(_finalize_confirmed_payment(order_id, user_id, txid, "auto_txid"))
     elif verification["status"] == "manual_review":
         reason = verification.get("reason", "Vérification automatique indisponible")
-        mark_manual_review(order_id, reason)
-        result["status"] = "manual_review"
+        db.update_order(
+            order_id,
+            status=OrderStatus.PENDING_PAYMENT,
+            txid="",
+            verify_method="auto_unavailable",
+        )
+        result["status"] = "failed"
         result["error_code"] = verification.get("code", "temporary_error")
         result["error_message"] = reason
         db.audit_event(
-            "payment.manual_review",
+            "payment.verification_unavailable",
             actor_id=user_id,
             details={"order_id": order_id, "reason": reason},
         )
@@ -266,7 +271,8 @@ def auto_check_payment(order_id: int, user_id: int) -> dict[str, Any]:
         for item in db.get_conn().orders.find({"txid": {"$nin": ["", None]}, "id": {"$ne": order_id}}, {"txid": 1})
     ]
     verification = verify_payment_by_amount(
-        order["total_price"], CURRENCY, order.get("created_at"), used_txids=used_txids
+        order["total_price"], CURRENCY, order.get("created_at"),
+        used_txids=used_txids, expected_memo=user_id,
     )
     if verification["status"] == "confirmed":
         txid = verification.get("txid", "")
@@ -279,7 +285,7 @@ def auto_check_payment(order_id: int, user_id: int) -> dict[str, Any]:
             return result
         result.update(_finalize_confirmed_payment(order_id, user_id, txid, "auto_amount"))
     elif verification["status"] == "manual_review":
-        result["status"] = "manual_review"
+        result["status"] = "failed"
         result["error_code"] = verification.get("code", "temporary_error")
         result["error_message"] = verification.get("reason", "Verification automatique indisponible")
     else:

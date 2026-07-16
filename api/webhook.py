@@ -25,7 +25,7 @@ from telegram.constants import ParseMode
 import database as db
 from api.dashboard import render_dashboard
 from app import __version__
-from app.domain import inventory_service, order_service, payment_service, support_service
+from app.domain import inventory_service, order_service, support_service
 from app.web import dashboard_api
 from bot import build_app
 from config import CURRENCY, DASHBOARD_PASSWORD
@@ -495,41 +495,10 @@ class handler(BaseHTTPRequestHandler):
                             print(f"Failed to notify user about ticket reply: {e}")
 
             elif action == "confirm_payment":
-                oid = int(form["order_id"])
-                if payment_service.confirm_payment_manual(oid):
-                    # Tenter la livraison automatique
-                    delivered = inventory_service.deliver_for_order(oid)
-                    order = db.get_order(oid)
-                    app = _application()
-                    if delivered:
-                        content = "\n\n".join(delivered)
-                        try:
-                            # Notifier le client avec la livraison
-                            _loop.run_until_complete(
-                                app.bot.send_message(
-                                    order["user_id"],
-                                    f"🎁 <b>Votre commande #{oid} est livrée !</b>\n\n"
-                                    f"Service : <b>{html.escape(order['service_name'])}</b> — {html.escape(order['offer_name'])}\n\n"
-                                    f"<code>{html.escape(content)}</code>\n\n"
-                                    f"Merci pour votre confiance ! 💜",
-                                    parse_mode=ParseMode.HTML,
-                                )
-                            )
-                        except Exception as e:
-                            print(f"Failed to deliver notification to user: {e}")
-                    else:
-                        # Notifier simplement que le paiement est validé
-                        try:
-                            _loop.run_until_complete(
-                                app.bot.send_message(
-                                    order["user_id"],
-                                    f"✅ <b>Paiement confirmé !</b> Commande #{oid}\n\n"
-                                    f"Votre produit sera livré manuellement très bientôt. Merci !",
-                                    parse_mode=ParseMode.HTML,
-                                )
-                            )
-                        except Exception as e:
-                            print(f"Failed to notify user: {e}")
+                raise ValueError(
+                    "La confirmation manuelle est désactivée. "
+                    "Le paiement doit être confirmé automatiquement par Binance."
+                )
 
             elif action == "cancel_order":
                 oid = int(form["order_id"])
