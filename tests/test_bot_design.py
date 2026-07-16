@@ -70,6 +70,7 @@ def test_catalog_button_opens_the_services_catalog(monkeypatch):
     query = SimpleNamespace(
         data="catalog",
         from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(text="Home"),
         answer=AsyncMock(),
         edit_message_text=AsyncMock(),
     )
@@ -88,6 +89,25 @@ def test_catalog_button_opens_the_services_catalog(monkeypatch):
         for button in row
     }
     assert {"catalog", "home"} <= callbacks
+
+
+def test_catalog_from_photo_caption_sends_a_new_text_screen(monkeypatch):
+    message = SimpleNamespace(text=None, reply_text=AsyncMock())
+    query = SimpleNamespace(
+        data="catalog",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+        edit_message_reply_markup=AsyncMock(),
+    )
+    update = SimpleNamespace(callback_query=query)
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(update, SimpleNamespace()))
+
+    message.reply_text.assert_awaited_once()
+    assert "CATALOG" in message.reply_text.await_args.args[0]
+    query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
 
 
 def test_orders_are_grouped_by_service_with_counts(monkeypatch):

@@ -377,6 +377,16 @@ async def show_catalog(update, context, lang):
                          reply_markup=kb.services_keyboard(lang))
 
 
+async def show_callback_screen(query, text, *, reply_markup, parse_mode=ParseMode.MARKDOWN):
+    """Render a callback screen from either a text message or a photo caption."""
+    if getattr(query.message, "text", None):
+        await query.edit_message_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+        return
+    await query.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+    with contextlib.suppress(Exception):
+        await query.edit_message_reply_markup(reply_markup=None)
+
+
 async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
@@ -396,9 +406,11 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_main_menu(update, context, lang)
         return
     if data == "catalog":
-        await q.edit_message_text(t(lang, "catalog_title", shop=SHOP_NAME),
-                                  parse_mode=ParseMode.MARKDOWN,
-                                  reply_markup=kb.services_keyboard(lang))
+        await show_callback_screen(
+            q,
+            t(lang, "catalog_title", shop=SHOP_NAME),
+            reply_markup=kb.services_keyboard(lang),
+        )
         return
     if data == "orders":
         await show_my_orders(update, context, lang)
