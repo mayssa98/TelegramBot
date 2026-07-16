@@ -207,7 +207,7 @@ def test_payment_qualifies_referral_only_after_confirmation(mock_mongodb, mock_p
         "user_id": 111,
         "offer_id": offer_id,
         "qty": 1,
-        "total_price": 5.0,
+        "total_price": 10.0,
         "status": OrderStatus.PENDING_PAYMENT,
         "txid": "",
     })
@@ -215,4 +215,4 @@ def test_payment_qualifies_referral_only_after_confirmation(mock_mongodb, mock_p
     result = payment_service.submit_payment(30, "TXID_QUALIFIED", 111)
 
     assert result["affiliate"]["referrer_id"] == 999
-    assert mock_mongodb.referrals.find_one({"referred_id": 111})["first_payment"] is True
+    assert mock_mongodb.referrals.find_one({"referred_id": 111})["qualified"] is True

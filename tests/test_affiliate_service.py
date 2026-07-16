@@ -1,68 +1,61 @@
-"""Tests unitaires pour le service d'affiliation."""
-
-from __future__ import annotations
+"""Tests for qualified referral members and daily rewards."""
 
 import database as db
 from app.domain import affiliate_service
 
 
-def test_register_referral_link_success(mock_mongodb):
-    """Vérifie l'enregistrement de lien de parrainage."""
-    # Créer les utilisateurs parrain et filleul
-    conn = db.get_conn()
-    conn.users.insert_one({"telegram_id": 999, "username": "referrer"})
-    conn.users.insert_one({"telegram_id": 111, "username": "referred"})
-
-    # Enregistrer le lien
-    assert affiliate_service.register_referral_link(referred_id=111, referrer_id=999) is True
-
-    # Vérifier l'enregistrement
-    ref = conn.referrals.find_one({"referred_id": 111})
-    assert ref is not None
-    assert ref["referrer_id"] == 999
-    assert ref["first_payment"] is False
+def _users_and_referrals(conn, referrer_id=999, count=10):
+    conn.users.insert_one({"telegram_id": referrer_id})
+    for index in range(count):
+        user_id = 100 + index
+        conn.users.insert_one({"telegram_id": user_id})
+        assert affiliate_service.register_referral_link(user_id, referrer_id)
 
 
-def test_register_referral_self_referral(mock_mongodb):
-    """Vérifie qu'un utilisateur ne peut pas s'auto-parrainer."""
-    conn = db.get_conn()
-    conn.users.insert_one({"telegram_id": 111})
-
-    assert affiliate_service.register_referral_link(referred_id=111, referrer_id=111) is False
+def test_register_referral_rejects_self_referral(mock_mongodb):
+    mock_mongodb.users.insert_one({"telegram_id": 111})
+    assert affiliate_service.register_referral_link(111, 111) is False
 
 
-def test_affiliate_reward_on_first_payment(mock_mongodb):
-    """Vérifie qu'un parrain reçoit sa récompense au premier paiement du filleul."""
-    conn = db.get_conn()
-    conn.users.insert_one({"telegram_id": 999})
-    conn.users.insert_one({"telegram_id": 111})
+def test_member_qualifies_after_ten_dollars(mock_mongodb):
+    _users_and_referrals(mock_mongodb, count=1)
+    mock_mongodb.orders.insert_one({
+        "id": 1, "user_id": 100, "status": "delivered", "total_price": 10.0,
+    })
 
-    # Parrainer
-    affiliate_service.register_referral_link(referred_id=111, referrer_id=999)
+    result = affiliate_service.on_confirmed_payment(100, 1)
 
-    # Simuler le premier paiement du filleul
-    res = affiliate_service.on_first_payment(user_id=111)
+    assert result["qualified"] is True
+    assert result["daily_count"] == 1
+    assert result["rewarded"] is False
 
-    assert res is not None
-    assert res["referrer_id"] == 999
-    assert res["paid_count"] == 1
-    assert res["progress"] == 1
 
-    # Par défaut, le seuil est de 10 filleuls (HP_AFFILIATE_TARGET). Donc pas encore récompensé.
-    assert res["rewarded"] is False
+def test_fifth_and_tenth_daily_members_reward_wallet(mock_mongodb):
+    _users_and_referrals(mock_mongodb)
+    rewards = []
+    for index in range(10):
+        user_id = 100 + index
+        order_id = index + 1
+        mock_mongodb.orders.insert_one({
+            "id": order_id, "user_id": user_id, "status": "delivered", "total_price": 10.0,
+        })
+        result = affiliate_service.on_confirmed_payment(user_id, order_id)
+        if result["rewarded"]:
+            rewards.append(result["reward_amount"])
 
-    # Simuler 9 autres filleuls qui payent pour le même parrain
-    for i in range(2, 11):
-        fid = 100 + i
-        conn.users.insert_one({"telegram_id": fid})
-        affiliate_service.register_referral_link(referred_id=fid, referrer_id=999)
-        res = affiliate_service.on_first_payment(user_id=fid)
+    assert rewards == [5.0, 2.0]
+    assert affiliate_service.get_stats(999)["balance_cents"] == 700
 
-    # Le 10ème filleul déclenche le seuil de parrainage
-    assert res["paid_count"] == 10
-    assert res["rewarded"] is True
-    assert res["reward_amount"] == 1.0  # 100 centimes = 1.0 USDT
 
-    # Vérifier le solde du parrain
-    stats = affiliate_service.get_stats(user_id=999)
-    assert stats["balance_cents"] == 100
+def test_daily_cap_stops_the_eleventh_member(mock_mongodb):
+    _users_and_referrals(mock_mongodb, count=11)
+    for index in range(11):
+        user_id = 100 + index
+        order_id = index + 1
+        mock_mongodb.orders.insert_one({
+            "id": order_id, "user_id": user_id, "status": "delivered", "total_price": 10.0,
+        })
+        result = affiliate_service.on_confirmed_payment(user_id, order_id)
+
+    assert result["daily_cap_reached"] is True
+    assert db.get_conn().referrals.find_one({"referred_id": 110})["qualified"] is False

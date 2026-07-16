@@ -18,6 +18,49 @@ from app.constants import InventoryStatus, OrderStatus
 log = logging.getLogger(__name__)
 
 
+def parse_bulk_inventory(text: str) -> list[str]:
+    """Split account blocks delimited by lines beginning with ``#``.
+
+    The marker may contain an admin reference such as ``#1`` or
+    ``#Netflix-01``. It is stored with the account block and does not declare
+    the number of accounts.
+    """
+    blocks: list[list[str]] = []
+    current: list[str] | None = None
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            if current:
+                blocks.append(current)
+            current = [line]
+        elif current is None:
+            raise ValueError("Chaque compte doit commencer par une ligne #.")
+        else:
+            current.append(line)
+    if current:
+        blocks.append(current)
+    if not blocks:
+        raise ValueError("Aucun compte détecté. Commencez chaque compte par #.")
+    if len(blocks) > 5000:
+        raise ValueError("Un import est limité à 5000 comptes.")
+    incomplete = [block[0] for block in blocks if len(block) < 2]
+    if incomplete:
+        raise ValueError(f"Compte sans contenu après {incomplete[0]}.")
+    return ["\n".join(block) for block in blocks]
+
+
+def sync_offer_stock(offer_id: int) -> int:
+    conn = db.get_conn()
+    available = conn.inventory.count_documents({
+        "offer_id": offer_id,
+        "status": InventoryStatus.AVAILABLE,
+    })
+    conn.offers.update_one({"id": offer_id}, {"$set": {"stock": available}})
+    return available
+
+
 # ---------------------------------------------------------------------------
 # Ajout d'inventaire
 # ---------------------------------------------------------------------------
@@ -56,7 +99,7 @@ def add_items(offer_id: int, items: list[str]) -> int:
             log.info("Élément d'inventaire dupliqué ignoré pour l'offre %d", offer_id)
 
     if added:
-        conn.offers.update_one({"id": offer_id}, {"$inc": {"stock": added}})
+        sync_offer_stock(offer_id)
         db.audit_event("inventory.added", details={"offer_id": offer_id, "count": added})
         log.info("%d éléments ajoutés à l'offre %d", added, offer_id)
 
@@ -89,6 +132,7 @@ def reserve_for_order(offer_id: int, order_id: int, qty: int = 1) -> list[dict] 
                     "reserved_at": int(time.time()),
                 }
             },
+            sort=[("id", 1)],
             return_document=ReturnDocument.AFTER,
         )
         if not item:
@@ -168,7 +212,7 @@ def deliver_for_order(order_id: int) -> list[str] | None:
     # Récupérer les éléments réservés
     reserved_items = list(conn.inventory.find(
         {"reserved_order_id": order_id, "status": InventoryStatus.RESERVED}
-    ))
+    ).sort("id", 1))
 
     if not reserved_items:
         # Pas d'inventaire réservé — tenter une réservation atomique
@@ -240,6 +284,8 @@ def deliver_for_order(order_id: int) -> list[str] | None:
             }
         },
     )
+    if order.get("offer_id"):
+        sync_offer_stock(order["offer_id"])
 
     db.audit_event(
         "order.delivered",

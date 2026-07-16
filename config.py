@@ -57,8 +57,10 @@ CURRENCY: str = "USDT"
 # ---------------------------------------------------------------------------
 # Affiliation
 # ---------------------------------------------------------------------------
-AFFILIATE_TARGET: int = int(os.environ.get("HP_AFFILIATE_TARGET", "10"))
-AFFILIATE_REWARD_CENTS: int = int(os.environ.get("HP_AFFILIATE_REWARD_CENTS", "100"))
+AFFILIATE_QUALIFY_CENTS: int = int(os.environ.get("HP_AFFILIATE_QUALIFY_CENTS", "1000"))
+AFFILIATE_FIVE_REWARD_CENTS: int = int(os.environ.get("HP_AFFILIATE_FIVE_REWARD_CENTS", "500"))
+AFFILIATE_TEN_REWARD_CENTS: int = int(os.environ.get("HP_AFFILIATE_TEN_REWARD_CENTS", "200"))
+AFFILIATE_DAILY_CAP: int = int(os.environ.get("HP_AFFILIATE_DAILY_CAP", "10"))
 
 # ---------------------------------------------------------------------------
 # Commandes

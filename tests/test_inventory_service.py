@@ -7,6 +7,31 @@ from app.constants import InventoryStatus, OrderStatus
 from app.domain import inventory_service
 
 
+def test_bulk_inventory_parser_uses_hash_as_account_delimiter():
+    items = inventory_service.parse_bulk_inventory(
+        "#1\nEmail: one@example.com\nPassword: pass1\n"
+        "#2\nEmail: two@example.com\nPassword: pass2"
+    )
+    assert items == [
+        "#1\nEmail: one@example.com\nPassword: pass1",
+        "#2\nEmail: two@example.com\nPassword: pass2",
+    ]
+
+
+def test_bulk_inventory_parser_rejects_content_before_first_marker():
+    import pytest
+
+    with pytest.raises(ValueError, match="commencer par une ligne #"):
+        inventory_service.parse_bulk_inventory("Email: one@example.com\n#2\nEmail: two@example.com")
+
+
+def test_bulk_inventory_parser_rejects_empty_account_block():
+    import pytest
+
+    with pytest.raises(ValueError, match="sans contenu"):
+        inventory_service.parse_bulk_inventory("#1\n#2\nEmail: two@example.com")
+
+
 def test_add_inventory_items(mock_mongodb):
     """Vérifie l'ajout et le chiffrement d'éléments d'inventaire."""
     db.add_service("VOD", "🎬")
@@ -100,6 +125,24 @@ def test_deliver_for_order(mock_mongodb):
     assert inventory_service.deliver_for_order(order_id=10) is None
     assert conn.inventory.count_documents({"delivered_order_id": 10}) == 1
     assert inventory_service.delivered_content(10) == ["netflix_cred_1234"]
+
+
+def test_delivery_preserves_admin_import_order(mock_mongodb):
+    db.add_service("Accounts", "A")
+    offer_id = db.add_offer(1, "Ordered accounts", 2.0, 0)
+    inventory_service.add_items(offer_id, ["first", "second", "third"])
+    mock_mongodb.orders.insert_one({
+        "id": 20,
+        "user_id": 1,
+        "offer_id": offer_id,
+        "service_name": "Accounts",
+        "offer_name": "Ordered accounts",
+        "qty": 2,
+        "status": OrderStatus.PAID,
+    })
+
+    assert inventory_service.deliver_for_order(20) == ["first", "second"]
+    assert db.get_offer(offer_id)["stock"] == 1
 
 
 def test_initial_inventory_content_increases_offer_stock(mock_mongodb):

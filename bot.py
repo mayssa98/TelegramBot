@@ -5,11 +5,14 @@ Point d'entrée principal. Exécuté en long polling pour rester réactif 24/7.
 import asyncio
 import contextlib
 import html
+import io
 import logging
 import os
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 
-from telegram import Update
+from telegram import InputFile, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -24,11 +27,21 @@ from telegram.ext import (
 import admin
 import database as db
 import keyboards as kb
-from app.domain import affiliate_service, inventory_service, order_service, payment_service, support_service
+from app.domain import (
+    affiliate_service,
+    inventory_service,
+    loyalty_service,
+    order_service,
+    payment_service,
+    support_service,
+    wallet_service,
+)
 from config import (
     ADMIN_ID,
-    AFFILIATE_REWARD_CENTS,
-    AFFILIATE_TARGET,
+    AFFILIATE_DAILY_CAP,
+    AFFILIATE_FIVE_REWARD_CENTS,
+    AFFILIATE_QUALIFY_CENTS,
+    AFFILIATE_TEN_REWARD_CENTS,
     BINANCE_PAY_ID,
     BOT_TOKEN,
     CURRENCY,
@@ -192,11 +205,25 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(update.effective_user.id)
-    await update.effective_message.reply_text(t(lang, "support_choose_category"), reply_markup=kb.support_category_keyboard(lang))
+    await update.effective_message.reply_text(
+        t(lang, "support_admin_contact", admin="@Anwer_07"),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.orders_keyboard(lang),
+    )
 
 
 async def cmd_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_catalog(update, context, lang_of(update.effective_user.id))
+
+
+async def show_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    lang = lang_of(uid)
+    await update.effective_message.reply_text(
+        t(lang, "topup_message", binance_id=BINANCE_PAY_ID, telegram_id=uid),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.topup_keyboard(lang),
+    )
 
 
 async def cmd_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -224,23 +251,20 @@ async def show_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     lang = lang_of(uid)
     account = db.user_account_summary(uid)
-    labels = {
-        "fr": ("Mon compte BlackMarket", "Nom", "Utilisateur", "Commandes", "Paiements validés", "Total payé", "Historique récent"),
-        "en": ("My BlackMarket account", "Name", "Username", "Orders", "Validated payments", "Total paid", "Recent history"),
-        "ar": ("حساب BlackMarket", "الاسم", "المستخدم", "الطلبات", "المدفوعات المؤكدة", "إجمالي المدفوع", "السجل الأخير"),
-    }[lang if lang in ("fr", "en", "ar") else "fr"]
+    stats = affiliate_service.get_stats(uid)
+    loyalty = loyalty_service.active_benefit(uid)
+    wallet = stats["balance_cents"] / 100
     name = html.escape(str(account.get("first_name") or update.effective_user.full_name or "—"))
     username = html.escape("@" + account["username"] if account.get("username") else "—")
-    lines = [f"👤 <b>{labels[0]}</b>", "", f"🪪 <b>{labels[1]}:</b> {name}",
-             f"🔗 <b>{labels[2]}:</b> {username}", f"🧾 <b>{labels[3]}:</b> {account['order_count']}",
-             f"✅ <b>{labels[4]}:</b> {account['paid_count']}", f"💰 <b>{labels[5]}:</b> {account['total_paid']:.2f} {CURRENCY}",
-             "", f"📚 <b>{labels[6]}:</b>"]
-    if account["orders"]:
-        for order in account["orders"][:10]:
-            lines.append(f"• #{order['id']} — {html.escape(str(order['offer_name']))} — {order['total_price']:.2f} {CURRENCY} — {html.escape(status_label(lang, order['status']))}")
-    else:
-        lines.append("—")
-    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML,
+    level = loyalty["level"] or "—"
+    expires = datetime.fromtimestamp(loyalty["expires_at"], UTC).strftime("%d/%m/%Y") if loyalty["expires_at"] else "—"
+    text = t(
+        lang, "profile_card", name=name, username=username, telegram_id=uid,
+        wallet=f"{wallet:.2f}", invites=stats["referrals"],
+        qualified=stats["qualified_referrals"], total_buy=f"{account['total_paid']:.2f}",
+        level=level.title(), discount=loyalty["discount_percent"], expires=expires,
+    )
+    await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML,
                                               reply_markup=kb.home_keyboard(lang, uid))
 
 
@@ -250,12 +274,17 @@ async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     me = context.bot.username or (await context.bot.get_me()).username
     link = f"https://t.me/{me}?start=ref_{user_id}"
     stats = affiliate_service.get_stats(user_id)
-    reward = AFFILIATE_REWARD_CENTS / 100
     balance = stats["balance_cents"] / 100
+    earned = stats["earned_cents"] / 100
     message = t(
-        lang, "affiliate_title", count=stats["paid_referrals"],
-        progress=stats["progress"], target=AFFILIATE_TARGET,
-        balance=f"{balance:.2f}", reward=f"{reward:.2f}", link=link,
+        lang, "affiliate_title", earned=f"{earned:.2f}", balance=f"{balance:.2f}",
+        referrals=stats["referrals"], rewarded=stats["qualified_referrals"],
+        pending=stats["pending_referrals"],
+        five_reward=f"{AFFILIATE_FIVE_REWARD_CENTS / 100:.2f}",
+        ten_reward=f"{AFFILIATE_TEN_REWARD_CENTS / 100:.2f}",
+        qualify=f"{AFFILIATE_QUALIFY_CENTS / 100:.2f}",
+        today=stats["qualified_today"], daily_cap=AFFILIATE_DAILY_CAP,
+        link=link,
     )
     share_text = {
         "fr": f"🎁 Rejoins {SHOP_NAME} avec mon lien : {link}",
@@ -294,12 +323,16 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     blocking_states = {
         "await_txid",
+        "await_topup_txid",
         "adm_setprice",
         "adm_setstock",
         "adm_svcname",
         "adm_svcemoji",
         "adm_offname",
         "adm_offnote",
+        "adm_offdesc",
+        "adm_offinstructions",
+        "adm_offdelay",
         "adm_addsvc",
         "adm_addoff",
         "adm_inventory",
@@ -312,13 +345,12 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == t(lang, "menu_orders"):
         clear_support_pending()
         await show_my_orders(update, context, lang)
+    elif text == t(lang, "menu_topup"):
+        clear_support_pending()
+        await show_topup(update, context)
     elif text == t(lang, "menu_account"):
         clear_support_pending()
         await show_account(update, context)
-    elif text == t(lang, "menu_help"):
-        clear_support_pending()
-        help_text = db.shop_settings().get("help_message", "").strip() or t(lang, "help_text", shop=SHOP_NAME)
-        await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
     elif text == t(lang, "menu_lang"):
         clear_support_pending()
         await update.message.reply_text(t(lang, "choose_lang"), reply_markup=kb.lang_keyboard())
@@ -371,21 +403,45 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "orders":
         await show_my_orders(update, context, lang)
         return
+    if data == "topup":
+        await show_topup(update, context)
+        return
+    if data == "topup_claim":
+        PENDING[uid] = ("await_topup_txid", 0)
+        await q.message.reply_text(t(lang, "topup_ask_txid"), parse_mode=ParseMode.MARKDOWN)
+        return
+    if data.startswith("orders_group:") or data == "orders_export:all":
+        orders = db.list_user_orders(uid, limit=500)
+        if not orders:
+            await q.message.reply_text(t(lang, "no_orders"), reply_markup=kb.orders_keyboard(lang))
+            return
+        if data == "orders_export:all":
+            await send_orders_export(q, lang, orders, t(lang, "orders_all_title"))
+            return
+        groups = order_service_groups(orders)
+        index = int(data.split(":", 1)[1])
+        if index < 0 or index >= len(groups):
+            await q.answer(t(lang, "orders_group_unavailable"), show_alert=True)
+            return
+        group = groups[index]
+        await send_orders_export(q, lang, group["orders"], group["name"])
+        return
     if data == "account":
         await show_account(update, context)
         return
     if data == "affiliate":
         await show_affiliate(update, context)
         return
+    if data == "affiliate_copy":
+        me = context.bot.username or (await context.bot.get_me()).username
+        link = f"https://t.me/{me}?start=ref_{uid}"
+        await q.message.reply_text(t(lang, "affiliate_copy_message", link=link), parse_mode=ParseMode.MARKDOWN)
+        return
     if data == "support":
         await cmd_support(update, context)
         return
     if data == "language":
         await q.message.reply_text(t(lang, "choose_lang"), reply_markup=kb.lang_keyboard())
-        return
-    if data == "help":
-        help_text = db.shop_settings().get("help_message", "").strip() or t(lang, "help_text", shop=SHOP_NAME)
-        await q.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb.orders_keyboard(lang))
         return
     if data.startswith("order_view:"):
         oid = int(data.split(":", 1)[1])
@@ -614,6 +670,18 @@ async def handle_buy_confirmation(update, context, lang):
         return
 
     svc = db.get_service(offer["service_id"])
+    gross_total = round(offer["price"] * qty, 2)
+    referral_discount = loyalty_service.discount_for_order(uid, gross_total)
+    discount_line = ""
+    if referral_discount["amount"] > 0:
+        discount_line = t(
+            lang,
+            "loyalty_discount_line",
+            level=(referral_discount["level"] or "").title(),
+            percent=referral_discount["discount_percent"],
+            amount=f"{referral_discount['amount']:.2f}",
+            cur=CURRENCY,
+        )
     await q.edit_message_text(
         t(lang, "confirm_purchase",
           emoji=svc["emoji"] if svc else "??",
@@ -622,7 +690,8 @@ async def handle_buy_confirmation(update, context, lang):
           price=f"{offer['price']:.2f}",
           cur=CURRENCY,
           qty=qty,
-          total=f"{offer['price'] * qty:.2f}"),
+          total=f"{gross_total - referral_discount['amount']:.2f}",
+          discount_line=discount_line),
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=kb.confirm_buy_keyboard(lang, offer_id, qty),
     )
@@ -647,6 +716,12 @@ async def handle_buy_confirmed(update, context, lang):
         await q.answer(str(exc), show_alert=True)
         return
 
+    if order["total_price"] == 0:
+        await q.edit_message_text(t(lang, "wallet_payment_processing"), parse_mode=ParseMode.MARKDOWN)
+        result = await asyncio.to_thread(payment_service.confirm_wallet_order, order["id"], uid)
+        await send_payment_result(q.message, context, lang, order["id"], result, uid)
+        return
+
     text = t(lang, "order_created", oid=order["id"], service=order["service_name"],
              offer=order["offer_name"], qty=order["qty"],
              total=f"{order['total_price']:.2f}", cur=CURRENCY,
@@ -665,6 +740,19 @@ async def handle_pending_input(update, context, lang):
     if kind == "await_txid":
         await process_txid(update, context, lang, ref, text)
         PENDING.pop(uid, None)
+        return
+
+    if kind == "await_topup_txid":
+        result = await asyncio.to_thread(wallet_service.claim_transfer, uid, text)
+        if result["status"] == "confirmed":
+            PENDING.pop(uid, None)
+            await update.message.reply_text(
+                t(lang, "topup_success", amount=f"{result['amount']:.2f}", balance=f"{result['balance']:.2f}"),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=kb.home_keyboard(lang, uid),
+            )
+        else:
+            await update.message.reply_text(t(lang, "topup_failed", reason=result.get("message", "—")))
         return
 
     # --- Admin : prix ---
@@ -699,8 +787,11 @@ async def handle_pending_input(update, context, lang):
                                         reply_markup=admin.admin_panel_keyboard())
         return
 
-    if uid == ADMIN_ID and kind in {"adm_svcname", "adm_svcemoji", "adm_offname", "adm_offnote"}:
-        if kind != "adm_offnote" and not text:
+    if uid == ADMIN_ID and kind in {
+        "adm_svcname", "adm_svcemoji", "adm_offname", "adm_offnote",
+        "adm_offdesc", "adm_offinstructions", "adm_offdelay",
+    }:
+        if kind not in {"adm_offnote", "adm_offdesc", "adm_offinstructions"} and not text:
             await update.message.reply_text("⚠️ La valeur ne peut pas être vide.")
             return
         if kind == "adm_svcname":
@@ -709,8 +800,18 @@ async def handle_pending_input(update, context, lang):
             db.update_service(ref, emoji=text[:12])
         elif kind == "adm_offname":
             db.update_offer(ref, name=text[:120])
-        else:
+        elif kind == "adm_offnote":
             db.update_offer(ref, note=text[:250])
+        elif kind == "adm_offdesc":
+            db.update_offer(ref, description=text[:2000])
+        elif kind == "adm_offinstructions":
+            offer = db.get_offer(ref)
+            description = offer.get("description", "")
+            kept = [line for line in description.splitlines() if not line.lower().startswith("instructions:")]
+            kept.append(f"Instructions: {text[:1000]}")
+            db.update_offer(ref, description="\n".join(kept))
+        else:
+            db.update_offer(ref, delivery_delay=text[:120])
         PENDING.pop(uid, None)
         await update.message.reply_text("✅ Modification enregistrée.",
                                         reply_markup=admin.admin_panel_keyboard())
@@ -747,20 +848,18 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "adm_inventory" and uid == ADMIN_ID:
-        items = [line.strip() for line in text.splitlines() if line.strip()]
         try:
+            items = inventory_service.parse_bulk_inventory(text)
             added = inventory_service.add_items(ref, items)
-        except RuntimeError as exc:
+        except (RuntimeError, ValueError) as exc:
             await update.message.reply_text(f"⚠️ {exc}")
             return
         PENDING.pop(uid, None)
-        stats = db.inventory_stats(ref)
-        preview = "\n".join(f"{index}. {item}" for index, item in enumerate(items[:20], 1))
-        extra = "" if len(items) <= 20 else f"\n... +{len(items) - 20} autre(s)"
+        stock = inventory_service.sync_offer_stock(ref)
         await update.message.reply_text(
-            f"\u2705 {added} compte(s) ajoute(s) et chiffre(s).\n"
-            f"Disponible : {stats['available']} - Vendus : {stats['sold']}\n\n"
-            f"Comptes recus :\n{preview}{extra}",
+            f"✅ {added} compte(s) ajouté(s) et chiffré(s).\n"
+            f"♻️ Doublons ignorés : {len(items) - added}\n"
+            f"📦 Stock affiché synchronisé : {stock}",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
         return
@@ -846,16 +945,22 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                     t(
                         ref_lang,
                         "affiliate_rewarded",
-                        count=affiliate["paid_count"],
+                        count=affiliate["daily_count"],
                         reward=f"{affiliate['reward_amount']:.2f}",
                     ),
                     parse_mode=ParseMode.MARKDOWN,
                 )
-            else:
-                await context.bot.send_message(
-                    referrer_id,
-                    t(ref_lang, "affiliate_payment_progress", count=affiliate["paid_count"], target=AFFILIATE_TARGET),
-                )
+        loyalty = result.get("loyalty")
+        if loyalty and loyalty.get("activated"):
+            await message.reply_text(
+                t(
+                    lang,
+                    "loyalty_activated",
+                    level=loyalty["level"].title(),
+                    discount=loyalty["discount_percent"],
+                ),
+                parse_mode=ParseMode.MARKDOWN,
+            )
         if result["delivered_content"]:
             content = "\n\n".join(result["delivered_content"])
             paid_order = db.get_order(order_id)
@@ -950,19 +1055,60 @@ async def process_txid(update, context, lang, order_id, txid):
 # ---------------- Mes commandes ----------------
 async def show_my_orders(update, context, lang):
     uid = update.effective_user.id
-    orders = db.list_user_orders(uid, limit=15)
+    orders = db.list_user_orders(uid, limit=500)
     if not orders:
         await update.effective_message.reply_text(t(lang, "no_orders"), reply_markup=kb.orders_keyboard(lang))
         return
-    lines = [t(lang, "my_orders_title")]
-    for o in orders:
-        lines.append(t(lang, "order_line", oid=o["id"], offer=o["offer_name"],
-                       total=f"{o['total_price']:.2f}", cur=CURRENCY,
-                       status=status_label(lang, o["status"])))
+
+    groups = order_service_groups(orders)
     await update.effective_message.reply_text(
-        "\n".join(lines),
+        t(lang, "orders_choose_service"),
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=kb.orders_keyboard(lang, orders),
+        reply_markup=kb.orders_services_keyboard(lang, groups, len(orders)),
+    )
+
+
+def order_service_groups(orders):
+    service_emojis = {service["name"]: service.get("emoji", "📦") for service in db.list_services()}
+    grouped = {}
+    for order in orders:
+        name = str(order.get("service_name") or "Other")
+        grouped.setdefault(name, {
+            "name": name,
+            "emoji": service_emojis.get(name, "📦"),
+            "orders": [],
+        })["orders"].append(order)
+    groups = sorted(grouped.values(), key=lambda group: (-len(group["orders"]), group["name"].lower()))
+    for group in groups:
+        group["count"] = len(group["orders"])
+    return groups
+
+
+def orders_text_export(lang, orders, title):
+    lines = [title, "=" * max(24, len(title)), ""]
+    for order in orders:
+        created_at = order.get("created_at")
+        date = datetime.fromtimestamp(created_at, UTC).strftime("%Y-%m-%d %H:%M UTC") if created_at else "—"
+        lines.extend([
+            f"Order #{order['id']}",
+            f"Service: {order.get('service_name') or '—'}",
+            f"Offer: {order.get('offer_name') or '—'}",
+            f"Quantity: {order.get('qty', 1)}",
+            f"Total: {float(order.get('total_price') or 0):.2f} {order.get('currency', CURRENCY)}",
+            f"Status: {status_label(lang, order.get('status', ''))}",
+            f"Date: {date}",
+            "-" * 32,
+        ])
+    return "\n".join(lines)
+
+
+async def send_orders_export(query, lang, orders, title):
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "-", title).strip("-").lower() or "orders"
+    content = orders_text_export(lang, orders, title).encode("utf-8")
+    await query.message.reply_document(
+        document=InputFile(io.BytesIO(content), filename=f"{safe_name}.txt"),
+        caption=t(lang, "orders_file_caption", service=title, count=len(orders)),
+        reply_markup=kb.orders_keyboard(lang),
     )
 
 
@@ -1040,8 +1186,19 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         PENDING[uid] = ("adm_inventory", oid)
         stats = db.inventory_stats(oid)
         await q.message.reply_text(
-            "🔐 Envoyez un code/compte par ligne. Ils seront chiffrés avant stockage.\n"
-            f"Actuellement disponibles : {stats['available']}"
+            "🔐 *Import massif sécurisé*\n\n"
+            "Chaque ligne commençant par `#` ouvre un nouveau compte.\n"
+            "Toutes les lignes suivantes appartiennent à ce compte jusqu'au prochain `#`.\n\n"
+            "Exemple :\n"
+            "`#1`\n"
+            "`Email: client1@example.com`\n"
+            "`Password: secret1`\n"
+            "`Instructions: profil A`\n\n"
+            "`#2`\n"
+            "`Email: client2@example.com`\n"
+            "`Password: secret2`\n\n"
+            f"Actuellement disponibles : {stats['available']}",
+            parse_mode=ParseMode.MARKDOWN,
         )
         return
     if data.startswith("adm_svcname:") or data.startswith("adm_svcemoji:"):
@@ -1079,10 +1236,17 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid))
         return
-    if data.startswith("adm_offname:") or data.startswith("adm_offnote:"):
+    if data.startswith(("adm_offname:", "adm_offnote:", "adm_offdesc:", "adm_offinstructions:", "adm_offdelay:")):
         action, oid = data.split(":")
-        PENDING[uid] = ("adm_offname" if action == "adm_offname" else "adm_offnote", int(oid))
-        await q.message.reply_text("✏️ Envoyez la nouvelle valeur :")
+        PENDING[uid] = (action, int(oid))
+        prompts = {
+            "adm_offname": "✏️ Envoyez le nouveau nom :",
+            "adm_offnote": "📝 Envoyez la nouvelle note/garantie :",
+            "adm_offdesc": "📄 Envoyez la description complète :",
+            "adm_offinstructions": "📌 Envoyez les instructions destinées au client :",
+            "adm_offdelay": "🚚 Envoyez le délai de livraison affiché :",
+        }
+        await q.message.reply_text(prompts[action])
         return
     if data.startswith("adm_offtoggle:"):
         oid = int(data.split(":")[1])

@@ -1,0 +1,36 @@
+"""Tests for verified wallet top-ups and balance usage."""
+
+import database as db
+from app.domain import order_service, wallet_service
+
+
+def test_verified_topup_credits_real_transfer_amount(mock_mongodb, monkeypatch):
+    monkeypatch.setattr(wallet_service, "verify_incoming_transfer", lambda *_args, **_kwargs: {
+        "status": "confirmed", "amount": 12.5, "currency": "USDT",
+    })
+
+    result = wallet_service.claim_transfer(42, "TXID_TOPUP_123")
+
+    assert result["status"] == "confirmed"
+    assert result["amount"] == 12.5
+    assert result["balance"] == 12.5
+
+
+def test_topup_txid_cannot_be_used_twice(mock_mongodb, monkeypatch):
+    monkeypatch.setattr(wallet_service, "verify_incoming_transfer", lambda *_args, **_kwargs: {
+        "status": "confirmed", "amount": 5.0, "currency": "USDT",
+    })
+    assert wallet_service.claim_transfer(42, "TXID_UNIQUE_123")["status"] == "confirmed"
+    assert wallet_service.claim_transfer(99, "TXID_UNIQUE_123")["code"] == "already_used"
+
+
+def test_wallet_pays_order_and_reduces_external_total(mock_mongodb):
+    db.add_service("AI", "🤖")
+    offer_id = db.add_offer(1, "Premium", 10.0, 1)
+    mock_mongodb.wallets.insert_one({"user_id": 42, "balance_cents": 600})
+
+    order = order_service.create_order(42, db.get_offer(offer_id))
+
+    assert order["wallet_amount"] == 6.0
+    assert order["total_price"] == 4.0
+    assert wallet_service.balance_cents(42) == 0

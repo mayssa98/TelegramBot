@@ -12,7 +12,7 @@ from typing import Any
 
 import database as db
 from app.constants import OrderStatus
-from app.domain import affiliate_service, inventory_service
+from app.domain import affiliate_service, inventory_service, loyalty_service
 from config import CURRENCY
 from payment_verifier import verify_payment, verify_payment_by_amount
 
@@ -82,7 +82,8 @@ def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: 
         db.update_order(order_id, txid=txid)
     if db.mark_order_paid(order_id, method):
         result["status"] = "confirmed"
-        result["affiliate"] = affiliate_service.on_first_payment(user_id)
+        result["affiliate"] = affiliate_service.on_confirmed_payment(user_id, order_id)
+        result["loyalty"] = loyalty_service.record_purchase(user_id)
         delivered = inventory_service.deliver_for_order(order_id)
         if delivered:
             result["delivered_content"] = delivered
@@ -98,6 +99,13 @@ def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: 
         result["error_code"] = "payment_failed"
         result["error_message"] = "Le paiement n'a pas pu etre enregistre (stock insuffisant ou erreur)."
     return result
+
+
+def confirm_wallet_order(order_id: int, user_id: int) -> dict[str, Any]:
+    order = db.get_order(order_id)
+    if not order or order.get("user_id") != user_id or float(order.get("total_price", 1)) != 0:
+        return {"status": "failed", "order": order, "delivered_content": None, "affiliate": None}
+    return _finalize_confirmed_payment(order_id, user_id, "", "wallet")
 
 
 # ---------------------------------------------------------------------------

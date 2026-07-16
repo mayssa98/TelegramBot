@@ -77,11 +77,14 @@ def service_admin_keyboard(service_id):
 def offer_admin_keyboard(offer_id):
     off = db.get_offer(offer_id)
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔐 Ajouter des codes", callback_data=f"adm_inventory:{offer_id}")],
+        [InlineKeyboardButton("🔐 Ajouter plusieurs comptes", callback_data=f"adm_inventory:{offer_id}")],
         [InlineKeyboardButton("💵 Modifier le prix", callback_data=f"adm_setprice:{offer_id}"),
          InlineKeyboardButton("📦 Modifier le stock", callback_data=f"adm_setstock:{offer_id}")],
         [InlineKeyboardButton("✏️ Modifier le nom", callback_data=f"adm_offname:{offer_id}"),
          InlineKeyboardButton("📝 Modifier la note", callback_data=f"adm_offnote:{offer_id}")],
+        [InlineKeyboardButton("📄 Description", callback_data=f"adm_offdesc:{offer_id}"),
+         InlineKeyboardButton("📌 Instructions", callback_data=f"adm_offinstructions:{offer_id}")],
+        [InlineKeyboardButton("🚚 Délai de livraison", callback_data=f"adm_offdelay:{offer_id}")],
         [InlineKeyboardButton("⏸ Désactiver" if off["active"] else "▶️ Activer",
                               callback_data=f"adm_offtoggle:{offer_id}"),
          InlineKeyboardButton("🗑 Archiver", callback_data=f"adm_offdel:{offer_id}")],

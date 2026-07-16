@@ -59,7 +59,9 @@ def init_db():
     db.referrals.create_index("referred_id", unique=True)
     db.referrals.create_index("referrer_id")
     db.wallets.create_index("user_id", unique=True)
+    db.wallet_topups.create_index("txid", unique=True)
     db.affiliate_rewards.create_index([("referrer_id", ASCENDING), ("milestone", ASCENDING)], unique=True)
+    db.loyalty.create_index("user_id", unique=True)
     db.pending_states.create_index("user_id", unique=True)
     db.inventory.create_index([("offer_id", ASCENDING), ("status", ASCENDING)])
     _backfill_inventory_ids(db)
@@ -379,8 +381,8 @@ def user_account_summary(user_id):
     db = get_conn()
     user = _public(db.users.find_one({"telegram_id": user_id})) or {"telegram_id": user_id}
     orders = list_user_orders(user_id, limit=25)
-    paid_statuses = {"paid", "delivered"}
-    paid = [x for x in orders if x.get("status") in paid_statuses]
+    paid_statuses = {"paid", "payment_confirmed", "delivered"}
+    paid = list(db.orders.find({"user_id": user_id, "status": {"$in": list(paid_statuses)}}))
     user.update({
         "orders": orders,
         "order_count": db.orders.count_documents({"user_id": user_id}),
@@ -402,8 +404,8 @@ def set_setting(key, value):
 def shop_settings():
     """Return typed, administrator-editable shop settings."""
     from config import (
-        AFFILIATE_REWARD_CENTS,
-        AFFILIATE_TARGET,
+        AFFILIATE_DAILY_CAP,
+        AFFILIATE_FIVE_REWARD_CENTS,
         BINANCE_PAY_ID,
         LOW_STOCK_THRESHOLD,
         ORDER_EXPIRY_SECONDS,
@@ -417,8 +419,8 @@ def shop_settings():
         "order_expiry_seconds": ORDER_EXPIRY_SECONDS,
         "low_stock_threshold": LOW_STOCK_THRESHOLD,
         "affiliate_enabled": True,
-        "affiliate_target": AFFILIATE_TARGET,
-        "affiliate_reward_cents": AFFILIATE_REWARD_CENTS,
+        "affiliate_target": AFFILIATE_DAILY_CAP,
+        "affiliate_reward_cents": AFFILIATE_FIVE_REWARD_CENTS,
         "maintenance_enabled": False,
         "maintenance_message": "La boutique est temporairement en maintenance.",
         "welcome_message": "",

@@ -17,19 +17,51 @@ TRANSLATIONS = {
         "ar": "✅ تم تعيين اللغة: العربية",
     },
     "welcome": {
-        "fr": "\u2728 Bienvenue sur *{shop}* !\n\nAcc\u00e9dez rapidement \u00e0 une s\u00e9lection de services num\u00e9riques fiables, v\u00e9rifi\u00e9s et disponibles \u00e0 prix comp\u00e9titifs.\n\n\u2705 Paiement s\u00e9curis\u00e9 via Binance Pay\n\u26a1 Livraison rapide apr\u00e8s confirmation\n\U0001f3af Support disponible en cas de besoin\n\nChoisissez une option ci-dessous pour commencer :",
-        "en": "👋 Welcome to *{shop}*!\n\nYour premium digital services store at unbeatable prices. Fast payment via Binance Pay and guaranteed delivery.\n\nUse the menu below:",
-        "ar": "👋 مرحباً بك في *{shop}*!\n\nمتجرك للخدمات الرقمية المميزة بأسعار لا تُقاوم. دفع سريع عبر Binance Pay وتسليم مضمون.\n\nاستخدم القائمة أدناه:",
+        "fr": "✨ *Bienvenue sur {shop}*\n\nDécouvrez une sélection de services numériques premium, soigneusement présentés et régulièrement mis à jour.\n\n⚡ Accès rapide aux offres disponibles\n🛡️ Informations claires et service fiable\n🎯 Assistance dédiée à chaque étape\n\nChoisissez votre espace pour commencer :",
+        "en": "✨ *Welcome to {shop}*\n\nDiscover a curated selection of premium digital services, clearly presented and regularly updated.\n\n⚡ Quick access to available offers\n🛡️ Clear information and reliable service\n🎯 Dedicated assistance at every step\n\nChoose where you would like to begin:",
+        "ar": "✨ *مرحبًا بك في {shop}*\n\nاكتشف مجموعة مختارة من الخدمات الرقمية المميزة، مع عرض واضح وتحديث مستمر.\n\n⚡ وصول سريع إلى العروض المتاحة\n🛡️ معلومات واضحة وخدمة موثوقة\n🎯 مساعدة مخصصة في كل خطوة\n\nاختر القسم الذي تريد البدء منه:",
     },
     # ---------------- Menu principal ----------------
     "menu_catalog": {"fr": "🛍️ Catalogue", "en": "🛍️ Catalog", "ar": "🛍️ المتجر"},
     "menu_orders": {"fr": "🧾 Mes commandes", "en": "🧾 My orders", "ar": "🧾 طلباتي"},
+    "menu_topup": {"fr": "💳 Recharger le solde", "en": "💳 Top Up Balance", "ar": "💳 شحن الرصيد"},
     "menu_lang": {"fr": "🌐 Langue", "en": "🌐 Language", "ar": "🌐 Language"},
     "menu_help": {"fr": "❓ Aide", "en": "❓ Help", "ar": "❓ المساعدة"},
     "menu_admin": {"fr": "🛠️ Admin", "en": "🛠️ Admin", "ar": "🛠️ المشرف"},
     "menu_affiliate": {"fr": "🎁 Affiliation", "en": "🎁 Affiliate", "ar": "🎁 الإحالة"},
     "menu_account": {"fr": "👤 Mon compte", "en": "👤 My account", "ar": "👤 حسابي"},
     "menu_support": {"fr": "🛎️ Support", "en": "🛎️ Support", "ar": "🛎️ Support"},
+    "topup_message": {
+        "fr": "✍️ *Envoyez le montant souhaité — minimum 1 USDT*\nLe même montant sera ajouté à votre portefeuille.\n\n🟡 *Recharge Binance Pay*\n\nEnvoyez le montant vers notre Binance Pay ID :\n`{binance_id}`\n\n⚠️ *Important*\nAjoutez votre Telegram ID dans le champ Notes / Mémo :\n`{telegram_id}`\n\nAprès le transfert, appuyez sur *Réclamer le transfert* puis envoyez votre TXID.",
+        "en": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay Top Up*\n\nSend the amount to our Binance Pay ID:\n`{binance_id}`\n\n⚠️ *Important*\nAdd your Telegram ID in the Notes / Memo field:\n`{telegram_id}`\n\nAfter transferring, tap *Claim Transfer* and send your TXID.",
+        "ar": "✍️ *أرسل أي مبلغ — الحد الأدنى 1 USDT*\nسيتم إضافة نفس المبلغ إلى محفظتك.\n\nأرسل المبلغ إلى Binance Pay ID:\n`{binance_id}`\n\n⚠️ أضف معرف تيليغرام في الملاحظات:\n`{telegram_id}`\n\nبعد التحويل اضغط المطالبة بالتحويل وأرسل TXID.",
+    },
+    "topup_claim": {"fr": "✅ Réclamer le transfert", "en": "✅ Claim Transfer", "ar": "✅ المطالبة بالتحويل"},
+    "topup_ask_txid": {
+        "fr": "🔎 Envoyez maintenant le *TXID* du transfert. Il sera vérifié avant tout crédit.",
+        "en": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
+        "ar": "🔎 أرسل الآن *TXID* للتحقق منه قبل إضافة الرصيد.",
+    },
+    "topup_success": {
+        "fr": "✅ *Recharge confirmée*\n\nMontant ajouté : *{amount} USDT*\nNouveau solde : *{balance} USDT*",
+        "en": "✅ *Top up confirmed*\n\nAmount added: *{amount} USDT*\nNew balance: *{balance} USDT*",
+        "ar": "✅ *تم شحن الرصيد*\n\nالمبلغ المضاف: *{amount} USDT*\nالرصيد الجديد: *{balance} USDT*",
+    },
+    "topup_failed": {
+        "fr": "⚠️ Recharge non confirmée : {reason}\nVérifiez le TXID puis réessayez.",
+        "en": "⚠️ Top up not confirmed: {reason}\nCheck the TXID and try again.",
+        "ar": "⚠️ لم يتم تأكيد الشحن: {reason}",
+    },
+    "wallet_payment_processing": {
+        "fr": "💳 *Paiement par portefeuille confirmé*\n\nPréparation de votre livraison…",
+        "en": "💳 *Wallet payment confirmed*\n\nPreparing your delivery…",
+        "ar": "💳 *تم الدفع بالمحفظة*\n\nجارٍ تجهيز التسليم…",
+    },
+    "support_admin_contact": {
+        "fr": "🛎️ *Support BlackMarket*\n\nPour toute question ou assistance, contactez directement notre administrateur :\n\n👤 {admin}\n\nMerci de préciser votre numéro de commande si votre demande concerne un achat.",
+        "en": "🛎️ *BlackMarket Support*\n\nFor questions or assistance, contact our administrator directly:\n\n👤 {admin}\n\nPlease include your order number when your request concerns a purchase.",
+        "ar": "🛎️ *دعم BlackMarket*\n\nلأي سؤال أو مساعدة، تواصل مباشرة مع المسؤول:\n\n👤 {admin}\n\nيرجى إرسال رقم الطلب إذا كان طلبك متعلقًا بعملية شراء.",
+    },
     "support_prompt": {
         "fr": "🎫 Décrivez votre problème. Vous pourrez continuer la conversation dans ce ticket.",
         "en": "🎫 Describe your issue. You will be able to continue the conversation in this ticket.",
@@ -88,9 +120,15 @@ TRANSLATIONS = {
         "ar": "🔐 *الخصوصية*\n\nيحتفظ المتجر فقط بالبيانات اللازمة للطلبات والمدفوعات والتسليم والتذاكر. بيانات المخزون السرية مشفرة ولا تُكتب في السجلات.",
     },
     "affiliate_title": {
-        "fr": "💸 *Programme d'affiliation*\n\n👥 Filleuls : *{count}*\n🎯 Progression : *{progress}/{target}*\n💰 Solde : *{balance}$*\n\nInvitez {target} nouvelles personnes avec votre lien et recevez *{reward}$*. Chaque personne ne peut compter qu'une fois.\n\n🔗 Votre lien :\n`{link}`",
-        "en": "💸 *Affiliate program*\n\n👥 Referrals: *{count}*\n🎯 Progress: *{progress}/{target}*\n💰 Balance: *{balance}$*\n\nInvite {target} new people with your link and receive *{reward}$*. Each person counts only once.\n\n🔗 Your link:\n`{link}`",
-        "ar": "💸 *برنامج الإحالة*\n\n👥 الإحالات: *{count}*\n🎯 التقدم: *{progress}/{target}*\n💰 الرصيد: *{balance}$*\n\nادعُ {target} أشخاص جدد واربح *{reward}$*.\n\n🔗 رابطك:\n`{link}`",
+        "fr": "🎊 *PROGRAMME D'AFFILIATION*\n\n📊 *Vos statistiques*\n💰 Gains : *{earned} USDT*\n💳 Portefeuille : *{balance} USDT*\n👥 Invitations : *{referrals}*\n✅ Membres qualifiés : *{rewarded}*\n⌛ En attente : *{pending}*\n📅 Aujourd'hui : *{today}/{daily_cap}*\n\n🔗 *Votre lien*\n`{link}`\n\n🎯 *Paliers quotidiens*\n• 5 membres qualifiés → *{five_reward} USDT*\n• 10 membres qualifiés → *+{ten_reward} USDT*\n\nUn membre devient qualifié après *{qualify} USDT* d'achats confirmés. Maximum : *{daily_cap} membres par jour*.\n\n⚠️ Auto-parrainage et comptes frauduleux refusés.",
+        "en": "🎊 *AFFILIATE PROGRAM*\n\n📊 *Your stats*\n💰 Earned: *{earned} USDT*\n💳 Wallet: *{balance} USDT*\n👥 Invites: *{referrals}*\n✅ Qualified members: *{rewarded}*\n⌛ Pending: *{pending}*\n📅 Today: *{today}/{daily_cap}*\n\n🔗 *Your link*\n`{link}`\n\n🎯 *Daily milestones*\n• 5 qualified members → *{five_reward} USDT*\n• 10 qualified members → *+{ten_reward} USDT*\n\nA member qualifies after *{qualify} USDT* in confirmed purchases. Maximum: *{daily_cap} members per day*.\n\n⚠️ Self-referrals and fake accounts are rejected.",
+        "ar": "🎊 *برنامج الإحالة*\n\n💰 الأرباح: *{earned} USDT*\n💳 المحفظة: *{balance} USDT*\n👥 الدعوات: *{referrals}*\n✅ المؤهلون: *{rewarded}*\n📅 اليوم: *{today}/{daily_cap}*\n\n🔗 `{link}`\n\n5 أعضاء مؤهلين = *{five_reward} USDT*\n10 أعضاء مؤهلين = *+{ten_reward} USDT*\n\nيتأهل العضو بعد مشتريات مؤكدة بقيمة *{qualify} USDT*. الحد الأقصى *{daily_cap}* أعضاء يوميًا.",
+    },
+    "affiliate_copy": {"fr": "🔗 Copier le lien", "en": "🔗 Copy Link", "ar": "🔗 نسخ الرابط"},
+    "affiliate_copy_message": {
+        "fr": "🔗 *Votre lien de parrainage*\n\n`{link}`\n\nMaintenez le lien pour le copier.",
+        "en": "🔗 *Your referral link*\n\n`{link}`\n\nPress and hold the link to copy it.",
+        "ar": "🔗 *رابط الإحالة الخاص بك*\n\n`{link}`\n\nاضغط مطولًا لنسخ الرابط.",
     },
     "affiliate_share": {"fr": "📤 Partager mon lien", "en": "📤 Share my link", "ar": "📤 مشاركة الرابط"},
     "affiliate_open": {"fr": "🔗 Ouvrir le lien", "en": "🔗 Open link", "ar": "🔗 فتح الرابط"},
@@ -162,9 +200,24 @@ TRANSLATIONS = {
         "ar": "\U0001f9ee *\u0627\u062e\u062a\u0631 \u0627\u0644\u0643\u0645\u064a\u0629*\n\n\u0627\u0644\u0645\u0646\u062a\u062c: *{offer}*\n\u0627\u0644\u0645\u062e\u0632\u0648\u0646 \u0627\u0644\u0645\u062a\u0627\u062d: *{stock}*\n\u0633\u0639\u0631 \u0627\u0644\u0648\u062d\u062f\u0629: *{price} {cur}*\n\n\u0627\u062e\u062a\u0631 \u0639\u062f\u062f \u0627\u0644\u062d\u0633\u0627\u0628\u0627\u062a \u0627\u0644\u062a\u064a \u062a\u0631\u064a\u062f \u0634\u0631\u0627\u0621\u0647\u0627:",
     },
     "confirm_purchase": {
-        "fr": "🧾 *Résumé de votre commande*\n\n{emoji} Service : *{service}*\n📋 Offre : *{offer}*\n💵 Prix unitaire : *{price} {cur}*\n📦 Quantité : *{qty}*\n💰 Total : *{total} {cur}*\n\nConfirmez-vous cet achat ?",
-        "en": "🧾 *Order summary*\n\n{emoji} Service: *{service}*\n📋 Offer: *{offer}*\n💵 Unit price: *{price} {cur}*\n📦 Quantity: *{qty}*\n💰 Total: *{total} {cur}*\n\nDo you confirm this purchase?",
-        "ar": "🧾 *ملخص الطلب*\n\n{emoji} الخدمة: *{service}*\n📋 العرض: *{offer}*\n💵 السعر: *{price} {cur}*\n📦 الكمية: *{qty}*\n💰 الإجمالي: *{total} {cur}*\n\nهل تؤكد هذا الشراء؟",
+        "fr": "🧾 *Résumé de votre commande*\n\n{emoji} Service : *{service}*\n📋 Offre : *{offer}*\n💵 Prix unitaire : *{price} {cur}*\n📦 Quantité : *{qty}*\n{discount_line}\n💰 Total : *{total} {cur}*\n\nConfirmez-vous cet achat ?",
+        "en": "🧾 *Order summary*\n\n{emoji} Service: *{service}*\n📋 Offer: *{offer}*\n💵 Unit price: *{price} {cur}*\n📦 Quantity: *{qty}*\n{discount_line}\n💰 Total: *{total} {cur}*\n\nDo you confirm this purchase?",
+        "ar": "🧾 *ملخص الطلب*\n\n{emoji} الخدمة: *{service}*\n📋 العرض: *{offer}*\n💵 السعر: *{price} {cur}*\n📦 الكمية: *{qty}*\n{discount_line}\n💰 الإجمالي: *{total} {cur}*\n\nهل تؤكد هذا الشراء؟",
+    },
+    "loyalty_discount_line": {
+        "fr": "🏆 Niveau {level} : *-{percent}%* (-{amount} {cur})",
+        "en": "🏆 {level} level: *-{percent}%* (-{amount} {cur})",
+        "ar": "🏆 مستوى {level}: *-{percent}%* (-{amount} {cur})",
+    },
+    "profile_card": {
+        "fr": "👤 <b>MON PROFIL</b>\n\n🪪 <b>Nom :</b> {name}\n🔗 <b>Utilisateur :</b> {username}\n🆔 <b>Telegram ID :</b> <code>{telegram_id}</code>\n\n💳 <b>Portefeuille :</b> {wallet} USDT\n👥 <b>Total invitations :</b> {invites}\n✅ <b>Invitations qualifiées :</b> {qualified}\n🛍️ <b>Total des achats :</b> {total_buy} USDT\n\n🏆 <b>Niveau :</b> {level}\n🎁 <b>Remise active :</b> {discount}%\n⏳ <b>Expiration :</b> {expires}",
+        "en": "👤 <b>MY PROFILE</b>\n\n🪪 <b>Name:</b> {name}\n🔗 <b>Username:</b> {username}\n🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n\n💳 <b>Wallet:</b> {wallet} USDT\n👥 <b>Total invites:</b> {invites}\n✅ <b>Qualified invites:</b> {qualified}\n🛍️ <b>Total purchases:</b> {total_buy} USDT\n\n🏆 <b>Level:</b> {level}\n🎁 <b>Active discount:</b> {discount}%\n⏳ <b>Expires:</b> {expires}",
+        "ar": "👤 <b>ملفي</b>\n\n🪪 <b>الاسم:</b> {name}\n🆔 <b>معرف تيليغرام:</b> <code>{telegram_id}</code>\n💳 <b>المحفظة:</b> {wallet} USDT\n👥 <b>الدعوات:</b> {invites}\n✅ <b>الدعوات المؤهلة:</b> {qualified}\n🛍️ <b>إجمالي المشتريات:</b> {total_buy} USDT\n🏆 <b>المستوى:</b> {level}\n🎁 <b>الخصم:</b> {discount}%\n⏳ <b>الانتهاء:</b> {expires}",
+    },
+    "loyalty_activated": {
+        "fr": "🏆 *Nouveau niveau {level} !*\n\nVous bénéficiez maintenant de *-{discount}%* sur tous les produits pendant 7 jours.",
+        "en": "🏆 *New {level} level!*\n\nYou now receive *-{discount}%* on every product for 7 days.",
+        "ar": "🏆 *مستوى جديد {level}!*\n\nتحصل الآن على خصم *{discount}%* على جميع المنتجات لمدة 7 أيام.",
     },
     "duplicate_order": {
         "fr": "⚠️ *Commande existante détectée*\n\nVous avez déjà une commande #{oid} en attente pour *{offer}* ({total} {cur}).\n\nQue souhaitez-vous faire ?",
@@ -309,6 +362,31 @@ TRANSLATIONS = {
         "fr": "📦 *Vos commandes*",
         "en": "📦 *Your orders*",
         "ar": "📦 *طلباتك*",
+    },
+    "orders_choose_service": {
+        "fr": "📋 *Mes commandes*\n\nSélectionnez un service pour consulter vos commandes :",
+        "en": "📋 *My Orders*\n\nSelect a service to view your orders:",
+        "ar": "📋 *طلباتي*\n\nاختر خدمة لعرض طلباتك:",
+    },
+    "orders_all": {
+        "fr": "📊 Toutes les commandes ({count})",
+        "en": "📊 All Orders ({count})",
+        "ar": "📊 جميع الطلبات ({count})",
+    },
+    "orders_all_title": {
+        "fr": "Toutes les commandes",
+        "en": "All Orders",
+        "ar": "جميع الطلبات",
+    },
+    "orders_file_caption": {
+        "fr": "📄 {service} — {count} commande(s)",
+        "en": "📄 {service} — {count} order(s)",
+        "ar": "📄 {service} — {count} طلب",
+    },
+    "orders_group_unavailable": {
+        "fr": "Cette catégorie n'est plus disponible. Actualisez vos commandes.",
+        "en": "This category is no longer available. Refresh your orders.",
+        "ar": "هذه الفئة لم تعد متاحة. حدّث قائمة الطلبات.",
     },
     "no_orders": {
         "fr": "Vous n'avez aucune commande pour le moment.",

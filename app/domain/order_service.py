@@ -12,6 +12,7 @@ from typing import Any
 
 import database as db
 from app.constants import PAID_STATUSES, TERMINAL_STATUSES, InventoryStatus, OrderStatus
+from app.domain import loyalty_service, wallet_service
 from config import CURRENCY, ORDER_EXPIRY_SECONDS
 
 log = logging.getLogger(__name__)
@@ -55,6 +56,11 @@ def create_order(user_id: int, offer: dict, qty: int = 1) -> dict:
 
     now = int(time.time())
     unit_price = offer["price"]
+    gross_total = round(unit_price * qty, 2)
+    discount = loyalty_service.discount_for_order(user_id, gross_total)
+    discount_amount = discount["amount"]
+    after_discount = round(max(0, gross_total - discount_amount), 2)
+    wallet_used = wallet_service.apply_balance(user_id, after_discount)
     service = db.get_service(offer["service_id"])
 
     order_id = db._next_id("orders")
@@ -66,7 +72,13 @@ def create_order(user_id: int, offer: dict, qty: int = 1) -> dict:
         "offer_name": offer["name"],
         "qty": qty,
         "unit_price": unit_price,
-        "total_price": round(unit_price * qty, 2),
+        "gross_total": gross_total,
+        "loyalty_level": discount["level"],
+        "loyalty_discount_percent": discount["discount_percent"],
+        "loyalty_discount_amount": discount_amount,
+        "wallet_amount": wallet_used,
+        "wallet_refunded": False,
+        "total_price": round(max(0, after_discount - wallet_used), 2),
         "currency": CURRENCY,
         "status": OrderStatus.PENDING_PAYMENT,
         "txid": "",
@@ -99,6 +111,9 @@ def create_order(user_id: int, offer: dict, qty: int = 1) -> dict:
 def expire_order(order_id: int) -> bool:
     """Marque une commande comme expirée et libère l'inventaire réservé."""
     conn = db.get_conn()
+    order = conn.orders.find_one({"id": order_id})
+    if not order:
+        return False
     result = conn.orders.update_one(
         {
             "id": order_id,
@@ -117,6 +132,7 @@ def expire_order(order_id: int) -> bool:
 
     # Libérer l'inventaire réservé s'il y en a
     _release_reserved_inventory(conn, order_id)
+    wallet_service.refund_balance(order["user_id"], order.get("wallet_amount", 0), order_id)
 
     db.audit_event("order.expired", details={"order_id": order_id})
     log.info("Commande #%d expirée", order_id)
@@ -174,6 +190,7 @@ def cancel_order(order_id: int, reason: str = "") -> bool:
         conn.offers.update_one({"id": order["offer_id"]}, {"$inc": {"stock": order.get("qty", 1)}})
 
     _release_reserved_inventory(conn, order_id)
+    wallet_service.refund_balance(order["user_id"], order.get("wallet_amount", 0), order_id)
 
     db.audit_event("order.cancelled", details={"order_id": order_id, "reason": reason})
     log.info("Commande #%d annulée", order_id)

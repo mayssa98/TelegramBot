@@ -66,6 +66,37 @@ def verify_payment(txid, amount, currency=None, created_at=None):
         return {"status": "manual_review", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
 
 
+def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
+    """Verify an incoming TXID and return its real amount for wallet top-ups."""
+    txid = (txid or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
+        return {"status": "failed", "code": "invalid_format", "reason": "Format de transaction invalide"}
+    if not BINANCE_API_KEY or not BINANCE_API_SECRET:
+        return {"status": "manual_review", "code": "not_configured", "reason": "Vérification automatique non configurée"}
+    start_ms = ((created_at or int(time.time()) - 86400) * 1000) - 600_000
+    try:
+        minimum = Decimal(str(minimum_amount))
+        for transaction in _fetch_pay_transactions(start_ms):
+            if str(transaction.get("transactionId", "")).strip() != txid:
+                continue
+            amount = Decimal(str(transaction.get("amount", "0")))
+            asset = str(transaction.get("currency", "")).upper()
+            if asset != PAY_CURRENCY:
+                return {"status": "failed", "code": "wrong_currency", "reason": f"Devise reçue: {asset}"}
+            if amount < minimum:
+                return {"status": "failed", "code": "below_minimum", "reason": f"Montant minimum: {minimum} {PAY_CURRENCY}"}
+            return {
+                "status": "confirmed",
+                "code": "confirmed",
+                "amount": float(amount),
+                "currency": asset,
+                "reason": "Transfert entrant confirmé",
+            }
+        return {"status": "failed", "code": "not_found", "reason": "Transaction absente de l'historique Binance Pay"}
+    except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
+        return {"status": "manual_review", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
+
+
 def _transaction_time_ms(transaction):
     for key in ("transactionTime", "createTime", "time", "insertTime", "timestamp"):
         value = transaction.get(key)

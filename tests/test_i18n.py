@@ -6,11 +6,13 @@ from i18n import t
 def test_french_welcome_message_is_professional():
     message = t("fr", "welcome", shop="BlackMarket")
 
-    assert "Bienvenue sur *BlackMarket*" in message
-    assert "services numériques fiables" in message
-    assert "Paiement sécurisé via Binance Pay" in message
-    assert "Livraison rapide après confirmation" in message
-    assert "Choisissez une option ci-dessous" in message
+    assert "Bienvenue sur BlackMarket" in message
+    assert "services numériques premium" in message
+    assert "Informations claires et service fiable" in message
+    assert "Assistance dédiée" in message
+    assert "Choisissez votre espace" in message
+    assert "Binance" not in message
+    assert "paiement" not in message.lower()
 
 
 def test_french_payment_message_matches_binance_style():
