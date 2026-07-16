@@ -10,7 +10,6 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
-from pathlib import Path
 
 from telegram import InputFile, Update
 from telegram.constants import ParseMode
@@ -178,18 +177,36 @@ async def send_main_menu(update, context, lang, chat_id=None):
     text = configured or t(lang, "welcome", shop=SHOP_NAME)
     target = update.message or (update.callback_query.message if update.callback_query else None)
     markup = kb.home_keyboard(lang, uid)
-    banner = Path(__file__).resolve().parent / "assets" / "blackmarket-welcome-v2.png"
+    public_base_url = os.environ.get(
+        "HP_PUBLIC_BASE_URL",
+        "https://telegram-bot-mayssa98s-projects.vercel.app",
+    ).rstrip("/")
+    banner_source = (
+        os.environ.get("HP_WELCOME_PHOTO_FILE_ID", "").strip()
+        or f"{public_base_url}/assets/blackmarket-welcome-v2.png"
+    )
     if target:
-        if banner.exists():
-            with banner.open("rb") as photo:
-                await target.reply_photo(photo=photo, caption=text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
-        else:
+        try:
+            await target.reply_photo(
+                photo=banner_source,
+                caption=text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=markup,
+            )
+        except Exception:
+            log.exception("Welcome image could not be sent; falling back to text")
             await target.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
     else:
-        if banner.exists():
-            with banner.open("rb") as photo:
-                await context.bot.send_photo(chat_id, photo=photo, caption=text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
-        else:
+        try:
+            await context.bot.send_photo(
+                chat_id,
+                photo=banner_source,
+                caption=text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=markup,
+            )
+        except Exception:
+            log.exception("Welcome image could not be sent; falling back to text")
             await context.bot.send_message(chat_id, text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
 
 

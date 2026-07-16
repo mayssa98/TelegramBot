@@ -13,6 +13,8 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 
 _client = None
 _db = None
+_schema_initialized = False
+SCHEMA_VERSION = 1
 
 
 def get_conn():
@@ -43,8 +45,15 @@ def _next_id(sequence):
 
 
 def init_db():
+    global _schema_initialized
+    if _schema_initialized:
+        return
     db = get_conn()
     db.command("ping")
+    schema = db.schema_meta.find_one({"_id": "schema"}, {"version": 1})
+    if schema and schema.get("version") == SCHEMA_VERSION:
+        _schema_initialized = True
+        return
     db.users.create_index("telegram_id", unique=True)
     db.services.create_index([("sort_order", ASCENDING), ("id", ASCENDING)])
     db.services.create_index("id", unique=True)
@@ -75,6 +84,12 @@ def init_db():
     db.ticket_messages.create_index([("ticket_id", ASCENDING), ("created_at", ASCENDING)])
     if os.environ.get("HP_SEED_DEFAULT_CATALOG", "").strip().lower() in {"1", "true", "yes"}:
         _seed_catalog()
+    db.schema_meta.update_one(
+        {"_id": "schema"},
+        {"$set": {"version": SCHEMA_VERSION, "updated_at": int(time.time())}},
+        upsert=True,
+    )
+    _schema_initialized = True
 
 
 def _backfill_inventory_ids(conn):
@@ -182,6 +197,27 @@ def affiliate_stats(user_id, target=10):
 def list_services(active_only=True):
     query = {"active": 1} if active_only else {}
     return [_public(x) for x in get_conn().services.find(query).sort([("sort_order", ASCENDING), ("id", ASCENDING)])]
+
+
+def list_services_with_stock(active_only=True):
+    """Return services and stock totals with two queries instead of one per service."""
+    conn = get_conn()
+    services = [
+        _public(item)
+        for item in conn.services.find({"active": 1} if active_only else {}).sort(
+            [("sort_order", ASCENDING), ("id", ASCENDING)]
+        )
+    ]
+    totals = {
+        row["_id"]: row["total"]
+        for row in conn.offers.aggregate([
+            {"$match": {"active": 1}},
+            {"$group": {"_id": "$service_id", "total": {"$sum": "$stock"}}},
+        ])
+    }
+    for service in services:
+        service["total_stock"] = totals.get(service["id"], 0)
+    return services
 
 
 def get_service(service_id):

@@ -19,6 +19,7 @@ def mock_mongodb(monkeypatch):
     monkeypatch.setattr(database, "INVENTORY_KEY", Fernet.generate_key().decode())
     monkeypatch.setattr(database, "_client", client)
     monkeypatch.setattr(database, "_db", db)
+    monkeypatch.setattr(database, "_schema_initialized", False)
 
     # Initialiser les index et collections simulés
     database.init_db()

@@ -6,7 +6,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import keyboards as kb
-from bot import cb_admin, cb_navigation, order_service_groups, orders_text_export, payment_scanner_frame
+from bot import (
+    cb_admin,
+    cb_navigation,
+    order_service_groups,
+    orders_text_export,
+    payment_scanner_frame,
+    send_main_menu,
+)
 from i18n import t
 
 
@@ -64,6 +71,25 @@ def test_welcome_banner_is_packaged_with_the_bot():
 
     assert banner.exists()
     assert banner.stat().st_size > 100_000
+
+
+def test_main_menu_sends_welcome_banner_by_cached_url(monkeypatch):
+    message = SimpleNamespace(reply_photo=AsyncMock(), reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        message=message,
+        callback_query=None,
+    )
+    monkeypatch.setenv("HP_PUBLIC_BASE_URL", "https://shop.example")
+    monkeypatch.setattr("bot.db.shop_settings", lambda: {"welcome_message": ""})
+
+    asyncio.run(send_main_menu(update, SimpleNamespace(), "en"))
+
+    message.reply_photo.assert_awaited_once()
+    assert message.reply_photo.await_args.kwargs["photo"] == (
+        "https://shop.example/assets/blackmarket-welcome-v2.png"
+    )
+    message.reply_text.assert_not_awaited()
 
 
 def test_catalog_button_opens_the_services_catalog(monkeypatch):

@@ -71,9 +71,10 @@ def test_services_keyboard_uses_total_stock_color(monkeypatch):
         {"id": 2, "name": "Low", "emoji": "📦"},
         {"id": 3, "name": "Empty", "emoji": "📦"},
     ]
-    totals = {1: 4, 2: 3, 3: 0}
-    monkeypatch.setattr(kb.db, "list_services", lambda: services)
-    monkeypatch.setattr(kb.db, "service_total_stock", lambda service_id: totals[service_id])
+    services[0]["total_stock"] = 4
+    services[1]["total_stock"] = 3
+    services[2]["total_stock"] = 0
+    monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: services)
 
     keyboard = kb.services_keyboard("fr")
     labels = [

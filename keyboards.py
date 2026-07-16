@@ -123,7 +123,7 @@ def topup_keyboard(lang):
 
 def services_keyboard(lang):
     buttons = []
-    services = db.list_services()
+    services = db.list_services_with_stock()
 
     # Grouper par catégorie
     categories = {}
@@ -136,7 +136,7 @@ def services_keyboard(lang):
     for _cat, svcs in categories.items():
         row = []
         for _i, svc in enumerate(svcs):
-            total = db.service_total_stock(svc["id"])
+            total = svc.get("total_stock", 0)
             label = f"{stock_badge(total)} {svc['emoji']} {compact_offer_name(svc['name'], 22)}"
             row.append(InlineKeyboardButton(
                 label,

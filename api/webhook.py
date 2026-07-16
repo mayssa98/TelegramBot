@@ -144,13 +144,17 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == "/assets/chatgpt-plus-benefits.png":
-            asset_path = Path(__file__).resolve().parent.parent / "assets" / "chatgpt-plus-benefits.png"
+        public_assets = {
+            "/assets/chatgpt-plus-benefits.png": "chatgpt-plus-benefits.png",
+            "/assets/blackmarket-welcome-v2.png": "blackmarket-welcome-v2.png",
+        }
+        if path in public_assets:
+            asset_path = Path(__file__).resolve().parent.parent / "assets" / public_assets[path]
             if asset_path.exists():
                 body = asset_path.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "image/png")
-                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("Cache-Control", "public, max-age=604800, immutable")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
