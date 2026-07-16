@@ -58,9 +58,9 @@ TRANSLATIONS = {
         "ar": "💳 *تم الدفع بالمحفظة*\n\nجارٍ تجهيز التسليم…",
     },
     "support_admin_contact": {
-        "fr": "🛎️ *Support BlackMarket*\n\nPour toute question ou assistance, contactez directement notre administrateur :\n\n👤 {admin}\n\nMerci de préciser votre numéro de commande si votre demande concerne un achat.",
-        "en": "🛎️ *BlackMarket Support*\n\nFor questions or assistance, contact our administrator directly:\n\n👤 {admin}\n\nPlease include your order number when your request concerns a purchase.",
-        "ar": "🛎️ *دعم BlackMarket*\n\nلأي سؤال أو مساعدة، تواصل مباشرة مع المسؤول:\n\n👤 {admin}\n\nيرجى إرسال رقم الطلب إذا كان طلبك متعلقًا بعملية شراء.",
+        "fr": "🛎️ <b>Support BlackMarket</b>\n\nPour toute question ou assistance, contactez directement notre administrateur :\n\n👤 {admin}\n\nMerci de préciser votre numéro de commande si votre demande concerne un achat.",
+        "en": "🛎️ <b>BlackMarket Support</b>\n\nFor questions or assistance, contact our administrator directly:\n\n👤 {admin}\n\nPlease include your order number when your request concerns a purchase.",
+        "ar": "🛎️ <b>دعم BlackMarket</b>\n\nلأي سؤال أو مساعدة، تواصل مباشرة مع المسؤول:\n\n👤 {admin}\n\nيرجى إرسال رقم الطلب إذا كان طلبك متعلقًا بعملية شراء.",
     },
     "support_prompt": {
         "fr": "🎫 Décrivez votre problème. Vous pourrez continuer la conversation dans ce ticket.",

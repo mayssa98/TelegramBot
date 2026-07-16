@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import keyboards as kb
+from telegram.constants import ParseMode
+
 from bot import (
     cb_admin,
     cb_navigation,
@@ -134,6 +136,29 @@ def test_catalog_from_photo_caption_sends_a_new_text_screen(monkeypatch):
     message.reply_text.assert_awaited_once()
     assert "CATALOG" in message.reply_text.await_args.args[0]
     query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+
+
+def test_support_button_from_photo_sends_valid_html_contact(monkeypatch):
+    message = SimpleNamespace(text=None, reply_text=AsyncMock())
+    query = SimpleNamespace(
+        data="support",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        callback_query=query,
+        effective_user=query.from_user,
+        effective_message=message,
+    )
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(update, SimpleNamespace()))
+
+    message.reply_text.assert_awaited_once()
+    call = message.reply_text.await_args
+    assert "@Anwer_07" in call.args[0]
+    assert call.kwargs["parse_mode"] == ParseMode.HTML
 
 
 def test_admin_from_photo_caption_sends_a_new_text_panel(monkeypatch):

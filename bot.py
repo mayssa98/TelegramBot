@@ -224,7 +224,7 @@ async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(update.effective_user.id)
     await update.effective_message.reply_text(
         t(lang, "support_admin_contact", admin="@Anwer_07"),
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
         reply_markup=kb.orders_keyboard(lang),
     )
 
