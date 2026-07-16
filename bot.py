@@ -1048,7 +1048,7 @@ async def run_auto_payment_check(message, context, lang, order_id, uid):
         t(lang, "payment_scanner", frame=payment_scanner_frame(0), oid=order_id),
         parse_mode=ParseMode.MARKDOWN,
     )
-    deadline = asyncio.get_running_loop().time() + 20
+    deadline = asyncio.get_running_loop().time() + 120
     step = 0
     while asyncio.get_running_loop().time() < deadline:
         result = await asyncio.to_thread(payment_service.auto_check_payment, order_id, uid)

@@ -30,7 +30,7 @@ def test_french_payment_message_matches_binance_style():
     )
 
     assert "*Binance Pay*" in message
-    assert "20 secondes" in message
+    assert "2 minutes" in message
     assert "123456" in message
     assert "Produit : *Gemini AI Pro 18m*" in message
     assert "ENVOYEZ EXACTEMENT : 0.65 USDT" in message
