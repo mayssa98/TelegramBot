@@ -16,21 +16,23 @@ def compact_offer_name(name, max_len=34):
 def stock_badge(stock):
     """Return Telegram's closest visual equivalent to a colored button."""
     stock = int(stock or 0)
-    if stock > 10:
+    if stock > 3:
         return "🟩"
     if stock > 0:
-        return "🟨"
+        return "🟦"
     return "🟥"
 
 
 def stock_button_style(stock):
     """Map stock to Telegram's supported native button background styles."""
     stock = int(stock or 0)
-    if stock > 10:
+    if stock > 3:
         return "success"
+    if stock > 0:
+        return "primary"
     if stock == 0:
         return "danger"
-    return None
+    return "danger"
 
 
 def offer_button_label(lang, offer):
