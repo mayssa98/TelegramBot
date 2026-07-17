@@ -5,9 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
-import keyboards as kb
 from telegram.constants import ParseMode
 
+import keyboards as kb
 from bot import (
     cb_admin,
     cb_navigation,
