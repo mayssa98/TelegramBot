@@ -36,6 +36,14 @@ def test_french_payment_message_matches_binance_style():
     assert "ENVOYEZ EXACTEMENT : 0.65 USDT" in message
     assert "Binance ID : `904169573`" in message
     assert "Commande : *#6074*" in message
+
+
+def test_topup_failure_hides_internal_binance_error():
+    message = t("en", "topup_failed")
+
+    assert "temporarily unavailable" in message
+    assert "HTTP" not in message
+    assert "451" not in message
     assert "Copier Binance ID" in t("fr", "btn_copy_binance_id")
     assert "Copier le montant exact" in t("fr", "btn_copy_amount")
     assert "`904169573`" in t("fr", "copy_binance_id_msg", binance_id="904169573")

@@ -48,9 +48,9 @@ TRANSLATIONS = {
         "ar": "✅ *تم شحن الرصيد*\n\nالمبلغ المضاف: *{amount} USDT*\nالرصيد الجديد: *{balance} USDT*",
     },
     "topup_failed": {
-        "fr": "⚠️ Recharge non confirmée : {reason}\nVérifiez le TXID puis réessayez.",
-        "en": "⚠️ Top up not confirmed: {reason}\nCheck the TXID and try again.",
-        "ar": "⚠️ لم يتم تأكيد الشحن: {reason}",
+        "fr": "⚠️ *Recharge non confirmée*\n\nLa vérification automatique est temporairement indisponible. Votre solde n’a pas été modifié. Veuillez réessayer dans quelques minutes avec le même TXID.",
+        "en": "⚠️ *Top up not confirmed*\n\nAutomatic verification is temporarily unavailable. Your balance has not been changed. Please try again in a few minutes with the same TXID.",
+        "ar": "⚠️ *لم يتم تأكيد الشحن*\n\nالتحقق التلقائي غير متاح مؤقتًا. لم يتم تغيير رصيدك. حاول مرة أخرى بعد بضع دقائق باستخدام نفس TXID.",
     },
     "wallet_payment_processing": {
         "fr": "💳 *Paiement par portefeuille confirmé*\n\nPréparation de votre livraison…",

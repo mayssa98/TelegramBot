@@ -786,7 +786,11 @@ async def handle_pending_input(update, context, lang):
                 reply_markup=kb.home_keyboard(lang, uid),
             )
         else:
-            await update.message.reply_text(t(lang, "topup_failed", reason=result.get("message", "—")))
+            await update.message.reply_text(
+                t(lang, "topup_failed"),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=kb.topup_keyboard(lang),
+            )
         return
 
     # --- Admin : prix ---
