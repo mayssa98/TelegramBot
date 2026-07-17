@@ -354,6 +354,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "adm_svcname",
         "adm_svcemoji",
         "adm_offname",
+        "adm_offemoji",
         "adm_offnote",
         "adm_offdesc",
         "adm_offinstructions",
@@ -834,7 +835,7 @@ async def handle_pending_input(update, context, lang):
         return
 
     if uid == ADMIN_ID and kind in {
-        "adm_svcname", "adm_svcemoji", "adm_offname", "adm_offnote",
+        "adm_svcname", "adm_svcemoji", "adm_offname", "adm_offemoji", "adm_offnote",
         "adm_offdesc", "adm_offinstructions", "adm_offdelay",
     }:
         if kind not in {"adm_offnote", "adm_offdesc", "adm_offinstructions"} and not text:
@@ -847,13 +848,20 @@ async def handle_pending_input(update, context, lang):
                 custom_emoji_id=custom_emoji_from_message(update.message),
             )
         elif kind == "adm_svcemoji":
-            db.update_service(ref, emoji=text[:12])
+            custom_emoji_id = custom_emoji_from_message(update.message)
+            db.update_service(
+                ref,
+                emoji="" if custom_emoji_id else text[:12],
+                custom_emoji_id=custom_emoji_id,
+            )
         elif kind == "adm_offname":
             db.update_offer(
                 ref,
                 name=kb.clean_button_name(text)[:120],
                 custom_emoji_id=custom_emoji_from_message(update.message),
             )
+        elif kind == "adm_offemoji":
+            db.update_offer(ref, custom_emoji_id=custom_emoji_from_message(update.message))
         elif kind == "adm_offnote":
             db.update_offer(ref, note=text[:250])
         elif kind == "adm_offdesc":
@@ -877,7 +885,11 @@ async def handle_pending_input(update, context, lang):
         if not name:
             await update.message.reply_text("⚠️ Format : Nom du service | emoji")
             return
-        db.add_service(name[:80], emoji[:12])
+        db.add_service(
+            kb.clean_button_name(name)[:80],
+            "" if custom_emoji_from_message(update.message) else emoji[:12],
+            custom_emoji_id=custom_emoji_from_message(update.message),
+        )
         PENDING.pop(uid, None)
         await update.message.reply_text("✅ Service ajouté.", reply_markup=admin.admin_panel_keyboard())
         return
@@ -896,7 +908,14 @@ async def handle_pending_input(update, context, lang):
             await update.message.reply_text("⚠️ Prix ou stock invalide.")
             return
         note = parts[3][:250] if len(parts) > 3 else ""
-        db.add_offer(ref, parts[0][:120], price, stock, note)
+        db.add_offer(
+            ref,
+            kb.clean_button_name(parts[0])[:120],
+            price,
+            stock,
+            note,
+            custom_emoji_id=custom_emoji_from_message(update.message),
+        )
         PENDING.pop(uid, None)
         await update.message.reply_text("✅ Offre ajoutée.", reply_markup=admin.admin_panel_keyboard())
         return
@@ -1285,11 +1304,12 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid))
         return
-    if data.startswith(("adm_offname:", "adm_offnote:", "adm_offdesc:", "adm_offinstructions:", "adm_offdelay:")):
+    if data.startswith(("adm_offname:", "adm_offemoji:", "adm_offnote:", "adm_offdesc:", "adm_offinstructions:", "adm_offdelay:")):
         action, oid = data.split(":")
         PENDING[uid] = (action, int(oid))
         prompts = {
             "adm_offname": "✏️ Envoyez le nouveau nom :",
+            "adm_offemoji": "🎨 Envoyez un emoji Telegram Premium animé :",
             "adm_offnote": "📝 Envoyez la nouvelle note/garantie :",
             "adm_offdesc": "📄 Envoyez la description complète :",
             "adm_offinstructions": "📌 Envoyez les instructions destinées au client :",

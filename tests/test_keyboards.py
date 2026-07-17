@@ -144,6 +144,20 @@ def test_offer_button_uses_admin_selected_animated_emoji(monkeypatch):
     assert button.icon_custom_emoji_id == "admin-selected-id"
 
 
+def test_service_button_uses_admin_selected_animated_emoji(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: [{
+        "id": 3,
+        "name": "Streaming",
+        "total_stock": 8,
+        "custom_emoji_id": "premium-service-emoji",
+    }])
+
+    button = kb.services_keyboard("en").inline_keyboard[0][0]
+
+    assert button.text == "Streaming"
+    assert button.icon_custom_emoji_id == "premium-service-emoji"
+
+
 def test_offers_keyboard_matches_reference_flow(monkeypatch):
     monkeypatch.setattr(kb.db, "list_offers", lambda _service_id: [
         {"id": 1, "name": "Available plan", "price": 10.0, "stock": 14, "note": ""},

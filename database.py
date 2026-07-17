@@ -277,11 +277,18 @@ def update_offer(
         get_conn().offers.update_one({"id": offer_id}, {"$set": values})
 
 
-def add_service(name, emoji=""):
+def add_service(name, emoji="", custom_emoji_id=""):
     db = get_conn()
     last = db.services.find_one(sort=[("sort_order", DESCENDING)])
     sid = _next_id("services")
-    db.services.insert_one({"id": sid, "name": name, "emoji": emoji, "sort_order": (last or {}).get("sort_order", 0) + 1, "active": 1})
+    db.services.insert_one({
+        "id": sid,
+        "name": name,
+        "emoji": emoji,
+        "custom_emoji_id": custom_emoji_id,
+        "sort_order": (last or {}).get("sort_order", 0) + 1,
+        "active": 1,
+    })
     return sid
 
 
@@ -320,6 +327,7 @@ def add_offer(
     auto_delivery=True,
     low_stock_threshold=5,
     delivery_delay="Instantané après confirmation",
+    custom_emoji_id="",
 ):
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
@@ -335,6 +343,7 @@ def add_offer(
         "auto_delivery": bool(auto_delivery),
         "low_stock_threshold": int(low_stock_threshold),
         "delivery_delay": delivery_delay,
+        "custom_emoji_id": custom_emoji_id,
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
     })

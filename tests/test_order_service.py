@@ -28,6 +28,20 @@ def test_create_order_success(mock_mongodb):
     assert order["expires_at"] > order["created_at"]
 
 
+def test_catalog_persists_admin_selected_custom_emoji(mock_mongodb):
+    service_id = db.add_service("Streaming", custom_emoji_id="service-premium-id")
+    offer_id = db.add_offer(
+        service_id,
+        "Premium",
+        5.0,
+        2,
+        custom_emoji_id="offer-premium-id",
+    )
+
+    assert db.get_service(service_id)["custom_emoji_id"] == "service-premium-id"
+    assert db.get_offer(offer_id)["custom_emoji_id"] == "offer-premium-id"
+
+
 def test_create_order_inactive_offer(mock_mongodb):
     """Vérifie qu'on ne peut pas commander une offre inactive."""
     db.add_service("Discord", "🎮")

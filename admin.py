@@ -82,6 +82,7 @@ def offer_admin_keyboard(offer_id):
          InlineKeyboardButton("📦 Modifier le stock", callback_data=f"adm_setstock:{offer_id}")],
         [InlineKeyboardButton("✏️ Modifier le nom", callback_data=f"adm_offname:{offer_id}"),
          InlineKeyboardButton("📝 Modifier la note", callback_data=f"adm_offnote:{offer_id}")],
+        [InlineKeyboardButton("🎨 Emoji animé", callback_data=f"adm_offemoji:{offer_id}")],
         [InlineKeyboardButton("📄 Description", callback_data=f"adm_offdesc:{offer_id}"),
          InlineKeyboardButton("📌 Instructions", callback_data=f"adm_offinstructions:{offer_id}")],
         [InlineKeyboardButton("🚚 Délai de livraison", callback_data=f"adm_offdelay:{offer_id}")],
