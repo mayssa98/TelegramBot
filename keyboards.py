@@ -1,4 +1,6 @@
 """Constructeurs de claviers inline et reply."""
+import re
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 import database as db
@@ -35,10 +37,15 @@ def stock_button_style(stock):
     return "danger"
 
 
+def clean_button_name(value):
+    """Remove decorative emoji characters from button text; icons use Telegram's icon field."""
+    text = " ".join(str(value or "").split())
+    return re.sub(r"^[^\w\d]+", "", text, flags=re.UNICODE).strip()
+
+
 def offer_button_label(lang, offer):
     stock = int(offer.get("stock") or 0)
-    stock_status = stock_badge(stock)
-    return f"{stock_status} {compact_offer_name(offer['name'], 42)} ({stock})"
+    return f"{compact_offer_name(clean_button_name(offer['name']), 42)} ({stock})"
 
 
 def lang_keyboard():
@@ -137,11 +144,12 @@ def services_keyboard(lang):
         row = []
         for _i, svc in enumerate(svcs):
             total = svc.get("total_stock", 0)
-            label = f"{stock_badge(total)} {svc['emoji']} {compact_offer_name(svc['name'], 22)}"
+            label = compact_offer_name(clean_button_name(svc["name"]), 28)
             row.append(InlineKeyboardButton(
                 label,
                 callback_data=f"svc:{svc['id']}",
                 style=stock_button_style(total),
+                icon_custom_emoji_id=svc.get("custom_emoji_id") or None,
             ))
             if len(row) == 2:
                 buttons.append(row)
@@ -173,6 +181,7 @@ def offers_keyboard(lang, service_id):
             offer_button_label(lang, off),
             callback_data=f"off:{off['id']}",
             style=stock_button_style(off.get("stock")),
+            icon_custom_emoji_id=off.get("custom_emoji_id") or None,
         )])
     buttons.append([InlineKeyboardButton(t(lang, "btn_back_services"), callback_data="catalog")])
     return InlineKeyboardMarkup(buttons)

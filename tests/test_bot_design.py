@@ -5,14 +5,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
-from telegram.constants import ParseMode
-
 import keyboards as kb
 from telegram.constants import ParseMode
 
 from bot import (
     cb_admin,
     cb_navigation,
+    custom_emoji_from_message,
     order_service_groups,
     orders_text_export,
     payment_scanner_frame,
@@ -31,6 +30,15 @@ def test_main_menu_is_compact_and_actions_match_labels():
         [t("fr", "menu_account"), t("fr", "menu_affiliate")],
     ]
     assert "compte" in t("fr", "menu_account").lower()
+
+
+def test_admin_custom_emoji_is_extracted_from_telegram_entity():
+    message = SimpleNamespace(entities=[SimpleNamespace(
+        type="custom_emoji",
+        custom_emoji_id="animated-emoji-123",
+    )])
+
+    assert custom_emoji_from_message(message) == "animated-emoji-123"
 
 
 def test_payment_keyboard_prioritizes_verification():

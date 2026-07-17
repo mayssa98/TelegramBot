@@ -147,6 +147,14 @@ def offer_detail_fields(description: str, note: str) -> dict[str, str]:
     return fields
 
 
+def custom_emoji_from_message(message):
+    """Extract the first animated custom emoji selected by the admin in Telegram."""
+    for entity in getattr(message, "entities", None) or []:
+        if str(entity.type) == "custom_emoji" and entity.custom_emoji_id:
+            return entity.custom_emoji_id
+    return ""
+
+
 # ---------------- /start ----------------
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
@@ -833,11 +841,19 @@ async def handle_pending_input(update, context, lang):
             await update.message.reply_text("⚠️ La valeur ne peut pas être vide.")
             return
         if kind == "adm_svcname":
-            db.update_service(ref, name=text[:80])
+            db.update_service(
+                ref,
+                name=kb.clean_button_name(text)[:80],
+                custom_emoji_id=custom_emoji_from_message(update.message),
+            )
         elif kind == "adm_svcemoji":
             db.update_service(ref, emoji=text[:12])
         elif kind == "adm_offname":
-            db.update_offer(ref, name=text[:120])
+            db.update_offer(
+                ref,
+                name=kb.clean_button_name(text)[:120],
+                custom_emoji_id=custom_emoji_from_message(update.message),
+            )
         elif kind == "adm_offnote":
             db.update_offer(ref, note=text[:250])
         elif kind == "adm_offdesc":

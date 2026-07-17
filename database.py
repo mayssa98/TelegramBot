@@ -253,6 +253,7 @@ def update_offer(
     auto_delivery=None,
     low_stock_threshold=None,
     delivery_delay=None,
+    custom_emoji_id=None,
 ):
     values = {
         key: value
@@ -268,6 +269,7 @@ def update_offer(
             "auto_delivery": auto_delivery,
             "low_stock_threshold": low_stock_threshold,
             "delivery_delay": delivery_delay,
+            "custom_emoji_id": custom_emoji_id,
         }.items()
         if value is not None
     }
@@ -283,8 +285,17 @@ def add_service(name, emoji=""):
     return sid
 
 
-def update_service(service_id, name=None, emoji=None, active=None):
-    values = {k: v for k, v in {"name": name, "emoji": emoji, "active": active}.items() if v is not None}
+def update_service(service_id, name=None, emoji=None, active=None, custom_emoji_id=None):
+    values = {
+        k: v
+        for k, v in {
+            "name": name,
+            "emoji": emoji,
+            "active": active,
+            "custom_emoji_id": custom_emoji_id,
+        }.items()
+        if v is not None
+    }
     return bool(values and get_conn().services.update_one({"id": service_id}, {"$set": values}).matched_count)
 
 
