@@ -1,5 +1,6 @@
 """Tests for Telegram keyboard labels."""
 
+import admin
 import keyboards as kb
 from keyboards import offer_button_label, stock_badge, stock_button_style
 
@@ -36,7 +37,7 @@ def test_offer_button_label_uses_store_style():
         },
     )
 
-    assert label == "SuperGrok 12 Months (12)"
+    assert label == "SuperGrok 12 Months | Stock: 12"
 
 
 def test_offer_button_label_uses_sky_blue_for_low_stock():
@@ -50,7 +51,33 @@ def test_offer_button_label_uses_sky_blue_for_low_stock():
         },
     )
 
-    assert label == "Low Stock Product (2)"
+    assert label == "Low Stock Product | Stock: 2"
+
+
+def test_offer_button_always_keeps_live_stock_visible_with_long_name():
+    label = offer_button_label("en", {"name": "A" * 100, "stock": 35})
+
+    assert label.endswith("| Stock: 35")
+    assert len(label) <= 64
+
+
+def test_stock_label_is_listed_in_catalog_admin_category():
+    assert admin.text_category_for_key("stock_label") == "catalog"
+
+
+def test_stock_label_accepts_admin_premium_emoji(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_offers", lambda _service_id: [{
+        "id": 8, "name": "Premium", "stock": 2, "custom_emoji_id": "offer-icon",
+    }])
+    monkeypatch.setattr(
+        kb.db,
+        "get_text_override_icon",
+        lambda key, lang: "premium-stock-icon" if key == "stock_label" else "",
+    )
+
+    button = kb.offers_keyboard("en", 1).inline_keyboard[0][0]
+
+    assert button.icon_custom_emoji_id == "premium-stock-icon"
 
 
 def test_stock_badge_uses_the_same_thresholds_for_services_and_offers():
@@ -127,7 +154,8 @@ def test_offer_button_label_truncates_long_names():
         },
     )
 
-    assert label == "Very Long Product Name With Many Detail... (0)"
+    assert label.endswith("| Stock: 0")
+    assert len(label) <= 64
 
 
 def test_offer_button_uses_admin_selected_animated_emoji(monkeypatch):
@@ -140,7 +168,7 @@ def test_offer_button_uses_admin_selected_animated_emoji(monkeypatch):
 
     button = kb.offers_keyboard("en", 1).inline_keyboard[0][0]
 
-    assert button.text == "Premium (2)"
+    assert button.text == "Premium | Stock: 2"
     assert button.icon_custom_emoji_id == "admin-selected-id"
 
 
@@ -156,6 +184,48 @@ def test_service_button_uses_admin_selected_animated_emoji(monkeypatch):
 
     assert button.text == "Streaming"
     assert button.icon_custom_emoji_id == "premium-service-emoji"
+
+
+def test_admin_catalog_button_uses_premium_emoji(monkeypatch):
+    monkeypatch.setattr(admin.db, "list_services", lambda active_only=False: [{
+        "id": 4,
+        "name": "Chat GPT",
+        "active": 1,
+        "custom_emoji_id": "admin-premium-id",
+    }])
+
+    button = admin.catalog_admin_keyboard().inline_keyboard[0][0]
+
+    assert button.text == "Chat GPT"
+    assert button.icon_custom_emoji_id == "admin-premium-id"
+
+
+def test_admin_cannot_manually_modify_offer_stock(monkeypatch):
+    monkeypatch.setattr(admin.db, "get_offer", lambda _offer_id: {
+        "id": 4, "service_id": 1, "active": 1,
+    })
+
+    keyboard = admin.offer_admin_keyboard(4)
+    callbacks = {
+        button.callback_data
+        for row in keyboard.inline_keyboard
+        for button in row
+    }
+
+    assert not any(value and value.startswith("adm_setstock:") for value in callbacks)
+    assert "adm_inventory:4" in callbacks
+
+
+def test_catalog_never_builds_an_empty_button(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: [{
+        "id": 12,
+        "name": "✅",
+        "total_stock": 0,
+    }])
+
+    button = kb.services_keyboard("fr").inline_keyboard[0][0]
+
+    assert button.text == "Service #12"
 
 
 def test_offers_keyboard_matches_reference_flow(monkeypatch):
@@ -174,3 +244,22 @@ def test_offers_keyboard_matches_reference_flow(monkeypatch):
         "catalog",
     ]
     assert len(keyboard.inline_keyboard) == 4
+def test_admin_text_browser_exposes_every_translation_key():
+    from i18n import TRANSLATIONS
+
+    callbacks = []
+    page = 0
+    while True:
+        keyboard = admin.texts_editor_keyboard(page)
+        page_callbacks = [
+            button.callback_data
+            for row in keyboard.inline_keyboard
+            for button in row
+            if button.callback_data and button.callback_data.startswith("adm_text_key:")
+        ]
+        callbacks.extend(page_callbacks)
+        if len(page_callbacks) < 8:
+            break
+        page += 1
+    assert {value.split(":", 1)[1] for value in callbacks} == set(TRANSLATIONS)
+    assert "adm_text_key:order_created" in callbacks

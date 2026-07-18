@@ -8,6 +8,15 @@ from config import ADMIN_ID
 from i18n import t
 
 
+def translated_button(lang, key, *, callback_data=None, url=None, style=None, switch_inline_query=None):
+    """Build an inline button with the admin-selected Premium emoji icon."""
+    return InlineKeyboardButton(
+        t(lang, key), callback_data=callback_data, url=url, style=style,
+        switch_inline_query=switch_inline_query,
+        icon_custom_emoji_id=db.get_text_override_icon(key, lang) or None,
+    )
+
+
 def compact_offer_name(name, max_len=34):
     clean_name = " ".join(str(name or "").split())
     if len(clean_name) <= max_len:
@@ -45,30 +54,27 @@ def clean_button_name(value):
 
 def offer_button_label(lang, offer):
     stock = int(offer.get("stock") or 0)
-    return f"{compact_offer_name(clean_button_name(offer['name']), 42)} ({stock})"
+    stock_text = f"{t(lang, 'stock_label').title()}: {stock}"
+    # Telegram limits button labels to 64 characters. Always reserve room for
+    # the live stock quantity so a long offer name can never hide it.
+    max_name_length = max(8, 64 - len(stock_text) - 3)
+    name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
+    return f"{name} | {stock_text}"
 
 
 def lang_keyboard():
-    active = set(db.shop_settings().get("active_languages", "fr,en,ar").split(","))
-    choices = [
-        ("fr", "🇫🇷 Français"),
-        ("en", "🇬🇧 English"),
-        ("ar", "🇸🇦 العربية"),
-    ]
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(label, callback_data=f"lang:{code}")]
-        for code, label in choices
-        if code in active
-    ])
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🇬🇧 English", callback_data="lang:en"),
+    ]])
 
 
 def support_category_keyboard(lang):
     categories = ("payment", "delivery", "invalid_content", "order", "affiliation", "other")
     rows = [
-        [InlineKeyboardButton(t(lang, f"support_category_{category}"), callback_data=f"support_cat:{category}")]
+        [translated_button(lang, f"support_category_{category}", callback_data=f"support_cat:{category}")]
         for category in categories
     ]
-    rows.append([InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")])
+    rows.append([translated_button(lang, "btn_main_menu", callback_data="home")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -77,54 +83,66 @@ def support_order_keyboard(lang, orders):
         [InlineKeyboardButton(f"#{order['id']} — {order['offer_name']}", callback_data=f"support_order:{order['id']}")]
         for order in orders[:8]
     ]
-    rows.append([InlineKeyboardButton(t(lang, "support_no_order"), callback_data="support_order:0")])
+    rows.append([translated_button(lang, "support_no_order", callback_data="support_order:0")])
     return InlineKeyboardMarkup(rows)
 
 
 def support_keyboard(lang):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "menu_support"), callback_data="support_cat:payment")],
-        [InlineKeyboardButton(t(lang, "btn_main_menu"), callback_data="home")],
+        [translated_button(lang, "menu_support", callback_data="support_cat:payment")],
+        [translated_button(lang, "btn_main_menu", callback_data="home")],
     ])
 
 
 def main_menu_keyboard(lang, user_id):
-    rows = [
-        [t(lang, "menu_catalog"), t(lang, "menu_orders")],
-        [t(lang, "menu_topup")],
-        [t(lang, "menu_account"), t(lang, "menu_affiliate")],
-        [t(lang, "menu_support"), t(lang, "menu_lang")],
+    hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
+    candidates = [
+        [("catalog", t(lang, "menu_catalog")), ("orders", t(lang, "menu_orders"))],
+        [("topup", t(lang, "menu_topup"))],
+        [("account", t(lang, "menu_account")), ("affiliate", t(lang, "menu_affiliate"))],
+        [("support", t(lang, "menu_support")), ("language", t(lang, "menu_lang"))],
     ]
+    rows = [[label for action, label in row if action not in hidden] for row in candidates]
+    rows = [row for row in rows if row]
     if user_id == ADMIN_ID:
         rows.append([t(lang, "menu_admin")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
 def home_keyboard(lang, user_id):
-    rows = [
-        [InlineKeyboardButton(t(lang, "menu_catalog"), callback_data="catalog")],
-        [InlineKeyboardButton(t(lang, "menu_topup"), callback_data="topup", style="success")],
+    hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
+    candidate_rows = [
+        [translated_button(lang, "menu_catalog", callback_data="catalog")],
+        [translated_button(lang, "menu_topup", callback_data="topup", style="success")],
         [
-            InlineKeyboardButton(t(lang, "menu_orders"), callback_data="orders"),
-            InlineKeyboardButton(t(lang, "menu_account"), callback_data="account"),
+            translated_button(lang, "menu_orders", callback_data="orders"),
+            translated_button(lang, "menu_account", callback_data="account"),
         ],
         [
-            InlineKeyboardButton(t(lang, "menu_affiliate"), callback_data="affiliate"),
-            InlineKeyboardButton(t(lang, "menu_support"), callback_data="support"),
+            translated_button(lang, "menu_affiliate", callback_data="affiliate"),
+            translated_button(lang, "menu_support", callback_data="support"),
         ],
         [
-            InlineKeyboardButton(t(lang, "menu_lang"), callback_data="language"),
+            translated_button(lang, "menu_lang", callback_data="language"),
         ],
     ]
+    rows = []
+    for row in candidate_rows:
+        visible = [button for button in row if button.callback_data not in hidden]
+        if visible:
+            rows.append(visible)
+    for button in db.list_custom_buttons():
+        label = button.get(f"label_{lang}") or button.get("label_fr") or "Lien"
+        rows.append([InlineKeyboardButton(label[:64], url=button["url"])])
     if user_id == ADMIN_ID:
-        rows.append([InlineKeyboardButton(t(lang, "menu_admin"), callback_data="adm_panel")])
+        rows.append([translated_button(lang, "menu_admin", callback_data="adm_panel")])
     return InlineKeyboardMarkup(rows)
 
 
 def topup_keyboard(lang):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "topup_claim"), callback_data="topup_claim", style="success")],
-        [InlineKeyboardButton(t(lang, "btn_main_menu_short"), callback_data="home")],
+        [translated_button(lang, "topup_claim", callback_data="topup_claim", style="success")],
+        [translated_button(lang, "btn_main_menu_short", callback_data="home")],
     ])
 
 
@@ -144,7 +162,8 @@ def services_keyboard(lang):
         row = []
         for _i, svc in enumerate(svcs):
             total = svc.get("total_stock", 0)
-            label = compact_offer_name(clean_button_name(svc["name"]), 28)
+            safe_name = clean_button_name(svc.get("name")) or f"Service #{svc['id']}"
+            label = compact_offer_name(safe_name, 28)
             row.append(InlineKeyboardButton(
                 label,
                 callback_data=f"svc:{svc['id']}",
@@ -158,8 +177,8 @@ def services_keyboard(lang):
             buttons.append(row)
 
     buttons.append([
-        InlineKeyboardButton(t(lang, "btn_refresh_short"), callback_data="catalog"),
-        InlineKeyboardButton(t(lang, "btn_main_menu_short"), callback_data="home"),
+        translated_button(lang, "btn_refresh_short", callback_data="catalog"),
+        translated_button(lang, "btn_main_menu_short", callback_data="home"),
     ])
     return InlineKeyboardMarkup(buttons)
 
@@ -167,33 +186,37 @@ def services_keyboard(lang):
 def onboarding_keyboard(lang, step):
     if step < 3:
         return InlineKeyboardMarkup([[
-            InlineKeyboardButton(t(lang, "onboarding_next"), callback_data=f"tour:{step + 1}"),
+            translated_button(lang, "onboarding_next", callback_data=f"tour:{step + 1}"),
         ]])
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton(t(lang, "onboarding_start"), callback_data="catalog"),
+        translated_button(lang, "onboarding_start", callback_data="catalog"),
     ]])
 
 
 def offers_keyboard(lang, service_id):
     buttons = []
     for off in db.list_offers(service_id):
+        safe_offer = dict(off)
+        safe_offer["name"] = clean_button_name(off.get("name")) or f"Offre #{off['id']}"
         buttons.append([InlineKeyboardButton(
-            offer_button_label(lang, off),
+            offer_button_label(lang, safe_offer),
             callback_data=f"off:{off['id']}",
             style=stock_button_style(off.get("stock")),
-            icon_custom_emoji_id=off.get("custom_emoji_id") or None,
+            icon_custom_emoji_id=(
+                db.get_text_override_icon("stock_label", lang)
+                or off.get("custom_emoji_id")
+                or None
+            ),
         )])
-    buttons.append([InlineKeyboardButton(t(lang, "btn_back_services"), callback_data="catalog")])
+    buttons.append([translated_button(lang, "btn_back_services", callback_data="catalog")])
     return InlineKeyboardMarkup(buttons)
 
 
 def offer_detail_keyboard(lang, offer):
     buttons = []
     if offer["price"] is not None and offer["stock"] > 0:
-        buttons.append([InlineKeyboardButton(t(lang, "btn_buy"),
-                                             callback_data=f"buy:{offer['id']}")])
-    buttons.append([InlineKeyboardButton(t(lang, "btn_back"),
-                                         callback_data=f"svc:{offer['service_id']}")])
+        buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
+    buttons.append([translated_button(lang, "btn_back", callback_data=f"svc:{offer['service_id']}")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -219,21 +242,25 @@ def quantity_keyboard(lang, offer, page=0, page_size=20):
         nav.append(InlineKeyboardButton("▶️", callback_data=f"qty_page:{offer['id']}:{page + 1}"))
     if nav:
         rows.append(nav)
-    rows.append([InlineKeyboardButton(t(lang, "btn_back"), callback_data=f"off:{offer['id']}")])
+    rows.append([translated_button(lang, "btn_back", callback_data=f"off:{offer['id']}")])
     return InlineKeyboardMarkup(rows)
 
 
-def paid_keyboard(lang, order_id):
+def paid_keyboard(lang, order_id, binance_id="", total="", currency="USDT"):
     return InlineKeyboardMarkup([
+        [translated_button(lang, "btn_paid", callback_data=f"verify_auto:{order_id}")],
         [
-            InlineKeyboardButton(t(lang, "btn_copy_binance_id"), callback_data=f"copy_binance_id:{order_id}"),
-            InlineKeyboardButton(t(lang, "btn_copy_amount"), callback_data=f"copy_amount:{order_id}"),
+            translated_button(lang, "btn_cancel_short", callback_data=f"cancel_buy:{order_id}"),
+            translated_button(lang, "btn_main_menu_short", callback_data="home"),
         ],
-        [InlineKeyboardButton(t(lang, "btn_paid"), callback_data=f"paid:{order_id}")],
-        [
-            InlineKeyboardButton(t(lang, "btn_cancel_short"), callback_data=f"cancel_buy:{order_id}"),
-            InlineKeyboardButton(t(lang, "btn_main_menu_short"), callback_data="home"),
-        ],
+    ])
+
+
+def txid_verify_keyboard(lang, order_id):
+    return InlineKeyboardMarkup([
+        [translated_button(lang, "btn_verify_txid", callback_data=f"paid:{order_id}")],
+        [translated_button(lang, "btn_cancel_order", callback_data=f"cancel_buy:{order_id}")],
+        [translated_button(lang, "btn_main_menu_short", callback_data="home")],
     ])
 
 
@@ -250,45 +277,46 @@ def orders_services_keyboard(lang, groups, total):
         t(lang, "orders_all", count=total),
         callback_data="orders_export:all",
         style="success",
+        icon_custom_emoji_id=db.get_text_override_icon("orders_all", lang) or None,
     )])
-    rows.append([InlineKeyboardButton(t(lang, "btn_back"), callback_data="home")])
+    rows.append([translated_button(lang, "btn_back", callback_data="home")])
     return InlineKeyboardMarkup(rows)
 
 
 def orders_keyboard(lang, orders=None):
     """Small generic navigation keyboard kept for help and order detail views."""
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton(t(lang, "menu_orders"), callback_data="orders"),
-        InlineKeyboardButton(t(lang, "btn_main_menu_short"), callback_data="home"),
+        translated_button(lang, "menu_orders", callback_data="orders"),
+        translated_button(lang, "btn_main_menu_short", callback_data="home"),
     ]])
 
 
 def confirm_buy_keyboard(lang, offer_id, qty=1):
     """Clavier de confirmation avant achat."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "btn_pay_wallet"), callback_data=f"pay_wallet:{offer_id}:{qty}")],
-        [InlineKeyboardButton(t(lang, "btn_pay_binance"), callback_data=f"pay_binance:{offer_id}:{qty}")],
-        [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{offer_id}")],
+        [translated_button(lang, "btn_pay_wallet", callback_data=f"pay_wallet:{offer_id}:{qty}")],
+        [translated_button(lang, "btn_pay_binance", callback_data=f"pay_binance:{offer_id}:{qty}")],
+        [translated_button(lang, "btn_cancel", callback_data=f"cancel_buy:{offer_id}")],
     ])
 
 
 def duplicate_order_keyboard(lang, existing_order_id, offer_id, qty=1):
     """Clavier lorsqu'une commande identique existe déjà."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "btn_continue_payment"), callback_data=f"continue_pay:{existing_order_id}")],
-        [InlineKeyboardButton(t(lang, "btn_new_order"), callback_data=f"confirm_buy:{offer_id}:{qty}")],
-        [InlineKeyboardButton(t(lang, "btn_cancel"), callback_data=f"cancel_buy:{offer_id}")],
+        [translated_button(lang, "btn_continue_payment", callback_data=f"continue_pay:{existing_order_id}")],
+        [translated_button(lang, "btn_new_order", callback_data=f"confirm_buy:{offer_id}:{qty}")],
+        [translated_button(lang, "btn_cancel", callback_data=f"cancel_buy:{offer_id}")],
     ])
 
 
 def post_delivery_keyboard(lang, order_id):
     """Clavier après livraison : confirmer ou signaler un problème."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "btn_delivery_ok"), callback_data=f"delivery_ok:{order_id}")],
-        [InlineKeyboardButton(t(lang, "btn_delivery_problem"), callback_data=f"delivery_problem:{order_id}")],
+        [translated_button(lang, "btn_delivery_ok", callback_data=f"delivery_ok:{order_id}")],
+        [translated_button(lang, "btn_delivery_problem", callback_data=f"delivery_problem:{order_id}")],
         [
             InlineKeyboardButton("⭐ Avis", callback_data=f"rate:{order_id}"),
-            InlineKeyboardButton(t(lang, "menu_catalog"), callback_data="catalog"),
+            translated_button(lang, "menu_catalog", callback_data="catalog"),
         ],
     ])
 
@@ -302,8 +330,8 @@ def rating_keyboard(order_id):
 
 def affiliate_keyboard(lang, referral_link, share_text):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(lang, "affiliate_copy"), callback_data="affiliate_copy")],
-        [InlineKeyboardButton(t(lang, "affiliate_share"), switch_inline_query=share_text)],
-        [InlineKeyboardButton(t(lang, "btn_main_menu_short"), callback_data="home")],
+        [translated_button(lang, "affiliate_copy", callback_data="affiliate_copy")],
+        [translated_button(lang, "affiliate_share", switch_inline_query=share_text)],
+        [translated_button(lang, "btn_main_menu_short", callback_data="home")],
     ])
 

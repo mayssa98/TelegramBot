@@ -3,8 +3,32 @@ Internationalisation FR / EN / AR.
 Usage : t(lang, "key", **kwargs)
 """
 import contextlib
+import re
+
+
+CUSTOM_EMOJI_TOKEN_RE = re.compile(r"\[\[TGEMOJI:[0-9A-Za-z_-]+:[0-9a-fA-F]+\]\]")
+
+
+def without_custom_emoji_tokens(value):
+    """Return button/plain text without internal Premium emoji markers."""
+    return CUSTOM_EMOJI_TOKEN_RE.sub("", str(value or "")).strip()
 
 TRANSLATIONS = {
+    "admin_text_editor_title": {
+        "fr": "✏️ *Tous les textes du bot*\n\nChoisissez un texte à modifier. Utilisez les flèches pour parcourir la liste complète.",
+        "en": "✏️ *All bot texts*\n\nChoose a text to edit. Use the arrows to browse the complete list.",
+        "ar": "✏️ *جميع نصوص البوت*\n\nاختر نصاً لتعديله واستخدم الأسهم لتصفح القائمة.",
+    },
+    "admin_choose_text_language": {
+        "fr": "🌐 Choisissez la langue à modifier pour `{text_key}` :",
+        "en": "🌐 Choose the language to edit for `{text_key}`:",
+        "ar": "🌐 اختر لغة النص `{text_key}`:",
+    },
+    "admin_send_new_text": {
+        "fr": "✏️ Envoyez le nouveau texte pour `{text_key}` (`{selected_lang}`).\n\nTexte actuel :\n{current}",
+        "en": "✏️ Send the new text for `{text_key}` (`{selected_lang}`).\n\nCurrent text:\n{current}",
+        "ar": "✏️ أرسل النص الجديد للمفتاح `{text_key}` (`{selected_lang}`).\n\nالنص الحالي:\n{current}",
+    },
     # ---------------- Démarrage / langue ----------------
     "choose_lang": {
         "fr": "🌍 Bienvenue ! Choisissez votre langue :",
@@ -120,9 +144,9 @@ TRANSLATIONS = {
         "ar": "🔐 *الخصوصية*\n\nيحتفظ المتجر فقط بالبيانات اللازمة للطلبات والمدفوعات والتسليم والتذاكر. بيانات المخزون السرية مشفرة ولا تُكتب في السجلات.",
     },
     "affiliate_title": {
-        "fr": "🎊 *PROGRAMME D'AFFILIATION*\n\n📊 *Vos statistiques*\n💰 Gains : *{earned} USDT*\n💳 Portefeuille : *{balance} USDT*\n👥 Invitations : *{referrals}*\n✅ Membres qualifiés : *{rewarded}*\n⌛ En attente : *{pending}*\n📅 Aujourd'hui : *{today}/{daily_cap}*\n\n🔗 *Votre lien*\n`{link}`\n\n🎯 *Paliers quotidiens*\n• 5 membres qualifiés → *{five_reward} USDT*\n• 10 membres qualifiés → *+{ten_reward} USDT*\n\nUn membre devient qualifié après *{qualify} USDT* d'achats confirmés. Maximum : *{daily_cap} membres par jour*.\n\n⚠️ Auto-parrainage et comptes frauduleux refusés.",
-        "en": "🎊 *AFFILIATE PROGRAM*\n\n📊 *Your stats*\n💰 Earned: *{earned} USDT*\n💳 Wallet: *{balance} USDT*\n👥 Invites: *{referrals}*\n✅ Qualified members: *{rewarded}*\n⌛ Pending: *{pending}*\n📅 Today: *{today}/{daily_cap}*\n\n🔗 *Your link*\n`{link}`\n\n🎯 *Daily milestones*\n• 5 qualified members → *{five_reward} USDT*\n• 10 qualified members → *+{ten_reward} USDT*\n\nA member qualifies after *{qualify} USDT* in confirmed purchases. Maximum: *{daily_cap} members per day*.\n\n⚠️ Self-referrals and fake accounts are rejected.",
-        "ar": "🎊 *برنامج الإحالة*\n\n💰 الأرباح: *{earned} USDT*\n💳 المحفظة: *{balance} USDT*\n👥 الدعوات: *{referrals}*\n✅ المؤهلون: *{rewarded}*\n📅 اليوم: *{today}/{daily_cap}*\n\n🔗 `{link}`\n\n5 أعضاء مؤهلين = *{five_reward} USDT*\n10 أعضاء مؤهلين = *+{ten_reward} USDT*\n\nيتأهل العضو بعد مشتريات مؤكدة بقيمة *{qualify} USDT*. الحد الأقصى *{daily_cap}* أعضاء يوميًا.",
+        "fr": "🎊 *PROGRAMME D'AFFILIATION*\n\n💰 Gains : *{earned} USDT*\n💳 Portefeuille : *{balance} USDT*\n👥 Filleuls valides : *{referrals}*\n🎯 Progression : *{progress}/10*\n\n💵 Gagnez *2 USDT* pour chaque groupe de *10 filleuls valides*.\n\n🔗 *Votre lien*\n`{link}`\n\n⚠️ Auto-parrainage et faux comptes refusés.",
+        "en": "🎊 *AFFILIATE PROGRAM*\n\n💰 Earned: *{earned} USDT*\n💳 Wallet: *{balance} USDT*\n👥 Valid referrals: *{referrals}*\n🎯 Progress: *{progress}/10*\n\n💵 Earn *2 USDT* for every *10 valid referrals*.\n\n🔗 *Your link*\n`{link}`\n\n⚠️ Self-referrals and fake accounts are rejected.",
+        "ar": "🎊 *برنامج الإحالة*\n\n💰 الأرباح: *{earned} USDT*\n💳 المحفظة: *{balance} USDT*\n👥 الإحالات الصالحة: *{referrals}*\n🎯 التقدم: *{progress}/10*\n\n💵 اربح *2 USDT* لكل *10 إحالات صالحة*.\n\n🔗 `{link}`\n\n⚠️ الإحالة الذاتية والحسابات الوهمية مرفوضة.",
     },
     "affiliate_copy": {"fr": "🔗 Copier le lien", "en": "🔗 Copy Link", "ar": "🔗 نسخ الرابط"},
     "affiliate_copy_message": {
@@ -182,6 +206,7 @@ TRANSLATIONS = {
     "btn_refresh_short": {"fr": "🔄 Actualiser", "en": "🔄 Refresh", "ar": "🔄 تحديث"},
     "btn_main_menu_short": {"fr": "🏠 Accueil", "en": "🏠 Home", "ar": "🏠 الرئيسية"},
     "btn_cancel_short": {"fr": "✖️ Annuler", "en": "✖️ Cancel", "ar": "✖️ إلغاء"},
+    "btn_cancel_order": {"fr": "❌ Annuler la commande", "en": "❌ Cancel order", "ar": "❌ إلغاء الطلب"},
     "btn_confirm": {"fr": "✅ Confirmer l'achat", "en": "✅ Confirm purchase", "ar": "✅ تأكيد الشراء"},
     "btn_cancel": {"fr": '\u274c Annuler le paiement', "en": '\u274c Cancel Payment', "ar": '\u274c \u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u062f\u0641\u0639'},
     "btn_copy_binance_id": {"fr": '\U0001f9ed Copier Binance ID', "en": '\U0001f9ed Copy Binance ID', "ar": '\U0001f9ed \u0646\u0633\u062e \u0645\u0639\u0631\u0641 Binance'},
@@ -195,9 +220,24 @@ TRANSLATIONS = {
     "cat_other": {"fr": "📦 Autres services", "en": "📦 Other services", "ar": "📦 خدمات أخرى"},
     # ---------------- Confirmation d'achat ----------------
     "choose_quantity": {
-        "fr": "\U0001f9ee *Choisissez la quantit\u00e9*\n\nProduit : *{offer}*\nStock disponible : *{stock}*\nPrix unitaire : *{price} {cur}*\n\nS\u00e9lectionnez le nombre de comptes \u00e0 acheter :",
-        "en": "\U0001f9ee *Choose quantity*\n\nProduct: *{offer}*\nAvailable stock: *{stock}*\nUnit price: *{price} {cur}*\n\nSelect how many accounts to buy:",
-        "ar": "\U0001f9ee *\u0627\u062e\u062a\u0631 \u0627\u0644\u0643\u0645\u064a\u0629*\n\n\u0627\u0644\u0645\u0646\u062a\u062c: *{offer}*\n\u0627\u0644\u0645\u062e\u0632\u0648\u0646 \u0627\u0644\u0645\u062a\u0627\u062d: *{stock}*\n\u0633\u0639\u0631 \u0627\u0644\u0648\u062d\u062f\u0629: *{price} {cur}*\n\n\u0627\u062e\u062a\u0631 \u0639\u062f\u062f \u0627\u0644\u062d\u0633\u0627\u0628\u0627\u062a \u0627\u0644\u062a\u064a \u062a\u0631\u064a\u062f \u0634\u0631\u0627\u0621\u0647\u0627:",
+        "fr": "✏️ *Entrez la quantité à acheter (1-{stock}) :*\n\nProduit : *{offer}*\nStock disponible : *{stock}*\nPrix unitaire : *{price} {cur}*",
+        "en": "✏️ *Enter quantity to buy (1-{stock}):*\n\nProduct: *{offer}*\nAvailable stock: *{stock}*\nUnit price: *{price} {cur}*",
+        "ar": "✏️ *أدخل الكمية المطلوبة (1-{stock}):*\n\nالمنتج: *{offer}*\nالمخزون المتاح: *{stock}*\nسعر الوحدة: *{price} {cur}*",
+    },
+    "affiliate_referral_success": {
+        "fr": "🎉 *Nouveau filleul valide !*\n\nProgression : *{progress}/10*\nEncore *{remaining}* filleul(s) valide(s) pour gagner *2 USDT*.",
+        "en": "🎉 *New valid referral!*\n\nProgress: *{progress}/10*\nOnly *{remaining}* more valid referral(s) to earn *2 USDT*.",
+        "ar": "🎉 *إحالة صالحة جديدة!*\n\nالتقدم: *{progress}/10*\nمتبقي *{remaining}* إحالة صالحة لربح *2 USDT*.",
+    },
+    "affiliate_ten_success": {
+        "fr": "✅ *Objectif atteint !*\n\nVous avez complété *10 filleuls valides*. *2 USDT* ont été ajoutés automatiquement à votre portefeuille.\n\nNouveau solde : *{balance} USDT*.",
+        "en": "✅ *Goal completed!*\n\nYou completed *10 valid referrals*. *2 USDT* was automatically added to your wallet.\n\nNew balance: *{balance} USDT*.",
+        "ar": "✅ *تم تحقيق الهدف!*\n\nأكملت *10 إحالات صالحة*. تمت إضافة *2 USDT* تلقائيًا إلى محفظتك.\n\nالرصيد الجديد: *{balance} USDT*.",
+    },
+    "quantity_invalid": {
+        "fr": "⚠️ Quantité invalide. Envoyez un nombre entier entre *1* et *{stock}*.",
+        "en": "⚠️ Invalid quantity. Send a whole number between *1* and *{stock}*.",
+        "ar": "⚠️ كمية غير صالحة. أرسل رقماً صحيحاً بين *1* و *{stock}*.",
     },
     "confirm_purchase": {
         "fr": "🧾 *Résumé de votre commande*\n\n{emoji} Service : *{service}*\n📋 Offre : *{offer}*\n💵 Prix unitaire : *{price} {cur}*\n📦 Quantité : *{qty}*\n{discount_line}\n💰 Total : *{total} {cur}*\n\nConfirmez-vous cet achat ?",
@@ -210,9 +250,9 @@ TRANSLATIONS = {
         "ar": "🏆 مستوى {level}: *-{percent}%* (-{amount} {cur})",
     },
     "profile_card": {
-        "fr": "👤 <b>MON PROFIL</b>\n\n🪪 <b>Nom :</b> {name}\n🔗 <b>Utilisateur :</b> {username}\n🆔 <b>Telegram ID :</b> <code>{telegram_id}</code>\n\n💳 <b>Portefeuille :</b> {wallet} USDT\n👥 <b>Total invitations :</b> {invites}\n✅ <b>Invitations qualifiées :</b> {qualified}\n🛍️ <b>Total des achats :</b> {total_buy} USDT\n\n🏆 <b>Niveau :</b> {level}\n🎁 <b>Remise active :</b> {discount}%\n⏳ <b>Expiration :</b> {expires}",
-        "en": "👤 <b>MY PROFILE</b>\n\n🪪 <b>Name:</b> {name}\n🔗 <b>Username:</b> {username}\n🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n\n💳 <b>Wallet:</b> {wallet} USDT\n👥 <b>Total invites:</b> {invites}\n✅ <b>Qualified invites:</b> {qualified}\n🛍️ <b>Total purchases:</b> {total_buy} USDT\n\n🏆 <b>Level:</b> {level}\n🎁 <b>Active discount:</b> {discount}%\n⏳ <b>Expires:</b> {expires}",
-        "ar": "👤 <b>ملفي</b>\n\n🪪 <b>الاسم:</b> {name}\n🆔 <b>معرف تيليغرام:</b> <code>{telegram_id}</code>\n💳 <b>المحفظة:</b> {wallet} USDT\n👥 <b>الدعوات:</b> {invites}\n✅ <b>الدعوات المؤهلة:</b> {qualified}\n🛍️ <b>إجمالي المشتريات:</b> {total_buy} USDT\n🏆 <b>المستوى:</b> {level}\n🎁 <b>الخصم:</b> {discount}%\n⏳ <b>الانتهاء:</b> {expires}",
+        "fr": "👤 <b>MON PROFIL</b>\n\n🪪 <b>Nom :</b> {name}\n🔗 <b>Utilisateur :</b> {username}\n🆔 <b>Telegram ID :</b> <code>{telegram_id}</code>\n\n💳 <b>Portefeuille :</b> {wallet} USDT\n👥 <b>Filleuls valides :</b> {invites}\n🛍️ <b>Total des achats :</b> {total_buy} USDT\n\n🏆 <b>Niveau :</b> {level}\n🎁 <b>Remise active :</b> {discount}%\n⏳ <b>Expiration :</b> {expires}",
+        "en": "👤 <b>MY PROFILE</b>\n\n🪪 <b>Name:</b> {name}\n🔗 <b>Username:</b> {username}\n🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n\n💳 <b>Wallet:</b> {wallet} USDT\n👥 <b>Valid referrals:</b> {invites}\n🛍️ <b>Total purchases:</b> {total_buy} USDT\n\n🏆 <b>Level:</b> {level}\n🎁 <b>Active discount:</b> {discount}%\n⏳ <b>Expires:</b> {expires}",
+        "ar": "👤 <b>ملفي</b>\n\n🪪 <b>الاسم:</b> {name}\n🆔 <b>معرف تيليغرام:</b> <code>{telegram_id}</code>\n💳 <b>المحفظة:</b> {wallet} USDT\n👥 <b>الإحالات الصالحة:</b> {invites}\n🛍️ <b>إجمالي المشتريات:</b> {total_buy} USDT\n🏆 <b>المستوى:</b> {level}\n🎁 <b>الخصم:</b> {discount}%\n⏳ <b>الانتهاء:</b> {expires}",
     },
     "loyalty_activated": {
         "fr": "🏆 *Nouveau niveau {level} !*\n\nVous bénéficiez maintenant de *-{discount}%* sur tous les produits pendant 7 jours.",
@@ -231,8 +271,8 @@ TRANSLATIONS = {
     },
     # ---------------- Paiement ----------------
     "order_created": {
-        "fr": "\U0001f525\U0001f4b3 *Binance Pay*\n--------------------\n\n\U0001f6cd\ufe0f Produit : *{offer}*\n\U0001f4ab Quantit\xe9 : *{qty}*\n\n\U0001f6a8 *ENVOYEZ EXACTEMENT : {total} {cur}*\n\U0001f9ed Binance ID : `{binance_id}`\n\U0001f4dd Notes / M\xe9mo obligatoire : `{telegram_id}`\n\nLe scanner automatique fonctionne pendant *2 minutes*. Le montant et le m\xe9mo doivent correspondre exactement.\n\nSi le paiement n'est pas d\xe9tect\xe9, appuyez sur *V\xe9rifier le paiement* puis collez votre TXID.\n\n\U0001f3af Commande : *#{oid}*",
-        "en": "\U0001f525\U0001f4b3 *Binance Pay*\n--------------------\n\n\U0001f6cd\ufe0f Product: *{offer}*\n\U0001f4ab Quantity: *{qty}*\n\n\U0001f6a8 *SEND EXACTLY: {total} {cur}*\n\U0001f9ed Binance ID: `{binance_id}`\n\U0001f4dd Required Notes / Memo: `{telegram_id}`\n\nThe automatic scanner runs for *2 minutes*. The amount and memo must match exactly.\n\nIf the payment is not detected, tap *Check Payment* and paste your TXID.\n\n\U0001f3af Order: *#{oid}*",
+        "fr": "🔥💳 *Binance Pay*\n--------------------\n\n🛍️ Produit : *{offer}*\n💫 Quantité : *{qty}*\n\n🚨 *ENVOYEZ EXACTEMENT : {total} {cur}*\n🧭 Binance ID : `{binance_id}`\n📝 Notes / Mémo obligatoire : `{telegram_id}`\n\nEffectuez complètement le paiement, puis appuyez sur *Vérifier le paiement* pour lancer la détection automatique.\n\nSi le paiement n'est pas détecté, utilisez ensuite *Vérifier avec TXID*.\n\n🎯 Commande : *#{oid}*",
+        "en": "🔥💳 *Binance Pay*\n--------------------\n\n🛍️ Product: *{offer}*\n💫 Quantity: *{qty}*\n\n🚨 *SEND EXACTLY: {total} {cur}*\n🧭 Binance ID: `{binance_id}`\n📝 Required Notes / Memo: `{telegram_id}`\n\nComplete the payment first, then tap *Verify Payment* to launch automatic detection.\n\nIf the payment is not detected, use *Verify with TXID*.\n\n🎯 Order: *#{oid}*",
         "ar": "🧾 *تم إنشاء الطلب #{oid}*\n\nالخدمة: *{service}*\nالعرض: *{offer}*\nالكمية: *{qty}*\nالمبلغ الإجمالي: *{total} {cur}*\n\n💳 *الدفع عبر Binance Pay*\n\n1️⃣ أرسل *{total} {cur}* إلى معرّف Binance Pay:\n`{binance_id}`\n\n2️⃣ بعد الدفع، اضغط الزر أدناه وأرسل *رقم معاملة Binance*.",
     },
     "btn_paid": {
@@ -249,6 +289,11 @@ TRANSLATIONS = {
         "fr": "\U0001f680 V\u00e9rification automatique lanc\u00e9e pendant *{seconds} secondes*... Le bot cherche un paiement avec le montant exact.",
         "en": "\U0001f680 Automatic verification started for *{seconds} seconds*... The bot is looking for a payment with the exact amount.",
         "ar": "\U0001f680 \u0628\u062f\u0623 \u0627\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u062a\u0644\u0642\u0627\u0626\u064a \u0644\u0645\u062f\u0629 *{seconds} \u062b\u0627\u0646\u064a\u0629*... \u064a\u0628\u062d\u062b \u0627\u0644\u0628\u0648\u062a \u0639\u0646 \u062f\u0641\u0639\u0629 \u0628\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0635\u062d\u064a\u062d.",
+    },
+    "btn_verify_txid": {
+        "fr": "🧾 Vérifier avec TXID",
+        "en": "🧾 Verify with TXID",
+        "ar": "🧾 التحقق باستخدام TXID",
     },
     "btn_pay_wallet": {
         "fr": "💳 Payer avec mon solde",
@@ -308,9 +353,9 @@ TRANSLATIONS = {
         "ar": "🟧🟧🟧⏳🟧🟧🟧\n\n⚠️ *لم يتم اكتشاف الدفع*\nالتحقق اليدوي متاح للطلب *#{oid}*.",
     },
     "auto_check_timeout": {
-        "fr": "\u231b V\u00e9rification automatique termin\u00e9e pour la commande #{oid}.\n\nEnvoyez maintenant l'*ID de transaction Binance* pour v\u00e9rifier manuellement votre paiement.",
-        "en": "\u231b Automatic verification ended for order #{oid}.\n\nNow send the *Binance transaction ID* to manually verify your payment.",
-        "ar": "\u231b \u0627\u0646\u062a\u0647\u0649 \u0627\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u062a\u0644\u0642\u0627\u0626\u064a \u0644\u0644\u0637\u0644\u0628 #{oid}.\n\n\u0623\u0631\u0633\u0644 \u0627\u0644\u0622\u0646 *\u0631\u0642\u0645 \u0645\u0639\u0627\u0645\u0644\u0629 Binance* \u0644\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u064a\u062f\u0648\u064a \u0645\u0646 \u0627\u0644\u062f\u0641\u0639.",
+        "fr": "⌛ Vérification automatique terminée pour la commande #{oid}.\n\nUtilisez *Vérifier avec TXID* pour lancer la vérification manuelle.",
+        "en": "⌛ Automatic verification ended for order #{oid}.\n\nUse *Verify with TXID* to start manual verification.",
+        "ar": "⌛ انتهى التحقق التلقائي للطلب #{oid}.\n\nاستخدم *التحقق باستخدام TXID* لبدء التحقق اليدوي.",
     },
     "payment_contact_admin": {
         "fr": "\U0001f4f8 Si la v\u00e9rification \u00e9choue encore, contactez le support et envoyez une capture du paiement pour la commande #{oid}.",
@@ -453,9 +498,20 @@ TRANSLATIONS = {
 
 def t(lang, key, **kwargs):
     if lang not in ("fr", "en", "ar"):
-        lang = "fr"
+        lang = "en"
+    try:
+        import database as db
+        override = db.get_text_override(key, lang)
+    except Exception:
+        override = None
+    if override is not None and str(override).strip():
+        override = without_custom_emoji_tokens(override)
+        if kwargs:
+            with contextlib.suppress(KeyError, IndexError, ValueError):
+                return override.format(**kwargs)
+        return override
     entry = TRANSLATIONS.get(key, {})
-    text = entry.get(lang) or entry.get("fr") or key
+    text = entry.get(lang) or entry.get("en") or key
     if kwargs:
         with contextlib.suppress(KeyError, IndexError):
             text = text.format(**kwargs)

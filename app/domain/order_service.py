@@ -39,6 +39,22 @@ def check_duplicate_pending_order(user_id: int, offer_id: int) -> dict | None:
     return None
 
 
+def cancel_incomplete_orders(user_id: int, exclude_order_id: int | None = None) -> list[int]:
+    """Cancel a customer's older unfinished orders before creating a new one."""
+    cancelled = []
+    incomplete = {
+        OrderStatus.PENDING_PAYMENT,
+        OrderStatus.AWAITING_VERIFICATION,
+        OrderStatus.VERIFICATION_FAILED,
+    }
+    for order in db.list_user_orders(user_id, limit=500):
+        if order.get("id") != exclude_order_id and order.get("status") in incomplete and cancel_order(
+            order["id"], reason="Automatically replaced by a new order"
+        ):
+            cancelled.append(order["id"])
+    return cancelled
+
+
 def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = "binance") -> dict:
     """Crée une commande avec expiration et renvoie l'objet complet.
 

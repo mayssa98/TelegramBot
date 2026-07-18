@@ -30,7 +30,8 @@ def test_french_payment_message_matches_binance_style():
     )
 
     assert "*Binance Pay*" in message
-    assert "2 minutes" in message
+    assert "Effectuez complètement le paiement" in message
+    assert "Vérifier avec TXID" in message
     assert "123456" in message
     assert "Produit : *Gemini AI Pro 18m*" in message
     assert "ENVOYEZ EXACTEMENT : 0.65 USDT" in message
@@ -48,16 +49,26 @@ def test_topup_failure_hides_internal_binance_error():
     assert "Copier le montant exact" in t("fr", "btn_copy_amount")
     assert "`904169573`" in t("fr", "copy_binance_id_msg", binance_id="904169573")
     assert "15 secondes" in t("fr", "auto_check_started", seconds=15)
-    assert "ID de transaction Binance" in t("fr", "auto_check_timeout", oid=6074)
+    assert "Vérifier avec TXID" in t("fr", "auto_check_timeout", oid=6074)
     assert "capture du paiement" in t("fr", "payment_contact_admin", oid=6074)
 
 
 def test_french_quantity_prompt_mentions_stock_limit():
     message = t("fr", "choose_quantity", offer="Chat GPT Plus", stock=9, price="1.23", cur="USDT")
 
-    assert "Choisissez la quantité" in message
+    assert "Entrez la quantité" in message
+    assert "1-9" in message
     assert "Stock disponible : *9*" in message
     assert "1.23 USDT" in message
+
+
+def test_admin_text_prompt_formats_text_key_without_argument_collision():
+    message = t(
+        "fr", "admin_send_new_text",
+        text_key="btn_pay_wallet", selected_lang="fr", current="Payer avec mon solde",
+    )
+    assert "btn_pay_wallet" in message
+    assert "Payer avec mon solde" in message
 
 
 def test_offer_detail_template_has_premium_sections():

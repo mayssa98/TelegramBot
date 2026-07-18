@@ -65,6 +65,8 @@ def init_db():
     db.orders.create_index("txid", unique=True, partialFilterExpression={"txid": {"$gt": ""}})
     db.orders.create_index("expires_at")
     db.settings.create_index("key", unique=True)
+    db.text_overrides.create_index([("key", ASCENDING), ("lang", ASCENDING)], unique=True)
+    db.custom_buttons.create_index("id", unique=True)
     db.referrals.create_index("referred_id", unique=True)
     db.referrals.create_index("referrer_id")
     db.wallets.create_index("user_id", unique=True)
@@ -254,6 +256,8 @@ def update_offer(
     low_stock_threshold=None,
     delivery_delay=None,
     custom_emoji_id=None,
+    photo_file_id=None,
+    instructions=None,
 ):
     values = {
         key: value
@@ -270,6 +274,8 @@ def update_offer(
             "low_stock_threshold": low_stock_threshold,
             "delivery_delay": delivery_delay,
             "custom_emoji_id": custom_emoji_id,
+            "photo_file_id": photo_file_id,
+            "instructions": instructions,
         }.items()
         if value is not None
     }
@@ -328,6 +334,8 @@ def add_offer(
     low_stock_threshold=5,
     delivery_delay="Instantané après confirmation",
     custom_emoji_id="",
+    photo_file_id="",
+    instructions="",
 ):
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
@@ -344,10 +352,25 @@ def add_offer(
         "low_stock_threshold": int(low_stock_threshold),
         "delivery_delay": delivery_delay,
         "custom_emoji_id": custom_emoji_id,
+        "photo_file_id": photo_file_id,
+        "instructions": instructions,
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
     })
     return oid
+
+
+def offer_sold_count(offer_id):
+    """Return the quantity sold from confirmed, paid, or delivered orders."""
+    pipeline = [
+        {"$match": {
+            "offer_id": offer_id,
+            "status": {"$in": ["paid", "payment_confirmed", "delivered"]},
+        }},
+        {"$group": {"_id": None, "total": {"$sum": "$qty"}}},
+    ]
+    result = list(get_conn().orders.aggregate(pipeline))
+    return int(result[0]["total"]) if result else 0
 
 
 def duplicate_offer(offer_id):
@@ -457,6 +480,49 @@ def set_setting(key, value):
     get_conn().settings.update_one({"key": key}, {"$set": {"value": str(value)}}, upsert=True)
 
 
+def get_text_override(key, lang):
+    row = get_conn().text_overrides.find_one({"key": str(key), "lang": str(lang)})
+    return row.get("text") if row else None
+
+
+def get_text_override_icon(key, lang):
+    row = get_conn().text_overrides.find_one({"key": str(key), "lang": str(lang)})
+    return row.get("custom_emoji_id", "") if row else ""
+
+
+def set_text_override(key, lang, text, custom_emoji_id=""):
+    get_conn().text_overrides.update_one(
+        {"key": str(key), "lang": str(lang)},
+        {"$set": {
+            "text": str(text), "custom_emoji_id": str(custom_emoji_id or ""),
+            "updated_at": int(time.time()),
+        }},
+        upsert=True,
+    )
+
+
+def list_text_overrides():
+    return [_public(row) for row in get_conn().text_overrides.find().sort([("key", ASCENDING), ("lang", ASCENDING)])]
+
+
+def add_custom_button(label_fr, label_en, label_ar, url):
+    button_id = _next_id("custom_buttons")
+    get_conn().custom_buttons.insert_one({
+        "id": button_id, "label_fr": label_fr, "label_en": label_en,
+        "label_ar": label_ar, "url": url, "active": 1,
+    })
+    return button_id
+
+
+def list_custom_buttons(active_only=True):
+    query = {"active": 1} if active_only else {}
+    return [_public(row) for row in get_conn().custom_buttons.find(query).sort("id", ASCENDING)]
+
+
+def delete_custom_button(button_id):
+    return bool(get_conn().custom_buttons.delete_one({"id": int(button_id)}).deleted_count)
+
+
 def shop_settings():
     """Return typed, administrator-editable shop settings."""
     from config import (
@@ -483,7 +549,7 @@ def shop_settings():
         "help_message": "",
         "terms_message": "",
         "privacy_message": "",
-        "active_languages": "fr,en,ar",
+        "active_languages": "en",
     }
     rows = {row["key"]: row.get("value") for row in get_conn().settings.find({"key": {"$in": list(defaults)}})}
     result = defaults | rows

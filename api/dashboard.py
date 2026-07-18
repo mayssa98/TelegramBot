@@ -1050,15 +1050,11 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                     <input type="number" name="price" step="0.01" min="0" required>
                 </div>
                 <div class="form-group">
-                    <label>Stock affiché (si non géré par codes)</label>
-                    <input type="number" name="stock" value="0" min="0">
-                </div>
-                <div class="form-group">
                     <label>Note courte</label>
                     <textarea name="note"></textarea>
                 </div>
                 <div class="form-group"><label>Description détaillée</label><textarea name="description"></textarea></div>
-                <div class="form-group"><label>Contenu de commande initial</label><textarea name="initial_inventory" placeholder="Un contenu livrable par ligne&#10;compte1:motdepasse&#10;code-cadeau-123"></textarea></div>
+                <div class="form-group"><label>Comptes initiaux — stock automatique (# = 1 produit)</label><textarea name="initial_inventory" placeholder="#1&#10;Email: compte1@example.com&#10;Password: secret&#10;&#10;#2&#10;Code: produit-2"></textarea></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" value="Instantané après confirmation"></div>
                 <div class="form-group"><label>Seuil de stock faible</label><input type="number" name="low_stock_threshold" value="5" min="0"></div>
                 <div class="form-group"><label><input type="checkbox" name="auto_delivery" checked> Livraison automatique</label></div>
@@ -1076,7 +1072,6 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                 <div class="form-group"><label>Description du produit</label><textarea name="description" id="edit-offer-description"></textarea></div>
                 <div class="form-group"><label>Note</label><textarea name="note" id="edit-offer-note"></textarea></div>
                 <div class="form-group"><label>Prix</label><input type="number" step="0.01" min="0" name="price" id="edit-offer-price" required></div>
-                <div class="form-group"><label>Stock affiché</label><input type="number" min="0" name="stock" id="edit-offer-stock" required></div>
                 <div class="form-group"><label>Ordre</label><input type="number" min="0" name="sort_order" id="edit-offer-sort"></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" id="edit-offer-delay"></div>
                 <div class="form-group"><label>Seuil de stock faible</label><input type="number" min="0" name="low_stock_threshold" id="edit-offer-threshold"></div>
@@ -1096,8 +1091,8 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             <form onsubmit="handleFormSubmit(event, 'add_inventory')">
                 <input type="hidden" name="offer_id" id="add-inventory-offer-id">
                 <div class="form-group">
-                    <label>Contenus à chiffrer (un par ligne)</label>
-                    <textarea name="items" placeholder="code1&#10;compte:passe2" required style="min-height: 150px;"></textarea>
+                    <label>Comptes à chiffrer — chaque bloc # compte comme 1 produit</label>
+                    <textarea name="items" placeholder="#1&#10;Email: compte1@example.com&#10;Password: secret&#10;&#10;#2&#10;Code: produit-2" required style="min-height: 150px;"></textarea>
                 </div>
                 <button class="btn btn-primary" type="submit">🔒 Chiffrer & Ajouter</button>
             </form>
@@ -1803,7 +1798,6 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             document.getElementById("edit-offer-description").value = offer.description || "";
             document.getElementById("edit-offer-note").value = offer.note || "";
             document.getElementById("edit-offer-price").value = offer.price ?? 0;
-            document.getElementById("edit-offer-stock").value = offer.stock ?? 0;
             document.getElementById("edit-offer-sort").value = offer.sort_order ?? 0;
             document.getElementById("edit-offer-delay").value = offer.delivery_delay || "";
             document.getElementById("edit-offer-threshold").value = offer.low_stock_threshold ?? 5;

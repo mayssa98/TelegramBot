@@ -195,7 +195,7 @@ def test_temporary_verifier_error_never_enters_manual_review(mock_mongodb, monke
     assert order["txid"] == ""
 
 
-def test_payment_qualifies_referral_only_after_confirmation(mock_mongodb, mock_payment_verifier):
+def test_payment_does_not_change_already_valid_referral(mock_mongodb, mock_payment_verifier):
     from app.domain import affiliate_service
 
     mock_mongodb.users.insert_many([{"telegram_id": 999}, {"telegram_id": 111}])
@@ -214,5 +214,50 @@ def test_payment_qualifies_referral_only_after_confirmation(mock_mongodb, mock_p
 
     result = payment_service.submit_payment(30, "TXID_QUALIFIED", 111)
 
-    assert result["affiliate"]["referrer_id"] == 999
-    assert mock_mongodb.referrals.find_one({"referred_id": 111})["qualified"] is True
+    assert result["affiliate"] is None
+    assert mock_mongodb.referrals.find_one({"referred_id": 111})["valid"] is True
+
+
+def test_admin_test_payment_bypasses_binance_and_delivers(mock_mongodb, monkeypatch):
+    import time
+
+    monkeypatch.setattr(payment_service, "ADMIN_ID", 999)
+    db.set_setting("admin_test_payment_enabled", "true")
+    db.add_service("Test", "🧪")
+    offer_id = db.add_offer(1, "Test product", 5.0, 1)
+    db.add_inventory_items(offer_id, ["test_delivery_content"])
+    db.get_conn().orders.insert_one({
+        "id": 40, "user_id": 999, "offer_id": offer_id,
+        "service_name": "Test", "offer_name": "Test product",
+        "qty": 1, "total_price": 5.0,
+        "status": OrderStatus.PENDING_PAYMENT, "txid": "",
+        "created_at": int(time.time()), "expires_at": int(time.time()) + 1800,
+    })
+
+    result = payment_service.submit_payment(40, "TEST-PAYMENT", 999)
+
+    assert result["status"] == "delivered"
+    assert result["delivered_content"] == [
+        "SAMPLE TEST PRODUCT 1/1 — NOT A REAL PRODUCT — ORDER #40",
+    ]
+    assert db.get_order(40)["verify_method"] == "admin_test"
+    assert db.inventory_stats(offer_id)["available"] == 1
+
+
+def test_customer_cannot_use_admin_test_payment(mock_mongodb, monkeypatch):
+    import time
+
+    monkeypatch.setattr(payment_service, "ADMIN_ID", 999)
+    db.set_setting("admin_test_payment_enabled", "true")
+    db.get_conn().orders.insert_one({
+        "id": 41, "user_id": 123, "offer_id": 1, "qty": 1,
+        "total_price": 5.0, "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "", "created_at": int(time.time()),
+        "expires_at": int(time.time()) + 1800,
+    })
+
+    result = payment_service.submit_payment(41, "TEST-PAYMENT", 123)
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "not_found"
+    assert db.get_order(41)["status"] == OrderStatus.PENDING_PAYMENT

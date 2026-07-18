@@ -13,7 +13,7 @@ from typing import Any
 import database as db
 from app.constants import OrderStatus
 from app.domain import affiliate_service, inventory_service, loyalty_service
-from config import CURRENCY
+from config import ADMIN_ID, CURRENCY
 from payment_verifier import verify_payment, verify_payment_by_amount
 
 log = logging.getLogger(__name__)
@@ -101,6 +101,48 @@ def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: 
     return result
 
 
+def _finalize_admin_test_payment(order_id: int, user_id: int, txid: str) -> dict[str, Any]:
+    """Complete a test order with obvious samples, never real inventory."""
+    order = db.get_order(order_id)
+    result: dict[str, Any] = {
+        "status": "failed", "order": order, "delivered_content": None,
+        "error_code": None, "error_message": None, "affiliate": None,
+    }
+    if not order:
+        result["error_code"] = "order_not_found"
+        return result
+    if order.get("status") not in (OrderStatus.PAYMENT_CONFIRMED, OrderStatus.PAID):
+        if not db.mark_order_paid(order_id, "admin_test"):
+            result["error_code"] = "payment_failed"
+            return result
+    qty = max(1, int(order.get("qty", 1)))
+    samples = [
+        f"SAMPLE TEST PRODUCT {index}/{qty} — NOT A REAL PRODUCT — ORDER #{order_id}"
+        for index in range(1, qty + 1)
+    ]
+    now = int(time.time())
+    db.get_conn().orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": OrderStatus.DELIVERED,
+            "txid": txid,
+            "verify_method": "admin_test",
+            "delivery_text": "[admin test samples]",
+            "delivered_at": now,
+            "updated_at": now,
+        }},
+    )
+    db.audit_event(
+        "payment.admin_test_delivered", actor_id=user_id,
+        details={"order_id": order_id, "items_count": qty},
+    )
+    result.update({
+        "status": "delivered", "order": db.get_order(order_id),
+        "delivered_content": samples,
+    })
+    return result
+
+
 def confirm_wallet_order(order_id: int, user_id: int) -> dict[str, Any]:
     order = db.get_order(order_id)
     if not order or order.get("user_id") != user_id or float(order.get("total_price", 1)) != 0:
@@ -177,6 +219,18 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
         result["error_code"] = "expired"
         result["error_message"] = "Cette commande a expiré. Veuillez en créer une nouvelle."
         return result
+
+    # Explicit administrator-only test path. Customers can never use it.
+    if txid.upper() == "TEST-PAYMENT":
+        test_enabled = str(db.get_setting("admin_test_payment_enabled", "false")).lower() in {
+            "1", "true", "yes", "on",
+        }
+        if user_id != ADMIN_ID or not test_enabled:
+            result["error_code"] = "not_found"
+            result["error_message"] = "Transaction not found."
+            return result
+        test_txid = f"TEST-PAYMENT-{order_id}-{int(time.time())}"
+        return _finalize_admin_test_payment(order_id, user_id, test_txid)
 
     # 3. Vérifier unicité du TXID
     try:

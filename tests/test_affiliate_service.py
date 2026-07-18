@@ -1,61 +1,44 @@
-"""Tests for qualified referral members and daily rewards."""
+"""Tests for the simple 2 USDT / 10 valid referrals program."""
 
-import database as db
 from app.domain import affiliate_service
 
 
-def _users_and_referrals(conn, referrer_id=999, count=10):
+def _prepare_referrer(conn, referrer_id=999):
     conn.users.insert_one({"telegram_id": referrer_id})
-    for index in range(count):
-        user_id = 100 + index
-        conn.users.insert_one({"telegram_id": user_id})
-        assert affiliate_service.register_referral_link(user_id, referrer_id)
 
 
 def test_register_referral_rejects_self_referral(mock_mongodb):
-    mock_mongodb.users.insert_one({"telegram_id": 111})
+    _prepare_referrer(mock_mongodb, 111)
     assert affiliate_service.register_referral_link(111, 111) is False
 
 
-def test_member_qualifies_after_ten_dollars(mock_mongodb):
-    _users_and_referrals(mock_mongodb, count=1)
-    mock_mongodb.orders.insert_one({
-        "id": 1, "user_id": 100, "status": "delivered", "total_price": 10.0,
-    })
-
-    result = affiliate_service.on_confirmed_payment(100, 1)
-
-    assert result["qualified"] is True
-    assert result["daily_count"] == 1
-    assert result["rewarded"] is False
-
-
-def test_fifth_and_tenth_daily_members_reward_wallet(mock_mongodb):
-    _users_and_referrals(mock_mongodb)
-    rewards = []
+def test_ten_unique_valid_referrals_reward_two_usdt(mock_mongodb):
+    _prepare_referrer(mock_mongodb)
     for index in range(10):
         user_id = 100 + index
-        order_id = index + 1
-        mock_mongodb.orders.insert_one({
-            "id": order_id, "user_id": user_id, "status": "delivered", "total_price": 10.0,
-        })
-        result = affiliate_service.on_confirmed_payment(user_id, order_id)
-        if result["rewarded"]:
-            rewards.append(result["reward_amount"])
+        mock_mongodb.users.insert_one({"telegram_id": user_id})
+        assert affiliate_service.register_referral_link(user_id, 999)
 
-    assert rewards == [5.0, 2.0]
-    assert affiliate_service.get_stats(999)["balance_cents"] == 700
+    stats = affiliate_service.get_stats(999)
+    assert stats["valid_referrals"] == 10
+    assert stats["balance_cents"] == 200
+    assert stats["earned_cents"] == 200
 
 
-def test_daily_cap_stops_the_eleventh_member(mock_mongodb):
-    _users_and_referrals(mock_mongodb, count=11)
-    for index in range(11):
+def test_duplicate_referral_is_not_counted_or_rewarded_twice(mock_mongodb):
+    _prepare_referrer(mock_mongodb)
+    mock_mongodb.users.insert_one({"telegram_id": 100})
+
+    assert affiliate_service.register_referral_link(100, 999)
+    assert affiliate_service.register_referral_link(100, 999) is False
+    assert affiliate_service.get_stats(999)["valid_referrals"] == 1
+
+
+def test_each_new_group_of_ten_rewards_two_usdt(mock_mongodb):
+    _prepare_referrer(mock_mongodb)
+    for index in range(20):
         user_id = 100 + index
-        order_id = index + 1
-        mock_mongodb.orders.insert_one({
-            "id": order_id, "user_id": user_id, "status": "delivered", "total_price": 10.0,
-        })
-        result = affiliate_service.on_confirmed_payment(user_id, order_id)
+        mock_mongodb.users.insert_one({"telegram_id": user_id})
+        assert affiliate_service.register_referral_link(user_id, 999)
 
-    assert result["daily_cap_reached"] is True
-    assert db.get_conn().referrals.find_one({"referred_id": 110})["qualified"] is False
+    assert affiliate_service.get_stats(999)["balance_cents"] == 400

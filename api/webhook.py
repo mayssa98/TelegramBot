@@ -390,7 +390,6 @@ class handler(BaseHTTPRequestHandler):
                         db.audit_event("service.created", details={"service_id": sid, "name": "Catalogue"})
                 name = form["name"].strip()[:120]
                 price = float(form["price"])
-                stock = int(form.get("stock", 0))
                 note = form.get("note", "")[:250]
                 description = form.get("description", "").strip()[:1000]
                 auto_delivery = form.get("auto_delivery", "") == "on"
@@ -400,28 +399,28 @@ class handler(BaseHTTPRequestHandler):
                     sid,
                     name,
                     price,
-                    stock,
+                    0,
                     note,
                     description=description,
                     auto_delivery=auto_delivery,
                     low_stock_threshold=low_stock_threshold,
                     delivery_delay=delivery_delay,
                 )
-                initial_inventory = form.get("initial_inventory", "").splitlines()
-                if initial_inventory:
-                    inventory_service.add_items(oid, initial_inventory)
+                initial_inventory_text = form.get("initial_inventory", "").strip()
+                if initial_inventory_text:
+                    inventory_service.add_items(
+                        oid, inventory_service.parse_bulk_inventory(initial_inventory_text),
+                    )
                 db.audit_event("offer.created", details={"offer_id": oid, "name": name})
 
             elif action == "update_offer":
                 oid = int(form["offer_id"])
                 name = form["name"].strip()[:120]
                 price = None if form.get("price", "") == "" else float(form["price"])
-                stock = max(0, int(form["stock"]))
                 note = form.get("note", "")[:250]
                 db.update_offer(
                     oid,
                     price=price,
-                    stock=stock,
                     name=name,
                     note=note,
                     description=form.get("description", "").strip()[:1000],
@@ -447,7 +446,7 @@ class handler(BaseHTTPRequestHandler):
 
             elif action == "add_inventory":
                 oid = int(form["offer_id"])
-                items = form.get("items", "").splitlines()
+                items = inventory_service.parse_bulk_inventory(form.get("items", ""))
                 count = inventory_service.add_items(oid, items)
                 db.audit_event("inventory.added", details={"offer_id": oid, "count": count})
 

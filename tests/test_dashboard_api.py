@@ -144,7 +144,8 @@ def test_dashboard_contains_product_sync_fields():
     assert "Catalogue par defaut" in page
     assert 'name="description"' in page
     assert 'name="initial_inventory"' in page
-    assert "Contenu de commande initial" in page
+    assert "Comptes initiaux — stock automatique (# = 1 produit)" in page
+    assert 'name="stock"' not in page
     assert "Livraison :" in page
 
 

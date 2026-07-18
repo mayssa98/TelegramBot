@@ -11,7 +11,7 @@ import os
 import re
 from datetime import UTC, datetime
 
-from telegram import InputFile, Update
+from telegram import ForceReply, InputFile, LinkPreviewOptions, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -37,10 +37,6 @@ from app.domain import (
 )
 from config import (
     ADMIN_ID,
-    AFFILIATE_DAILY_CAP,
-    AFFILIATE_FIVE_REWARD_CENTS,
-    AFFILIATE_QUALIFY_CENTS,
-    AFFILIATE_TEN_REWARD_CENTS,
     BINANCE_PAY_ID,
     BOT_TOKEN,
     CURRENCY,
@@ -48,7 +44,7 @@ from config import (
     SHOP_NAME,
     configuration_issues,
 )
-from i18n import status_label, t
+from i18n import TRANSLATIONS, status_label, t
 
 _handlers = [logging.StreamHandler()]
 if not os.environ.get("VERCEL"):
@@ -64,7 +60,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # états utilisateurs en mémoire (clé = user_id)
-# "await_txid": order_id  |  "adm_setprice": offer_id  |  "adm_setstock": offer_id
+# "await_txid": order_id  |  "adm_setprice": offer_id
 #  "adm_deliver": order_id
 class PendingStates:
     """Small mapping facade backed by MongoDB for serverless-safe conversations."""
@@ -82,6 +78,21 @@ class PendingStates:
 
 
 PENDING = PendingStates()
+AUTO_PAYMENT_TASKS = {}
+AUTO_PAYMENT_MESSAGES = {}
+
+
+async def stop_auto_payment_check(order_id):
+    """Cancel a running scanner and remove its waiting message."""
+    task = AUTO_PAYMENT_TASKS.pop(int(order_id), None)
+    if task and not task.done():
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    scanner = AUTO_PAYMENT_MESSAGES.pop(int(order_id), None)
+    if scanner:
+        with contextlib.suppress(Exception):
+            await scanner.delete()
 
 
 async def block_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -110,6 +121,26 @@ async def block_maintenance_purchases(update: Update, context: ContextTypes.DEFA
 
 def lang_of(user_id):
     return db.get_user_lang(user_id) or DEFAULT_LANG
+
+
+async def notify_successful_referral(context, referrer_id):
+    """Notify the referrer after every valid referral and each 10-member reward."""
+    stats = affiliate_service.get_stats(referrer_id)
+    lang = lang_of(referrer_id)
+    if stats["referrals"] and stats["referrals"] % 10 == 0:
+        key = "affiliate_ten_success"
+        values = {"balance": f"{stats['balance_cents'] / 100:.2f}"}
+    else:
+        key = "affiliate_referral_success"
+        values = {
+            "progress": stats["progress"],
+            "remaining": stats["remaining"],
+        }
+    await context.bot.send_message(
+        referrer_id,
+        premium_customer_text(lang, key, **values),
+        parse_mode=ParseMode.HTML,
+    )
 
 
 def offer_detail_fields(description: str, note: str) -> dict[str, str]:
@@ -147,12 +178,130 @@ def offer_detail_fields(description: str, note: str) -> dict[str, str]:
     return fields
 
 
+def compact_offer_text(offer: dict, lang: str) -> str:
+    """Build the compact public offer card used with or without an image."""
+    labels = {
+        "fr": ("PRIX", "STOCK", "VENDUS", "GARANTIE", "DESCRIPTION"),
+        "en": ("PRICE", "STOCK", "SOLD", "WARRANTY", "DESCRIPTION"),
+        "ar": ("السعر", "المخزون", "تم البيع", "الضمان", "الوصف"),
+    }
+    price_label, stock_label, sold_label, warranty_label, description_label = labels.get(lang, labels["en"])
+    description = (offer.get("description") or "").strip() or "—"
+    warranty = offer.get("note") or "—"
+    price = "—" if offer.get("price") is None else f"{offer['price']:.2f}"
+    sold = db.offer_sold_count(offer["id"])
+    return (
+        f"🏷 <b>{html.escape(offer['name'])}</b>\n\n"
+        f"💎 <b>{price_label}:</b> {price} {html.escape(offer.get('currency', CURRENCY))}\n"
+        f"📦 <b>{stock_label}:</b> {int(offer.get('stock') or 0)}\n"
+        f"🛒 <b>{sold_label}:</b> {sold}\n"
+        f"🛡 <b>{warranty_label}:</b> {html.escape(warranty[:120])}\n\n"
+        f"💬 <b>{description_label}:</b>\n{render_stored_rich_text(description, parse_legacy_markdown=False)}"
+    )
+
+
+def admin_text_preview(key: str) -> str:
+    current = db.get_text_override(key, "en") or TRANSLATIONS.get(key, {}).get("en") or "—"
+    return (
+        f"✏️ <b>{html.escape(key)}</b>\n\n"
+        f"🇬🇧 <b>English</b>\n<pre>{html.escape(current[:2700])}</pre>\n"
+        "Choose the text to edit or use the arrows:"
+    )
+
+
+def custom_emojis_from_message(message):
+    """Extract every unique Premium custom emoji from text or caption entities."""
+    found = []
+    entities = list(getattr(message, "entities", None) or [])
+    entities.extend(getattr(message, "caption_entities", None) or [])
+    for entity in entities:
+        entity_type = getattr(getattr(entity, "type", None), "value", getattr(entity, "type", None))
+        emoji_id = getattr(entity, "custom_emoji_id", None)
+        if str(entity_type) == "custom_emoji" and emoji_id and emoji_id not in found:
+            found.append(emoji_id)
+    return found
+
+
 def custom_emoji_from_message(message):
-    """Extract the first animated custom emoji selected by the admin in Telegram."""
-    for entity in getattr(message, "entities", None) or []:
-        if str(entity.type) == "custom_emoji" and entity.custom_emoji_id:
-            return entity.custom_emoji_id
-    return ""
+    """Return the first Premium emoji, the only one Telegram allows as a button icon."""
+    emojis = custom_emojis_from_message(message)
+    return emojis[0] if emojis else ""
+
+
+def text_without_custom_emojis(message):
+    """Remove Premium emoji placeholders using Telegram's UTF-16 entity offsets."""
+    value = (getattr(message, "text", None) or getattr(message, "caption", None) or "")
+    entities = list(getattr(message, "entities", None) or [])
+    entities.extend(getattr(message, "caption_entities", None) or [])
+    encoded = bytearray(value.encode("utf-16-le"))
+    ranges = []
+    for entity in entities:
+        entity_type = getattr(getattr(entity, "type", None), "value", getattr(entity, "type", None))
+        if str(entity_type) == "custom_emoji":
+            ranges.append((int(entity.offset) * 2, (int(entity.offset) + int(entity.length)) * 2))
+    for start, end in sorted(ranges, reverse=True):
+        del encoded[start:end]
+    return encoded.decode("utf-16-le").strip()
+
+
+def text_with_custom_emoji_tokens(message):
+    """Preserve every Premium emoji ID and its exact UTF-16 text position."""
+    value = (getattr(message, "text", None) or getattr(message, "caption", None) or "")
+    entities = list(
+        (getattr(message, "entities", None) if getattr(message, "text", None) else
+         getattr(message, "caption_entities", None)) or []
+    )
+    encoded = bytearray(value.encode("utf-16-le"))
+    replacements = []
+    for entity in entities:
+        entity_type = getattr(getattr(entity, "type", None), "value", getattr(entity, "type", None))
+        emoji_id = getattr(entity, "custom_emoji_id", None)
+        if str(entity_type) != "custom_emoji" or not emoji_id:
+            continue
+        start = int(entity.offset) * 2
+        end = (int(entity.offset) + int(entity.length)) * 2
+        fallback = bytes(encoded[start:end]).decode("utf-16-le")
+        token = f"[[TGEMOJI:{emoji_id}:{fallback.encode('utf-8').hex()}]]"
+        replacements.append((start, end, token.encode("utf-16-le")))
+    for start, end, token in sorted(replacements, reverse=True):
+        encoded[start:end] = token
+    return encoded.decode("utf-16-le").strip()
+
+
+def rich_text_from_message(message):
+    """Capture Telegram's exact entity-aware HTML from an admin message."""
+    html_value = (
+        getattr(message, "text_html", None)
+        or getattr(message, "caption_html", None)
+    )
+    if html_value:
+        return f"[[HTML]]{html_value}"
+    return text_with_custom_emoji_tokens(message)
+
+
+def render_stored_rich_text(value, *, parse_legacy_markdown=True):
+    """Render trusted admin HTML or legacy Markdown/token text as Telegram HTML."""
+    raw_value = str(value or "")
+    if raw_value.startswith("[[HTML]]"):
+        return raw_value.removeprefix("[[HTML]]")
+    rendered = html.escape(raw_value)
+    if parse_legacy_markdown:
+        rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
+        rendered = re.sub(r"\*([^*]+)\*", r"<b>\1</b>", rendered)
+        rendered = re.sub(r"_([^_]+)_", r"<i>\1</i>", rendered)
+
+    def render_custom_emoji(match):
+        emoji_id, fallback_hex = match.groups()
+        with contextlib.suppress(ValueError, UnicodeDecodeError):
+            fallback = bytes.fromhex(fallback_hex).decode("utf-8")
+            return f'<tg-emoji emoji-id="{emoji_id}">{html.escape(fallback)}</tg-emoji>'
+        return ""
+
+    return re.sub(
+        r"\[\[TGEMOJI:([0-9A-Za-z_-]+):([0-9a-fA-F]+)\]\]",
+        render_custom_emoji,
+        rendered,
+    )
 
 
 # ---------------- /start ----------------
@@ -162,7 +311,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_new and context.args and context.args[0].startswith("ref_"):
         try:
             referrer_id = int(context.args[0][4:])
-            affiliate_service.register_referral_link(u.id, referrer_id)
+            accepted = affiliate_service.register_referral_link(u.id, referrer_id)
+            if accepted:
+                with contextlib.suppress(Exception):
+                    await notify_successful_referral(context, referrer_id)
         except (ValueError, TypeError):
             pass
     lang = db.get_user_lang(u.id)
@@ -286,7 +438,7 @@ async def show_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = t(
         lang, "profile_card", name=name, username=username, telegram_id=uid,
         wallet=f"{wallet:.2f}", invites=stats["referrals"],
-        qualified=stats["qualified_referrals"], total_buy=f"{account['total_paid']:.2f}",
+        qualified=stats["valid_referrals"], total_buy=f"{account['total_paid']:.2f}",
         level=level.title(), discount=loyalty["discount_percent"], expires=expires,
     )
     await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML,
@@ -303,12 +455,7 @@ async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     earned = stats["earned_cents"] / 100
     message = t(
         lang, "affiliate_title", earned=f"{earned:.2f}", balance=f"{balance:.2f}",
-        referrals=stats["referrals"], rewarded=stats["qualified_referrals"],
-        pending=stats["pending_referrals"],
-        five_reward=f"{AFFILIATE_FIVE_REWARD_CENTS / 100:.2f}",
-        ten_reward=f"{AFFILIATE_TEN_REWARD_CENTS / 100:.2f}",
-        qualify=f"{AFFILIATE_QUALIFY_CENTS / 100:.2f}",
-        today=stats["qualified_today"], daily_cap=AFFILIATE_DAILY_CAP,
+        referrals=stats["referrals"], progress=stats["progress"],
         link=link,
     )
     share_text = {
@@ -326,6 +473,9 @@ async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cb_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     lang = q.data.split(":")[1]
+    if lang != "en":
+        await q.answer("English is the only available language.", show_alert=True)
+        return
     db.set_user_lang(q.from_user.id, lang)
     await q.answer()
     await q.edit_message_text(
@@ -349,18 +499,25 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     blocking_states = {
         "await_txid",
         "await_topup_txid",
+        "await_quantity",
         "adm_setprice",
-        "adm_setstock",
         "adm_svcname",
         "adm_svcemoji",
         "adm_offname",
         "adm_offemoji",
         "adm_offnote",
         "adm_offdesc",
-        "adm_offinstructions",
         "adm_offdelay",
         "adm_addsvc",
         "adm_addoff",
+        "adm_addoff_image",
+        "adm_addoff_name",
+        "adm_addoff_warranty",
+        "adm_addoff_description",
+        "adm_addoff_price",
+        "adm_offimage",
+        "adm_text_override",
+        "adm_btn_add",
         "adm_inventory",
         "adm_deliver",
     }
@@ -500,10 +657,12 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         svc = db.get_service(sid)
         offers = db.list_offers(sid)
         if not offers:
-            await q.edit_message_text(t(lang, "no_offers"),
-                                      reply_markup=kb.services_keyboard(lang))
+            await show_callback_screen(
+                q, t(lang, "no_offers"), reply_markup=kb.services_keyboard(lang),
+            )
             return
-        await q.edit_message_text(
+        await show_callback_screen(
+            q,
             t(lang, "service_title", emoji=svc["emoji"], name=svc["name"]),
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=kb.offers_keyboard(lang, sid),
@@ -513,16 +672,27 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
         svc = db.get_service(off["service_id"])
-        price = t(lang, "price_tbd") if off["price"] is None else f"{off['price']:.2f}"
-        note = off["note"] if off["note"] else ""
-        description = off.get("description") or ""
-        delivery = off.get("delivery_delay") or ""
-        fields = offer_detail_fields(description, note)
-        detail_text = t(lang, "offer_detail", emoji=svc["emoji"], service=svc["name"],
-                        offer=off["name"], price=price, cur=off.get("currency", CURRENCY),
-                        stock=off["stock"], note=fields["note"], description=fields["description"],
-                        delivery=delivery or "Instantane apres confirmation",
-                        duration=fields["duration"], mail=fields["mail"], access=fields["access"])
+        detail_text = compact_offer_text(off, lang)
+        photo_file_id = off.get("photo_file_id")
+        if photo_file_id:
+            if len(detail_text) <= 900:
+                await q.message.reply_photo(
+                    photo=photo_file_id,
+                    caption=detail_text,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=kb.offer_detail_keyboard(lang, off),
+                )
+            else:
+                await q.message.reply_photo(photo=photo_file_id)
+                await q.message.reply_text(
+                    detail_text,
+                    parse_mode=ParseMode.HTML,
+                    link_preview_options=LinkPreviewOptions(is_disabled=True),
+                    reply_markup=kb.offer_detail_keyboard(lang, off),
+                )
+            with contextlib.suppress(Exception):
+                await q.message.delete()
+            return
         is_chatgpt_offer = "chat" in off["name"].lower() and "gpt" in off["name"].lower()
         if is_chatgpt_offer:
             base_url = os.environ.get("HP_PUBLIC_BASE_URL", "https://telegram-bot-mayssa98s-projects.vercel.app").rstrip("/")
@@ -533,7 +703,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await q.message.reply_text(
                 detail_text,
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
                 reply_markup=kb.offer_detail_keyboard(lang, off),
             )
             with contextlib.suppress(Exception):
@@ -541,7 +712,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         await q.edit_message_text(
             detail_text,
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.HTML,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
             reply_markup=kb.offer_detail_keyboard(lang, off),
         )
         return
@@ -560,10 +732,14 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("cancel_buy:"):
         order_id = int(data.split(":", 1)[1])
+        await stop_auto_payment_check(order_id)
         order = db.get_order(order_id)
         if order and order.get("user_id") == uid:
             order_service.cancel_order(order_id, reason="Cancelled by customer")
-        await q.edit_message_text(t(lang, "cancelled_msg"))
+        await q.edit_message_text(
+            premium_customer_text(lang, "cancelled_msg"),
+            parse_mode=ParseMode.HTML,
+        )
         return
     if data.startswith("copy_binance_id:"):
         oid = int(data.split(":")[1])
@@ -585,21 +761,48 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("paid:"):
         oid = int(data.split(":")[1])
+        await stop_auto_payment_check(oid)
         PENDING[uid] = ("await_txid", oid)
         await q.message.reply_text(t(lang, "ask_txid", oid=oid),
                                    parse_mode=ParseMode.MARKDOWN)
+        return
+    if data.startswith("verify_auto:"):
+        oid = int(data.split(":", 1)[1])
+        order = db.get_order(oid)
+        if not order or order.get("user_id") != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        await stop_auto_payment_check(oid)
+        task = context.application.create_task(
+            run_auto_payment_check(q.message, context, lang, oid, uid),
+            update=update,
+            name=f"payment-scan-{oid}",
+        )
+        AUTO_PAYMENT_TASKS[oid] = task
+
+        def cleanup_scan(completed_task, order_id=oid):
+            if AUTO_PAYMENT_TASKS.get(order_id) is completed_task:
+                AUTO_PAYMENT_TASKS.pop(order_id, None)
+                AUTO_PAYMENT_MESSAGES.pop(order_id, None)
+
+        task.add_done_callback(cleanup_scan)
         return
     if data.startswith("continue_pay:"):
         oid = int(data.split(":")[1])
         order = db.get_order(oid)
         if order and order["user_id"] == uid:
-            text = t(lang, "order_created", oid=oid, service=order["service_name"],
-                     offer=order["offer_name"], qty=order["qty"],
-                     total=f"{order['total_price']:.2f}", cur=CURRENCY,
-                     binance_id=BINANCE_PAY_ID)
-            payment_message = await q.message.reply_text(text, parse_mode=ParseMode.MARKDOWN,
-                                                         reply_markup=kb.paid_keyboard(lang, oid))
-            await run_auto_payment_check(payment_message, context, lang, oid, uid)
+            text = premium_customer_text(
+                lang, "order_created", oid=oid, service=order["service_name"],
+                offer=order["offer_name"], qty=order["qty"],
+                total=f"{order['total_price']:.2f}", cur=CURRENCY,
+                binance_id=BINANCE_PAY_ID, telegram_id=uid,
+            )
+            await q.message.reply_text(
+                text, parse_mode=ParseMode.HTML,
+                reply_markup=kb.paid_keyboard(
+                    lang, oid, BINANCE_PAY_ID, f"{order['total_price']:.2f}", CURRENCY,
+                ),
+            )
         return
     if data.startswith("delivery_ok:"):
         order_id = int(data.split(":")[1])
@@ -662,19 +865,15 @@ async def handle_quantity_selection(update, context, lang):
     q = update.callback_query
     parts = q.data.split(":")
     offer_id = int(parts[1])
-    page = int(parts[2]) if len(parts) > 2 and parts[0] == "qty_page" else 0
     offer = db.get_offer(offer_id)
 
     if not offer or offer["price"] is None or offer["stock"] <= 0:
         await q.answer(t(lang, "out_of_stock"), show_alert=True)
         return
 
-    if offer["stock"] == 1:
-        q.data = f"buyq:{offer_id}:1"
-        await handle_buy_confirmation(update, context, lang)
-        return
-
-    await q.edit_message_text(
+    PENDING[q.from_user.id] = ("await_quantity", offer_id)
+    send_quantity_prompt = q.message.reply_text if q.message.photo else q.edit_message_text
+    await send_quantity_prompt(
         t(
             lang,
             "choose_quantity",
@@ -684,8 +883,34 @@ async def handle_quantity_selection(update, context, lang):
             cur=CURRENCY,
         ),
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=kb.quantity_keyboard(lang, offer, page=page),
     )
+
+
+async def send_buy_confirmation(send, uid, offer_id, qty, lang):
+    """Validate a typed quantity and display the purchase summary."""
+    offer = db.get_offer(offer_id)
+    if not offer or offer["price"] is None or offer["stock"] <= 0 or qty < 1 or qty > offer["stock"]:
+        return False
+    svc = db.get_service(offer["service_id"])
+    gross_total = round(offer["price"] * qty, 2)
+    referral_discount = loyalty_service.discount_for_order(uid, gross_total)
+    discount_line = ""
+    if referral_discount["amount"] > 0:
+        discount_line = t(
+            lang, "loyalty_discount_line",
+            level=(referral_discount["level"] or "").title(),
+            percent=referral_discount["discount_percent"],
+            amount=f"{referral_discount['amount']:.2f}", cur=CURRENCY,
+        )
+    await send(
+        t(lang, "confirm_purchase",
+          emoji=svc["emoji"] if svc else "📦", service=svc["name"] if svc else "",
+          offer=offer["name"], price=f"{offer['price']:.2f}", cur=CURRENCY, qty=qty,
+          total=f"{gross_total - referral_discount['amount']:.2f}", discount_line=discount_line),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.confirm_buy_keyboard(lang, offer_id, qty),
+    )
+    return True
 
 
 async def handle_buy_confirmation(update, context, lang):
@@ -695,49 +920,8 @@ async def handle_buy_confirmation(update, context, lang):
     parts = q.data.split(":")
     offer_id = int(parts[1])
     qty = int(parts[2]) if len(parts) > 2 else 1
-    offer = db.get_offer(offer_id)
-
-    if not offer or offer["price"] is None or offer["stock"] <= 0 or qty < 1 or qty > offer["stock"]:
+    if not await send_buy_confirmation(q.edit_message_text, uid, offer_id, qty, lang):
         await q.answer(t(lang, "out_of_stock"), show_alert=True)
-        return
-
-    existing = order_service.check_duplicate_pending_order(uid, offer_id)
-    if existing:
-        await q.edit_message_text(
-            t(lang, "duplicate_order", oid=existing["id"],
-              offer=existing["offer_name"],
-              total=f"{existing['total_price']:.2f}", cur=CURRENCY),
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.duplicate_order_keyboard(lang, existing["id"], offer_id, qty),
-        )
-        return
-
-    svc = db.get_service(offer["service_id"])
-    gross_total = round(offer["price"] * qty, 2)
-    referral_discount = loyalty_service.discount_for_order(uid, gross_total)
-    discount_line = ""
-    if referral_discount["amount"] > 0:
-        discount_line = t(
-            lang,
-            "loyalty_discount_line",
-            level=(referral_discount["level"] or "").title(),
-            percent=referral_discount["discount_percent"],
-            amount=f"{referral_discount['amount']:.2f}",
-            cur=CURRENCY,
-        )
-    await q.edit_message_text(
-        t(lang, "confirm_purchase",
-          emoji=svc["emoji"] if svc else "??",
-          service=svc["name"] if svc else "",
-          offer=offer["name"],
-          price=f"{offer['price']:.2f}",
-          cur=CURRENCY,
-          qty=qty,
-          total=f"{gross_total - referral_discount['amount']:.2f}",
-          discount_line=discount_line),
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=kb.confirm_buy_keyboard(lang, offer_id, qty),
-    )
 
 
 async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
@@ -755,6 +939,7 @@ async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
 
     try:
         order = order_service.create_order(uid, offer, qty=qty, payment_method=payment_method)
+        order_service.cancel_incomplete_orders(uid, exclude_order_id=order["id"])
     except ValueError as exc:
         await q.answer(str(exc), show_alert=True)
         return
@@ -765,13 +950,17 @@ async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
         await send_payment_result(q.message, context, lang, order["id"], result, uid)
         return
 
-    text = t(lang, "order_created", oid=order["id"], service=order["service_name"],
-             offer=order["offer_name"], qty=order["qty"],
-             total=f"{order['total_price']:.2f}", cur=CURRENCY,
-             binance_id=BINANCE_PAY_ID, telegram_id=uid)
-    await q.edit_message_text(text, parse_mode=ParseMode.MARKDOWN,
-                              reply_markup=kb.paid_keyboard(lang, order["id"]))
-    await run_auto_payment_check(q.message, context, lang, order["id"], uid)
+    text = premium_customer_text(
+        lang, "order_created", oid=order["id"], service=order["service_name"],
+        offer=order["offer_name"], qty=order["qty"],
+        total=f"{order['total_price']:.2f}", cur=CURRENCY,
+        binance_id=BINANCE_PAY_ID, telegram_id=uid,
+    )
+    await q.edit_message_text(text, parse_mode=ParseMode.HTML,
+                              reply_markup=kb.paid_keyboard(
+                                  lang, order["id"], BINANCE_PAY_ID,
+                                  f"{order['total_price']:.2f}", CURRENCY,
+                              ))
 
 
 # ---------------- Saisie en attente (txid / admin) ----------------
@@ -779,6 +968,142 @@ async def handle_pending_input(update, context, lang):
     uid = update.effective_user.id
     kind, ref = PENDING.get(uid)
     text = update.message.text.strip()
+
+    if kind == "await_quantity":
+        offer = db.get_offer(int(ref))
+        try:
+            qty = int(text)
+        except ValueError:
+            qty = 0
+        stock = int((offer or {}).get("stock") or 0)
+        if qty < 1 or qty > stock:
+            await update.message.reply_text(
+                t(lang, "quantity_invalid", stock=stock),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+        PENDING.pop(uid, None)
+        await send_buy_confirmation(update.message.reply_text, uid, int(ref), qty, lang)
+        return
+
+    if kind == "adm_text_override" and uid == ADMIN_ID:
+        saved_key = ""
+        override_icon = custom_emoji_from_message(update.message)
+        override_text = rich_text_from_message(update.message)
+        if isinstance(ref, str) and "|" in ref:
+            key, selected_lang = ref.rsplit("|", 1)
+            if key not in TRANSLATIONS or selected_lang not in {"fr", "en", "ar"}:
+                await update.message.reply_text("⚠️ Sélection de texte invalide.")
+                return
+            db.set_text_override(key, selected_lang, override_text, override_icon)
+            saved_key = key
+        else:
+            parts = [part.strip() for part in text.split("|", 2)]
+            if len(parts) != 3 or parts[1] not in {"fr", "en", "ar"} or not parts[0] or not parts[2]:
+                await update.message.reply_text("⚠️ Format : `clé | fr/en/ar | nouveau texte`", parse_mode=ParseMode.MARKDOWN)
+                return
+            db.set_text_override(parts[0], parts[1], parts[2])
+            saved_key = parts[0]
+        PENDING.pop(uid, None)
+        keys = sorted(TRANSLATIONS)
+        if saved_key in keys:
+            category = admin.text_category_for_key(saved_key)
+            await update.message.reply_text(
+                "✅ Texte enregistré immédiatement. Choisissez un autre texte à modifier :",
+                reply_markup=admin.texts_category_keyboard(category),
+            )
+        else:
+            await update.message.reply_text("✅ Texte enregistré immédiatement.", reply_markup=admin.customize_keyboard())
+        return
+
+    if kind == "adm_btn_add" and uid == ADMIN_ID:
+        parts = [part.strip() for part in text.split("|", 3)]
+        if len(parts) != 4 or not re.fullmatch(r"https?://\S+", parts[3]):
+            await update.message.reply_text(
+                "⚠️ Format : `Français | English | العربية | https://exemple.com`",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+        db.add_custom_button(*parts)
+        PENDING.pop(uid, None)
+        await update.message.reply_text("✅ Bouton ajouté au menu principal.", reply_markup=admin.buttons_editor_keyboard())
+        return
+
+    if kind == "adm_addoff_image" and uid == ADMIN_ID:
+        await update.message.reply_text("🖼 Envoyez une image (photo), pas un message texte.")
+        return
+
+    if kind == "adm_offimage" and uid == ADMIN_ID:
+        await update.message.reply_text("🖼 Envoyez la nouvelle image comme photo Telegram.")
+        return
+
+    if kind == "adm_addoff_name" and uid == ADMIN_ID:
+        clean_name = kb.clean_button_name(text)[:120]
+        if not clean_name:
+            await update.message.reply_text("⚠️ Le nom de l’offre ne peut pas être vide.")
+            return
+        data = dict(ref)
+        data["name"] = clean_name
+        PENDING[uid] = ("adm_addoff_warranty", data)
+        await update.message.reply_text(
+            "🛡 *Étape 3/5* — envoyez la garantie de l’offre (exemple : 30 jours) :",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if kind == "adm_addoff_warranty" and uid == ADMIN_ID:
+        warranty = text[:250].strip()
+        if not warranty:
+            await update.message.reply_text("⚠️ La garantie ne peut pas être vide.")
+            return
+        data = dict(ref)
+        data["warranty"] = warranty
+        PENDING[uid] = ("adm_addoff_description", data)
+        await update.message.reply_text(
+            "📝 *Étape 4/5* — envoyez la description de l’offre :",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if kind == "adm_addoff_description" and uid == ADMIN_ID:
+        description = rich_text_from_message(update.message)
+        if not description:
+            await update.message.reply_text("⚠️ La description ne peut pas être vide.")
+            return
+        data = dict(ref)
+        data["description"] = description
+        PENDING[uid] = ("adm_addoff_price", data)
+        await update.message.reply_text(
+            "💵 *Étape 5/5* — envoyez le prix unitaire en USDT (exemple : 4.99) :",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if kind == "adm_addoff_price" and uid == ADMIN_ID:
+        try:
+            price = float(text.replace(",", "."))
+            if price < 0:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text("⚠️ Prix invalide. Envoyez un nombre, par exemple : 4.99")
+            return
+        data = dict(ref)
+        offer_id = db.add_offer(
+            data["service_id"], data["name"], price, 0,
+            note=data["warranty"],
+            description=data["description"],
+            instructions="",
+            photo_file_id=data["photo_file_id"],
+        )
+        PENDING.pop(uid, None)
+        await update.message.reply_text(
+            "✅ Offre créée.\n\n"
+            "📦 Le stock sera calculé automatiquement à partir des comptes ajoutés.\n"
+            "🛒 Les ventes seront calculées automatiquement à partir des commandes confirmées.\n\n"
+            "Ajoutez maintenant les comptes pour alimenter le stock.",
+            reply_markup=admin.offer_admin_keyboard(offer_id),
+        )
+        return
 
     if kind == "await_txid":
         await process_txid(update, context, lang, ref, text)
@@ -818,33 +1143,19 @@ async def handle_pending_input(update, context, lang):
                                         reply_markup=admin.admin_panel_keyboard())
         return
 
-    # --- Admin : stock ---
-    if kind == "adm_setstock" and uid == ADMIN_ID:
-        try:
-            stock = int(text)
-            if stock < 0:
-                raise ValueError
-            db.update_offer(ref, stock=stock)
-            await update.message.reply_text(f"✅ Stock mis à jour : {stock}")
-        except ValueError:
-            await update.message.reply_text("⚠️ Valeur invalide. Envoyez un entier, ex : 25")
-            return
-        PENDING.pop(uid, None)
-        await update.message.reply_text("🛠️ *Panneau Admin*", parse_mode=ParseMode.MARKDOWN,
-                                        reply_markup=admin.admin_panel_keyboard())
-        return
-
     if uid == ADMIN_ID and kind in {
         "adm_svcname", "adm_svcemoji", "adm_offname", "adm_offemoji", "adm_offnote",
-        "adm_offdesc", "adm_offinstructions", "adm_offdelay",
+        "adm_offdesc", "adm_offdelay",
     }:
-        if kind not in {"adm_offnote", "adm_offdesc", "adm_offinstructions"} and not text:
+        if kind not in {"adm_offnote", "adm_offdesc"} and not text:
             await update.message.reply_text("⚠️ La valeur ne peut pas être vide.")
             return
         if kind == "adm_svcname":
+            service = db.get_service(ref)
+            clean_name = kb.clean_button_name(text)
             db.update_service(
                 ref,
-                name=kb.clean_button_name(text)[:80],
+                name=(clean_name[:80] or service["name"]),
                 custom_emoji_id=custom_emoji_from_message(update.message),
             )
         elif kind == "adm_svcemoji":
@@ -855,9 +1166,11 @@ async def handle_pending_input(update, context, lang):
                 custom_emoji_id=custom_emoji_id,
             )
         elif kind == "adm_offname":
+            offer = db.get_offer(ref)
+            clean_name = kb.clean_button_name(text)
             db.update_offer(
                 ref,
-                name=kb.clean_button_name(text)[:120],
+                name=(clean_name[:120] or offer["name"]),
                 custom_emoji_id=custom_emoji_from_message(update.message),
             )
         elif kind == "adm_offemoji":
@@ -865,13 +1178,7 @@ async def handle_pending_input(update, context, lang):
         elif kind == "adm_offnote":
             db.update_offer(ref, note=text[:250])
         elif kind == "adm_offdesc":
-            db.update_offer(ref, description=text[:2000])
-        elif kind == "adm_offinstructions":
-            offer = db.get_offer(ref)
-            description = offer.get("description", "")
-            kept = [line for line in description.splitlines() if not line.lower().startswith("instructions:")]
-            kept.append(f"Instructions: {text[:1000]}")
-            db.update_offer(ref, description="\n".join(kept))
+            db.update_offer(ref, description=rich_text_from_message(update.message))
         else:
             db.update_offer(ref, delivery_delay=text[:120])
         PENDING.pop(uid, None)
@@ -896,23 +1203,22 @@ async def handle_pending_input(update, context, lang):
 
     if kind == "adm_addoff" and uid == ADMIN_ID:
         parts = [p.strip() for p in text.split("|")]
-        if len(parts) < 3:
-            await update.message.reply_text("⚠️ Format : Nom | prix | stock | note optionnelle")
+        if len(parts) < 2:
+            await update.message.reply_text("⚠️ Format : Nom | prix | note optionnelle")
             return
         try:
             price = float(parts[1].replace(",", "."))
-            stock = int(parts[2])
-            if price < 0 or stock < 0:
+            if price < 0:
                 raise ValueError
         except ValueError:
-            await update.message.reply_text("⚠️ Prix ou stock invalide.")
+            await update.message.reply_text("⚠️ Prix invalide.")
             return
-        note = parts[3][:250] if len(parts) > 3 else ""
+        note = parts[2][:250] if len(parts) > 2 else ""
         db.add_offer(
             ref,
             kb.clean_button_name(parts[0])[:120],
             price,
-            stock,
+            0,
             note,
             custom_emoji_id=custom_emoji_from_message(update.message),
         )
@@ -1015,46 +1321,49 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
             if affiliate["rewarded"]:
                 await context.bot.send_message(
                     referrer_id,
-                    t(
+                    premium_customer_text(
                         ref_lang,
                         "affiliate_rewarded",
                         count=affiliate["daily_count"],
                         reward=f"{affiliate['reward_amount']:.2f}",
                     ),
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=ParseMode.HTML,
                 )
         loyalty = result.get("loyalty")
         if loyalty and loyalty.get("activated"):
             await message.reply_text(
-                t(
+                premium_customer_text(
                     lang,
                     "loyalty_activated",
                     level=loyalty["level"].title(),
                     discount=loyalty["discount_percent"],
                 ),
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
         if result["delivered_content"]:
             content = "\n\n".join(result["delivered_content"])
             paid_order = db.get_order(order_id)
             await message.reply_text(
-                t(lang, "delivery_received", oid=order_id,
+                premium_customer_text(lang, "delivery_received", oid=order_id,
                   service=paid_order["service_name"], offer=paid_order["offer_name"],
-                  content=html.escape(content)),
+                  content=content),
                 parse_mode=ParseMode.HTML,
                 reply_markup=kb.post_delivery_keyboard(lang, order_id),
             )
         else:
-            await message.reply_text(t(lang, "verify_ok", oid=order_id),
-                                     parse_mode=ParseMode.MARKDOWN)
+            await message.reply_text(premium_customer_text(lang, "verify_ok", oid=order_id),
+                                     parse_mode=ParseMode.HTML)
             await admin.notify_new_order(context, db.get_order(order_id))
     elif result["status"] == "already_paid":
-        await message.reply_text(t(lang, "already_paid", oid=order_id),
-                                 parse_mode=ParseMode.MARKDOWN)
+        await message.reply_text(premium_customer_text(lang, "already_paid", oid=order_id),
+                                 parse_mode=ParseMode.HTML)
     else:
         error_code = result.get("error_code", "unknown")
         if error_code == "too_short":
-            await message.reply_text(t(lang, "txid_too_short"))
+            await message.reply_text(
+                premium_customer_text(lang, "txid_too_short"),
+                parse_mode=ParseMode.HTML,
+            )
             PENDING[uid] = ("await_txid", order_id)
             return
         error_key = {
@@ -1064,8 +1373,8 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
             "not_found": "payment_not_found",
             "already_used": "payment_txid_used",
         }.get(error_code, "verify_failed")
-        await message.reply_text(t(lang, error_key, oid=order_id),
-                                 parse_mode=ParseMode.MARKDOWN)
+        await message.reply_text(premium_customer_text(lang, error_key, oid=order_id),
+                                 parse_mode=ParseMode.HTML)
         PENDING[uid] = ("await_txid", order_id)
 
 
@@ -1084,34 +1393,93 @@ def payment_scanner_frame(step: int, width: int = 9) -> str:
 
 async def run_auto_payment_check(message, context, lang, order_id, uid):
     scanner = await message.reply_text(
-        t(lang, "payment_scanner", frame=payment_scanner_frame(0), oid=order_id),
-        parse_mode=ParseMode.MARKDOWN,
+        premium_customer_text(lang, "payment_scanner", frame=payment_scanner_frame(0), oid=order_id),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.txid_verify_keyboard(lang, order_id),
     )
     deadline = asyncio.get_running_loop().time() + 120
     step = 0
     while asyncio.get_running_loop().time() < deadline:
+        current_order = db.get_order(order_id)
+        if not current_order or current_order.get("status") in {"cancelled", "expired", "refunded"}:
+            with contextlib.suppress(Exception):
+                await scanner.delete()
+            return
         result = await asyncio.to_thread(payment_service.auto_check_payment, order_id, uid)
         if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery", "already_paid"):
             with contextlib.suppress(Exception):
-                await scanner.edit_text(t(lang, "payment_scanner_success", oid=order_id), parse_mode=ParseMode.MARKDOWN)
+                await scanner.edit_text(
+                    premium_customer_text(lang, "payment_scanner_success", oid=order_id),
+                    parse_mode=ParseMode.HTML,
+                )
             await send_payment_result(message, context, lang, order_id, result, uid)
             return
         step += 1
         with contextlib.suppress(Exception):
             await scanner.edit_text(
-                t(lang, "payment_scanner", frame=payment_scanner_frame(step), oid=order_id),
-                parse_mode=ParseMode.MARKDOWN,
+                premium_customer_text(lang, "payment_scanner", frame=payment_scanner_frame(step), oid=order_id),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.txid_verify_keyboard(lang, order_id),
             )
         await asyncio.sleep(2)
     with contextlib.suppress(Exception):
-        await scanner.edit_text(t(lang, "payment_scanner_timeout", oid=order_id), parse_mode=ParseMode.MARKDOWN)
-    PENDING[uid] = ("await_txid", order_id)
-    await message.reply_text(t(lang, "auto_check_timeout", oid=order_id), parse_mode=ParseMode.MARKDOWN)
+        await scanner.edit_text(
+            premium_customer_text(lang, "payment_scanner_timeout", oid=order_id),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.txid_verify_keyboard(lang, order_id),
+        )
+    await message.reply_text(
+        premium_customer_text(lang, "auto_check_timeout", oid=order_id),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.txid_verify_keyboard(lang, order_id),
+    )
+    AUTO_PAYMENT_MESSAGES[order_id] = scanner
+
+
+def premium_customer_text(lang: str, key: str, **kwargs) -> str:
+    """Render selected customer texts as HTML with their Premium emoji."""
+    raw_override = db.get_text_override(key, lang)
+    if raw_override is not None and str(raw_override).strip():
+        raw_value = str(raw_override)
+        if kwargs:
+            format_kwargs = kwargs
+            if raw_value.startswith("[[HTML]]"):
+                format_kwargs = {name: html.escape(str(value)) for name, value in kwargs.items()}
+                if key == "order_created":
+                    for name in ("total", "binance_id", "telegram_id"):
+                        if name in format_kwargs:
+                            format_kwargs[name] = f"<code>{format_kwargs[name]}</code>"
+            with contextlib.suppress(KeyError, IndexError, ValueError):
+                raw_value = raw_value.format(**format_kwargs)
+    else:
+        raw_value = t(lang, key, **kwargs)
+    if key == "order_created" and not raw_value.startswith("[[HTML]]"):
+        # Keep the three payment values individually copyable in Telegram,
+        # even when the admin's customized template uses plain placeholders.
+        copyable_values = {
+            name: str(kwargs[name])
+            for name in ("total", "binance_id", "telegram_id")
+            if name in kwargs
+        }
+        if copyable_values:
+            raw_template = str(raw_override) if raw_override is not None else ""
+            for name, plain_value in copyable_values.items():
+                if f"`{{{name}}}`" not in raw_template:
+                    raw_value = raw_value.replace(plain_value, f"`{plain_value}`", 1)
+    value = render_stored_rich_text(raw_value)
+    inline_emojis = "<tg-emoji " in value
+    emoji_id = db.get_text_override_icon(key, lang)
+    if emoji_id and not inline_emojis:
+        value = f'<tg-emoji emoji-id="{html.escape(emoji_id)}">⭐</tg-emoji> {value}'
+    return value
 
 
 async def process_txid(update, context, lang, order_id, txid):
     uid = update.effective_user.id
-    await update.message.reply_text(t(lang, "verifying"))
+    await update.message.reply_text(
+        premium_customer_text(lang, "verifying"),
+        parse_mode=ParseMode.HTML,
+    )
     result = await asyncio.to_thread(
         payment_service.submit_payment, order_id, txid, uid
     )
@@ -1124,7 +1492,6 @@ async def show_my_orders(update, context, lang):
     if not orders:
         await update.effective_message.reply_text(t(lang, "no_orders"), reply_markup=kb.orders_keyboard(lang))
         return
-
     groups = order_service_groups(orders)
     await update.effective_message.reply_text(
         t(lang, "orders_choose_service"),
@@ -1132,6 +1499,32 @@ async def show_my_orders(update, context, lang):
         reply_markup=kb.orders_services_keyboard(lang, groups, len(orders)),
     )
 
+
+async def handle_pending_photo(update, context):
+    """Capture the advertising image during the guided offer creation flow."""
+    uid = update.effective_user.id
+    pending = PENDING.get(uid)
+    if uid != ADMIN_ID or not pending or pending[0] not in {"adm_addoff_image", "adm_offimage"}:
+        return
+    if pending[0] == "adm_offimage":
+        offer_id = int(pending[1])
+        db.update_offer(offer_id, photo_file_id=update.message.photo[-1].file_id)
+        PENDING.pop(uid, None)
+        await update.message.reply_text(
+            "✅ Image publicitaire mise à jour. Elle sera affichée lorsque le client ouvrira l’offre.",
+            reply_markup=admin.offer_admin_keyboard(offer_id),
+        )
+        return
+    service_id = pending[1]
+    photo_file_id = update.message.photo[-1].file_id
+    PENDING[uid] = ("adm_addoff_name", {
+        "service_id": service_id,
+        "photo_file_id": photo_file_id,
+    })
+    await update.message.reply_text(
+        "✏️ *Nouvelle offre — étape 2/6*\n\nEnvoyez le nom de l’offre :",
+        parse_mode=ParseMode.MARKDOWN,
+    )
 
 def order_service_groups(orders):
     service_emojis = {service["name"]: service.get("emoji", "📦") for service in db.list_services()}
@@ -1195,6 +1588,95 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    if data == "adm_customize":
+        await q.edit_message_text(
+            "🎛 *Personnalisation du bot*\n\nModifiez les textes, la visibilité des boutons et les liens personnalisés.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin.customize_keyboard(),
+        )
+        return
+    if data == "adm_texts":
+        await q.edit_message_text(
+            "🗂 *Textes du bot par catégorie*\n\nChoisissez la partie du bot que vous souhaitez modifier :",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin.text_categories_keyboard(),
+        )
+        return
+    if data.startswith("adm_text_cat:"):
+        category, page = data.removeprefix("adm_text_cat:").rsplit(":", 1)
+        labels = dict(admin.TEXT_CATEGORIES)
+        await q.edit_message_text(
+            f"{labels.get(category, '📝 Textes')}\n\nChoisissez un texte à modifier :",
+            reply_markup=admin.texts_category_keyboard(category, int(page)),
+        )
+        return
+    if data.startswith("adm_text_page:"):
+        page = int(data.split(":", 1)[1])
+        await q.edit_message_text(
+            t(lang_of(uid), "admin_text_editor_title"),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin.texts_editor_keyboard(page),
+        )
+        return
+    if data == "adm_text_noop":
+        return
+    if data.startswith("adm_text_key:"):
+        key = data.split(":", 1)[1]
+        await q.edit_message_text(
+            admin_text_preview(key),
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.text_languages_keyboard(key),
+        )
+        return
+    if data.startswith("adm_text_lang:"):
+        key, selected_lang = data.removeprefix("adm_text_lang:").rsplit(":", 1)
+        if selected_lang != "en":
+            await q.answer("English is the only available language.", show_alert=True)
+            return
+        current = db.get_text_override(key, selected_lang)
+        if current is None:
+            current = TRANSLATIONS.get(key, {}).get(selected_lang, "—")
+        PENDING[uid] = ("adm_text_override", f"{key}|{selected_lang}")
+        prompt = t(
+            lang_of(uid), "admin_send_new_text",
+            text_key=key, selected_lang=selected_lang, current=current,
+        )
+        await q.message.reply_text(
+            prompt[:4000],
+            reply_markup=ForceReply(
+                selective=True,
+                input_field_placeholder="Envoyez le nouveau texte…",
+            ),
+        )
+        return
+    if data == "adm_buttons":
+        await q.edit_message_text(
+            "🔘 *Gestion des boutons*\n\nCliquez sur un bouton standard pour le masquer/réactiver. Les boutons personnalisés marqués 🗑 peuvent être supprimés.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin.buttons_editor_keyboard(),
+        )
+        return
+    if data.startswith("adm_btn_toggle:"):
+        action = data.split(":", 1)[1]
+        allowed = {"catalog", "topup", "orders", "account", "affiliate", "support", "language"}
+        if action in allowed:
+            hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
+            hidden.remove(action) if action in hidden else hidden.add(action)
+            db.set_setting("hidden_home_actions", ",".join(sorted(hidden)))
+        await q.edit_message_reply_markup(reply_markup=admin.buttons_editor_keyboard())
+        return
+    if data == "adm_btn_add":
+        PENDING[uid] = ("adm_btn_add", 0)
+        await q.message.reply_text(
+            "➕ Envoyez : `Français | English | العربية | https://exemple.com`",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+    if data.startswith("adm_btn_del:"):
+        db.delete_custom_button(int(data.split(":", 1)[1]))
+        await q.edit_message_reply_markup(reply_markup=admin.buttons_editor_keyboard())
+        return
+
     if data.startswith("adm_list:"):
         status = data.split(":")[1]
         keyboard, orders = admin.orders_list_keyboard(status)
@@ -1244,10 +1726,12 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("adm_addoff:"):
         sid = int(data.split(":")[1])
-        PENDING[uid] = ("adm_addoff", sid)
+        PENDING[uid] = ("adm_addoff_image", sid)
         await q.message.reply_text(
-            "➕ Envoyez : `Nom | prix | stock | note`\nExemple : `Premium 1 mois | 4.99 | 20 | Garantie 30 jours`",
-            parse_mode=ParseMode.MARKDOWN)
+            "🖼 *Nouvelle offre — étape 1/6*\n\n"
+            "Envoyez l’image publicitaire de l’offre. Elle sera affichée aux clients.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
         return
     if data.startswith("adm_inventory:"):
         oid = int(data.split(":")[1])
@@ -1304,7 +1788,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid))
         return
-    if data.startswith(("adm_offname:", "adm_offemoji:", "adm_offnote:", "adm_offdesc:", "adm_offinstructions:", "adm_offdelay:")):
+    if data.startswith(("adm_offname:", "adm_offemoji:", "adm_offnote:", "adm_offdesc:", "adm_offdelay:")):
         action, oid = data.split(":")
         PENDING[uid] = (action, int(oid))
         prompts = {
@@ -1312,7 +1796,6 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "adm_offemoji": "🎨 Envoyez un emoji Telegram Premium animé :",
             "adm_offnote": "📝 Envoyez la nouvelle note/garantie :",
             "adm_offdesc": "📄 Envoyez la description complète :",
-            "adm_offinstructions": "📌 Envoyez les instructions destinées au client :",
             "adm_offdelay": "🚚 Envoyez le délai de livraison affiché :",
         }
         await q.message.reply_text(prompts[action])
@@ -1336,13 +1819,15 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         PENDING[uid] = ("adm_setprice", oid)
         await q.message.reply_text("💵 Envoyez le nouveau prix (ex : 1.99) :")
         return
-    if data.startswith("adm_setstock:"):
+    if data.startswith("adm_offimage:"):
         oid = int(data.split(":")[1])
-        PENDING[uid] = ("adm_setstock", oid)
-        await q.message.reply_text("📦 Envoyez le nouveau stock (entier, ex : 25) :")
+        PENDING[uid] = ("adm_offimage", oid)
+        await q.message.reply_text(
+            "🖼 *Envoyez la nouvelle image publicitaire*\n\n"
+            "Utilisez le bouton 📎 de Telegram, puis choisissez *Photo ou vidéo*.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
         return
-
-
 async def deliver_order(update, context, order_id, content):
     o = db.get_order(order_id)
     if not o:
@@ -1406,6 +1891,7 @@ def build_app():
     app.add_handler(CallbackQueryHandler(cb_lang, pattern=r"^lang:"))
     app.add_handler(CallbackQueryHandler(cb_admin, pattern=r"^adm_"))
     app.add_handler(CallbackQueryHandler(cb_navigation))  # reste
+    app.add_handler(MessageHandler(filters.PHOTO, handle_pending_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text_menu))
     app.add_error_handler(on_error)
     return app

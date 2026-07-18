@@ -50,8 +50,8 @@ DASHBOARD_PASSWORD: str = os.environ.get("HP_DASHBOARD_PASSWORD", "").strip()
 # Boutique
 # ---------------------------------------------------------------------------
 SHOP_NAME: str = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip()
-DEFAULT_LANG: str = "fr"
-SUPPORTED_LANGS: list[str] = ["fr", "en", "ar"]
+DEFAULT_LANG: str = "en"
+SUPPORTED_LANGS: list[str] = ["en"]
 CURRENCY: str = "USDT"
 
 # ---------------------------------------------------------------------------

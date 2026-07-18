@@ -42,6 +42,29 @@ def test_catalog_persists_admin_selected_custom_emoji(mock_mongodb):
     assert db.get_offer(offer_id)["custom_emoji_id"] == "offer-premium-id"
 
 
+def test_offer_persists_publicity_image_and_calculates_sales(mock_mongodb):
+    offer_id = db.add_offer(
+        service_id=1,
+        name="Premium",
+        price=4.99,
+        stock=0,
+        photo_file_id="telegram-photo-id",
+        description="Premium account",
+        instructions="Do not change the recovery email",
+    )
+    offer = db.get_offer(offer_id)
+    assert offer["photo_file_id"] == "telegram-photo-id"
+    assert offer["description"] == "Premium account"
+    assert offer["instructions"] == "Do not change the recovery email"
+
+    mock_mongodb.orders.insert_many([
+        {"id": 1001, "offer_id": offer_id, "qty": 2, "status": "delivered"},
+        {"id": 1002, "offer_id": offer_id, "qty": 1, "status": "payment_confirmed"},
+        {"id": 1003, "offer_id": offer_id, "qty": 5, "status": "cancelled"},
+    ])
+    assert db.offer_sold_count(offer_id) == 3
+
+
 def test_create_order_inactive_offer(mock_mongodb):
     """Vérifie qu'on ne peut pas commander une offre inactive."""
     db.add_service("Discord", "🎮")
@@ -88,6 +111,20 @@ def test_check_duplicate_pending_order(mock_mongodb):
     dup = order_service.check_duplicate_pending_order(12345, offer_id)
     assert dup is not None
     assert dup["id"] == 1
+
+
+def test_new_order_cancels_older_incomplete_orders(mock_mongodb):
+    db.add_service("Discord", "🎮")
+    offer_id = db.add_offer(service_id=1, name="Nitro", price=9.99, stock=5)
+    offer = db.get_offer(offer_id)
+    old_order = order_service.create_order(user_id=12345, offer=offer, qty=1)
+    new_order = order_service.create_order(user_id=12345, offer=offer, qty=2)
+
+    cancelled = order_service.cancel_incomplete_orders(12345, exclude_order_id=new_order["id"])
+
+    assert cancelled == [old_order["id"]]
+    assert db.get_order(old_order["id"])["status"] == OrderStatus.CANCELLED
+    assert db.get_order(new_order["id"])["status"] == OrderStatus.PENDING_PAYMENT
 
 
 def test_expire_order(mock_mongodb):
