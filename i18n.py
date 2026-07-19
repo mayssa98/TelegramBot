@@ -183,6 +183,11 @@ TRANSLATIONS = {
         "en": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",
         "ar": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",
     },
+    "channel_purchase_success": {
+        "fr": "🎉 *ANOTHER SUCCESSFUL PURCHASE*\n\n✅ A customer just secured:\n🛍 *{service} — {offer}*\n📦 Quantity: *{qty}*\n💎 Order value: *{total} {cur}*\n🔥 Remaining stock: *{stock} account(s)*\n\nTrusted delivery. Real products. Join the next drop before it sells out!",
+        "en": "🎉 *ANOTHER SUCCESSFUL PURCHASE*\n\n✅ A customer just secured:\n🛍 *{service} — {offer}*\n📦 Quantity: *{qty}*\n💎 Order value: *{total} {cur}*\n🔥 Remaining stock: *{stock} account(s)*\n\nTrusted delivery. Real products. Join the next drop before it sells out!",
+        "ar": "🎉 *ANOTHER SUCCESSFUL PURCHASE*\n\n✅ A customer just secured:\n🛍 *{service} — {offer}*\n📦 Quantity: *{qty}*\n💎 Order value: *{total} {cur}*\n🔥 Remaining stock: *{stock} account(s)*\n\nTrusted delivery. Real products. Join the next drop before it sells out!",
+    },
     "btn_channel_buy_now": {"fr": "🛒 Buy now", "en": "🛒 Buy now", "ar": "🛒 Buy now"},
     "catalog_title": {
         "fr": "🛍️ *CATALOGUE {shop}*\n\n🟢 Boutique opérationnelle\n⚡ Livraison rapide ou instantanée\n🛡️ Produits vérifiés et support inclus\n\nChoisissez votre univers :",

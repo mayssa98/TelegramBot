@@ -447,6 +447,22 @@ def update_order(order_id, **kwargs):
     get_conn().orders.update_one({"id": order_id}, {"$set": kwargs})
 
 
+def claim_order_channel_announcement(order_id):
+    """Atomically reserve the one public purchase announcement for an order."""
+    result = get_conn().orders.update_one(
+        {"id": int(order_id), "channel_sale_announced": {"$ne": True}},
+        {"$set": {"channel_sale_announced": True, "updated_at": int(time.time())}},
+    )
+    return result.modified_count == 1
+
+
+def release_order_channel_announcement(order_id):
+    """Allow a later retry when Telegram could not publish the announcement."""
+    get_conn().orders.update_one(
+        {"id": int(order_id)},
+        {"$set": {"channel_sale_announced": False, "updated_at": int(time.time())}},
+    )
+
 def list_orders(status=None, limit=30):
     query = {"status": status} if status else {}
     return [_public(x) for x in get_conn().orders.find(query).sort("id", DESCENDING).limit(limit)]

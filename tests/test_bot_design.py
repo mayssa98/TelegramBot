@@ -15,6 +15,7 @@ from bot import (
     AUTO_PAYMENT_MESSAGES,
     AUTO_PAYMENT_TASKS,
     announce_channel_restock,
+    announce_channel_purchase,
     PENDING,
     cb_admin,
     cb_navigation,
@@ -53,6 +54,50 @@ def test_inventory_restock_announcement_targets_channel_with_offer_deep_link(moc
     button = call["reply_markup"].inline_keyboard[0][0]
     assert button.url == f"https://t.me/blackmarketa_bot?start=offer_{offer_id}"
 
+
+def test_successful_purchase_is_announced_once_without_customer_secrets(mock_mongodb):
+    service_id = db.add_service("Chat GPT", "🤖")
+    offer_id = db.add_offer(service_id, "Premium 30 days", 5.0, 4)
+    mock_mongodb.orders.insert_one({
+        "id": 77,
+        "user_id": 987654321,
+        "offer_id": offer_id,
+        "service_name": "Chat GPT",
+        "offer_name": "Premium 30 days",
+        "qty": 2,
+        "unit_price": 5.0,
+        "gross_total": 10.0,
+        "currency": "USDT",
+        "status": "delivered",
+        "txid": "REAL_TXID_SECRET",
+        "verify_method": "binance",
+    })
+    bot_client = SimpleNamespace(username="blackmarketa_bot", send_message=AsyncMock())
+    context = SimpleNamespace(bot=bot_client)
+
+    first = asyncio.run(announce_channel_purchase(context, 77))
+    second = asyncio.run(announce_channel_purchase(context, 77))
+
+    assert first is True
+    assert second is False
+    bot_client.send_message.assert_awaited_once()
+    text = bot_client.send_message.await_args.kwargs["text"]
+    assert "SUCCESSFUL PURCHASE" in text
+    assert "Premium 30 days" in text
+    assert "987654321" not in text
+    assert "REAL_TXID_SECRET" not in text
+
+
+def test_admin_test_purchase_is_never_announced(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 78, "offer_id": 1, "status": "delivered", "verify_method": "admin_test",
+    })
+    bot_client = SimpleNamespace(username="blackmarketa_bot", send_message=AsyncMock())
+
+    sent = asyncio.run(announce_channel_purchase(SimpleNamespace(bot=bot_client), 78))
+
+    assert sent is False
+    bot_client.send_message.assert_not_awaited()
 
 def test_zero_added_inventory_does_not_announce(mock_mongodb):
     bot_client = SimpleNamespace(username="blackmarketa_bot", send_message=AsyncMock())

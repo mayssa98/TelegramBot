@@ -399,6 +399,45 @@ async def announce_channel_restock(context, offer_id, added, stock):
     return True
 
 
+async def announce_channel_purchase(context, order_id):
+    """Publish one privacy-safe success message per real confirmed order."""
+    order = db.get_order(int(order_id))
+    if not order or order.get("verify_method") == "admin_test":
+        return False
+    if str(order.get("txid") or "").startswith("TEST-PAYMENT-"):
+        return False
+    if not db.claim_order_channel_announcement(order_id):
+        return False
+    try:
+        offer = db.get_offer(order["offer_id"]) or {}
+        username = context.bot.username or (await context.bot.get_me()).username
+        qty = int(order.get("qty") or 1)
+        total = float(order.get("gross_total") or (float(order.get("unit_price") or 0) * qty))
+        await context.bot.send_message(
+            chat_id=REQUIRED_CHANNEL,
+            text=premium_customer_text(
+                DEFAULT_LANG, "channel_purchase_success",
+                service=order.get("service_name") or "BlackMarket",
+                offer=order.get("offer_name") or f"Offer #{order.get('offer_id')}",
+                qty=qty, total=f"{total:.2f}", cur=order.get("currency") or CURRENCY,
+                stock=int(offer.get("stock") or 0),
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.channel_offer_keyboard(DEFAULT_LANG, username, order["offer_id"]),
+        )
+    except Exception:
+        db.release_order_channel_announcement(order_id)
+        raise
+    return True
+
+
+async def safely_announce_channel_purchase(context, order_id):
+    try:
+        return await announce_channel_purchase(context, order_id)
+    except Exception:
+        log.exception("Channel purchase announcement failed for order %s", order_id)
+        return False
+
 async def show_deep_link_offer(update, lang, offer_id):
     """Open one channel-advertised offer safely in the customer's private chat."""
     offer = db.get_offer(int(offer_id))
@@ -1489,6 +1528,7 @@ async def handle_pending_input(update, context, lang):
 # ---------------- Traitement de paiement ----------------
 async def send_payment_result(message, context, lang, order_id, result, uid):
     if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery"):
+        await safely_announce_channel_purchase(context, order_id)
         affiliate = result.get("affiliate")
         if affiliate:
             referrer_id = affiliate["referrer_id"]
@@ -1530,6 +1570,7 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                                      parse_mode=ParseMode.HTML)
             await admin.notify_new_order(context, db.get_order(order_id))
     elif result["status"] == "already_paid":
+        await safely_announce_channel_purchase(context, order_id)
         await message.reply_text(premium_customer_text(lang, "already_paid", oid=order_id),
                                  parse_mode=ParseMode.HTML)
     else:
