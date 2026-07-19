@@ -1,4 +1,5 @@
 """Constructeurs de claviers inline et reply."""
+import html
 import re
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
@@ -8,10 +9,35 @@ from config import ADMIN_ID
 from i18n import t
 
 
+BUTTON_TEXT_KEYS = {
+    "menu_catalog", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
+    "menu_support", "menu_lang", "menu_admin", "btn_main_menu", "support_no_order",
+    "topup_claim", "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
+    "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
+    "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
+    "btn_pay_binance", "btn_cancel", "btn_continue_payment", "btn_new_order",
+    "affiliate_copy", "affiliate_share", "orders_all",
+}
+
+
+def is_button_text_key(key):
+    return key in BUTTON_TEXT_KEYS or str(key).startswith("support_category_")
+
+
+def clean_translated_button_text(value):
+    """Remove stored rich-text markup; Premium emoji is rendered by the icon field."""
+    value = str(value or "").removeprefix("[[HTML]]")
+    value = re.sub(r"<tg-emoji\b[^>]*>.*?</tg-emoji>", "", value, flags=re.IGNORECASE | re.DOTALL)
+    value = re.sub(r"\[\[TGEMOJI:[^\]]+\]\]", "", value)
+    value = re.sub(r"<[^>]+>", "", value)
+    return " ".join(html.unescape(value).split())[:64]
+
+
 def translated_button(lang, key, *, callback_data=None, url=None, style=None, switch_inline_query=None):
     """Build an inline button with the admin-selected Premium emoji icon."""
     return InlineKeyboardButton(
-        t(lang, key), callback_data=callback_data, url=url, style=style,
+        clean_translated_button_text(t(lang, key)),
+        callback_data=callback_data, url=url, style=style,
         switch_inline_query=switch_inline_query,
         icon_custom_emoji_id=db.get_text_override_icon(key, lang) or None,
     )

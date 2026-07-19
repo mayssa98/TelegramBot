@@ -1003,7 +1003,11 @@ async def handle_pending_input(update, context, lang):
     if kind == "adm_text_override" and uid == ADMIN_ID:
         saved_key = ""
         override_icon = custom_emoji_from_message(update.message)
-        override_text = rich_text_from_message(update.message)
+        override_text = (
+            text_without_custom_emojis(update.message)
+            if kb.is_button_text_key(ref.rsplit("|", 1)[0] if isinstance(ref, str) and "|" in ref else "")
+            else rich_text_from_message(update.message)
+        )
         if isinstance(ref, str) and "|" in ref:
             key, selected_lang = ref.rsplit("|", 1)
             if key not in TRANSLATIONS or selected_lang not in {"fr", "en", "ar"}:

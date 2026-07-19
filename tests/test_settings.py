@@ -45,6 +45,20 @@ def test_admin_can_override_any_translated_text(mock_mongodb):
     assert button.icon_custom_emoji_id == "premium-menu-icon"
 
 
+def test_premium_emoji_button_uses_icon_without_html_in_label(mock_mongodb):
+    db.set_text_override(
+        "menu_catalog",
+        "en",
+        '[[HTML]]<tg-emoji emoji-id="premium-catalog">🛍️</tg-emoji> <b>Premium Catalog</b>',
+        "premium-catalog",
+    )
+
+    button = keyboards.home_keyboard("en", 42).inline_keyboard[0][0]
+
+    assert button.text == "Premium Catalog"
+    assert button.icon_custom_emoji_id == "premium-catalog"
+    assert keyboards.is_button_text_key("menu_catalog")
+
 def test_custom_url_buttons_can_be_added_and_deleted(mock_mongodb):
     button_id = db.add_custom_button("Site", "Website", "الموقع", "https://example.com")
     assert db.list_custom_buttons()[0]["label_en"] == "Website"
