@@ -1,4 +1,4 @@
-"""Tests for seven-day customer loyalty levels."""
+"""Tests for three-day customer loyalty levels."""
 
 import time
 
@@ -18,7 +18,7 @@ def _paid_order(conn, order_id, user_id, amount):
 
 def test_levels_match_spend_thresholds(mock_mongodb):
     expected = [
-        (30, "bronze", 8),
+        (25, "bronze", 8),
         (70, "silver", 16),
         (200, "platinum", 24),
         (500, "diamond", 30),
@@ -29,8 +29,23 @@ def test_levels_match_spend_thresholds(mock_mongodb):
         benefit = loyalty_service.record_purchase(user_id)
         assert benefit["level"] == level
         assert benefit["discount_percent"] == discount
-        assert benefit["expires_at"] > int(time.time()) + 6 * 86400
+        assert benefit["expires_at"] > int(time.time()) + 2 * 86400
+        assert benefit["expires_at"] <= int(time.time()) + 3 * 86400
 
+
+def test_existing_seven_day_level_is_capped_to_three_days(mock_mongodb):
+    now = int(time.time())
+    mock_mongodb.loyalty.insert_one({
+        "user_id": 77,
+        "level": "bronze",
+        "discount_percent": 8,
+        "activated_at": now - 86400,
+        "expires_at": now + 6 * 86400,
+    })
+
+    benefit = loyalty_service.active_benefit(77)
+
+    assert benefit["expires_at"] <= now + 2 * 86400
 
 def test_active_level_discount_is_applied_to_new_order(mock_mongodb):
     db.add_service("AI", "🤖")

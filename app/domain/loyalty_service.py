@@ -1,4 +1,4 @@
-"""Seven-day customer levels based on cumulative confirmed purchases."""
+"""Three-day customer levels based on cumulative confirmed purchases."""
 from __future__ import annotations
 
 import time
@@ -8,12 +8,12 @@ import database as db
 from app.constants import PAID_STATUSES
 
 LEVELS = (
-    ("bronze", 30.0, 8),
+    ("bronze", 25.0, 8),
     ("silver", 70.0, 16),
     ("platinum", 200.0, 24),
     ("diamond", 500.0, 30),
 )
-LEVEL_DURATION_SECONDS = 7 * 24 * 60 * 60
+LEVEL_DURATION_SECONDS = 3 * 24 * 60 * 60
 
 
 def total_spend(user_id: int) -> float:
@@ -45,7 +45,13 @@ def record_purchase(user_id: int) -> dict[str, Any]:
     name, threshold, discount = level
     existing = conn.loyalty.find_one({"user_id": user_id}) or {}
     now = int(time.time())
-    if existing.get("level") != name or existing.get("expires_at", 0) <= now:
+    existing_expires_at = int(existing.get("expires_at", 0) or 0)
+    if existing.get("activated_at"):
+        existing_expires_at = min(
+            existing_expires_at,
+            int(existing["activated_at"]) + LEVEL_DURATION_SECONDS,
+        )
+    if existing.get("level") != name or existing_expires_at <= now:
         activated = True
         expires_at = now + LEVEL_DURATION_SECONDS
         conn.loyalty.update_one(
@@ -62,7 +68,7 @@ def record_purchase(user_id: int) -> dict[str, Any]:
         )
     else:
         activated = False
-        expires_at = existing["expires_at"]
+        expires_at = existing_expires_at
         conn.loyalty.update_one({"user_id": user_id}, {"$set": {"total_spend": spend}})
     return {
         "level": name,
@@ -75,12 +81,15 @@ def record_purchase(user_id: int) -> dict[str, Any]:
 
 def active_benefit(user_id: int) -> dict[str, Any]:
     row = db.get_conn().loyalty.find_one({"user_id": user_id}) or {}
-    if row.get("expires_at", 0) <= int(time.time()):
+    expires_at = int(row.get("expires_at", 0) or 0)
+    if row.get("activated_at"):
+        expires_at = min(expires_at, int(row["activated_at"]) + LEVEL_DURATION_SECONDS)
+    if expires_at <= int(time.time()):
         return {"level": None, "discount_percent": 0, "expires_at": None}
     return {
         "level": row.get("level"),
         "discount_percent": int(row.get("discount_percent", 0)),
-        "expires_at": row.get("expires_at"),
+        "expires_at": expires_at,
     }
 
 
