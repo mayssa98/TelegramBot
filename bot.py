@@ -1556,7 +1556,6 @@ async def handle_pending_input(update, context, lang):
                 announcement_line = f"\n⚠️ Channel announcement failed: {html.escape(str(exc))[:200]}"
         await update.message.reply_text(
             f"✅ {added} compte(s) ajouté(s) et chiffré(s).\n"
-            f"♻️ Doublons ignorés : {len(items) - added}\n"
             f"📦 Stock affiché synchronisé : {stock}"
             f"{announcement_line}",
             reply_markup=admin.offer_admin_keyboard(ref),
