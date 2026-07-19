@@ -59,6 +59,20 @@ def test_premium_emoji_button_uses_icon_without_html_in_label(mock_mongodb):
     assert button.icon_custom_emoji_id == "premium-catalog"
     assert keyboards.is_button_text_key("menu_catalog")
 
+def test_channel_buy_button_accepts_exact_premium_emoji(mock_mongodb):
+    db.set_text_override(
+        "btn_channel_buy_now",
+        "en",
+        '[[HTML]]<tg-emoji emoji-id="premium-buy">🛒</tg-emoji> <b>Get it now</b>',
+        "premium-buy",
+    )
+
+    button = keyboards.channel_offer_keyboard("en", "blackmarketa_bot", 9).inline_keyboard[0][0]
+
+    assert button.text == "Get it now"
+    assert button.icon_custom_emoji_id == "premium-buy"
+    assert button.url.endswith("?start=offer_9")
+
 def test_custom_url_buttons_can_be_added_and_deleted(mock_mongodb):
     button_id = db.add_custom_button("Site", "Website", "الموقع", "https://example.com")
     assert db.list_custom_buttons()[0]["label_en"] == "Website"

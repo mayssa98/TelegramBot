@@ -244,6 +244,19 @@ def test_multiple_premium_emojis_keep_exact_ids_and_positions():
     assert rendered.count("<tg-emoji") == 2
 
 
+def test_channel_message_accepts_exact_premium_emojis_and_rich_text(mock_mongodb):
+    db.set_text_override(
+        "channel_purchase_success",
+        "en",
+        '[[HTML]]<tg-emoji emoji-id="premium-sale">🎉</tg-emoji> <b>New sale</b>',
+        "premium-sale",
+    )
+
+    rendered = premium_customer_text("en", "channel_purchase_success")
+
+    assert '<tg-emoji emoji-id="premium-sale">🎉</tg-emoji>' in rendered
+    assert "<b>New sale</b>" in rendered
+
 def test_offer_description_preserves_telegram_rich_formatting(monkeypatch):
     message = SimpleNamespace(
         text="Premium description",
