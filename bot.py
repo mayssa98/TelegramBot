@@ -806,7 +806,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(
             premium_customer_text(lang, "catalog_request_prompt"),
             parse_mode=ParseMode.HTML,
-            reply_markup=kb.home_keyboard(lang, uid),
         )
         return
     if data == "orders":
