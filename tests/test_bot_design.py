@@ -107,9 +107,13 @@ def test_zero_added_inventory_does_not_announce(mock_mongodb):
     assert sent is False
     bot_client.send_message.assert_not_awaited()
 
-def test_delivery_accounts_are_numbered_in_order():
-    assert numbered_delivery_content(["first@example.com:pass", "second@example.com:pass"]) == (
-        "#1\nfirst@example.com:pass\n\n#2\nsecond@example.com:pass"
+def test_delivery_accounts_hide_hash_delimiters_and_numbering():
+    assert numbered_delivery_content([
+        "first@example.com:pass",
+        "#second@example.com:pass",
+        "#3\nthird@example.com:pass",
+    ]) == (
+        "first@example.com:pass\n\nsecond@example.com:pass\n\nthird@example.com:pass"
     )
 
 def test_start_requires_channel_membership(monkeypatch):

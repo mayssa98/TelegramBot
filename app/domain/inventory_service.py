@@ -19,37 +19,53 @@ log = logging.getLogger(__name__)
 
 
 def parse_bulk_inventory(text: str) -> list[str]:
-    """Split account blocks delimited by lines beginning with ``#``.
+    """Split accounts on ``#`` markers without storing the marker itself.
 
-    The marker may contain an admin reference such as ``#1`` or
-    ``#Netflix-01``. It is stored with the account block and does not declare
-    the number of accounts.
+    ``#`` may be placed alone before an account or directly before its first
+    content line. Numeric labels such as ``#1`` are treated only as markers.
     """
     blocks: list[list[str]] = []
     current: list[str] | None = None
+    current_marker = "#"
     for raw_line in (text or "").splitlines():
         line = raw_line.strip()
         if not line:
             continue
         if line.startswith("#"):
-            if current:
+            if current is not None:
+                if not current:
+                    raise ValueError(f"Compte sans contenu après {current_marker}.")
                 blocks.append(current)
-            current = [line]
+            current_marker = line
+            marker_suffix = line[1:].strip()
+            current = []
+            if marker_suffix and not marker_suffix.isdigit():
+                current.append(marker_suffix)
         elif current is None:
-            raise ValueError("Chaque compte doit commencer par une ligne #.")
+            raise ValueError("Chaque compte doit commencer par #.")
         else:
             current.append(line)
-    if current:
+    if current is not None:
+        if not current:
+            raise ValueError(f"Compte sans contenu après {current_marker}.")
         blocks.append(current)
     if not blocks:
         raise ValueError("Aucun compte détecté. Commencez chaque compte par #.")
     if len(blocks) > 5000:
         raise ValueError("Un import est limité à 5000 comptes.")
-    incomplete = [block[0] for block in blocks if len(block) < 2]
-    if incomplete:
-        raise ValueError(f"Compte sans contenu après {incomplete[0]}.")
     return ["\n".join(block) for block in blocks]
 
+
+def clean_delivery_value(value: str) -> str:
+    """Remove a legacy leading import marker before content reaches a client."""
+    value = str(value or "").strip()
+    if not value.startswith("#"):
+        return value
+    first_line, separator, remainder = value.partition("\n")
+    marker_suffix = first_line[1:].strip()
+    if marker_suffix and not marker_suffix.isdigit():
+        return marker_suffix + (separator + remainder if separator else "")
+    return remainder.strip()
 
 def sync_offer_stock(offer_id: int) -> int:
     conn = db.get_conn()
@@ -238,7 +254,7 @@ def deliver_for_order(order_id: int) -> list[str] | None:
     for item in reserved_items:
         try:
             decrypted = cipher.decrypt(item["payload"].encode()).decode()
-            values.append(decrypted)
+            values.append(clean_delivery_value(decrypted))
         except Exception as exc:
             log.error("Échec déchiffrement inventaire %s: %s", item.get("_id"), exc)
             conn.orders.update_one(
@@ -335,7 +351,7 @@ def delivered_content(order_id: int) -> list[str]:
     cipher = db._fernet()
     values: list[str] = []
     for item in items:
-        values.append(cipher.decrypt(item["payload"].encode()).decode())
+        values.append(clean_delivery_value(cipher.decrypt(item["payload"].encode()).decode()))
     db.audit_event("order.delivery_accessed", details={"order_id": order_id, "items_count": len(values)})
     return values
 

@@ -143,12 +143,20 @@ async def block_maintenance_purchases(update: Update, context: ContextTypes.DEFA
 
 
 def numbered_delivery_content(items):
-    """Format delivered inventory items as a clearly numbered account list."""
-    return "\n\n".join(
-        f"#{index}\n{str(item).strip()}"
-        for index, item in enumerate(items or [], start=1)
-        if str(item).strip()
-    )
+    """Join delivered accounts without exposing import delimiters or numbering."""
+    cleaned = []
+    for item in items or []:
+        value = str(item).strip()
+        if value.startswith("#"):
+            first_line, separator, remainder = value.partition("\n")
+            marker_suffix = first_line[1:].strip()
+            if marker_suffix and not marker_suffix.isdigit():
+                value = marker_suffix + (separator + remainder if separator else "")
+            else:
+                value = remainder.strip()
+        if value:
+            cleaned.append(value)
+    return "\n\n".join(cleaned)
 
 def lang_of(user_id):
     return db.get_user_lang(user_id) or DEFAULT_LANG
@@ -1955,15 +1963,15 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats = db.inventory_stats(oid)
         await q.message.reply_text(
             "🔐 *Import massif sécurisé*\n\n"
-            "Chaque ligne commençant par `#` ouvre un nouveau compte.\n"
+            "Placez `#` au début de chaque nouveau compte. Le séparateur `#` sert uniquement au calcul du stock et ne sera jamais livré au client.\n"
             "Toutes les lignes suivantes appartiennent à ce compte jusqu'au prochain `#`.\n\n"
             "Exemple :\n"
-            "`#1`\n"
-            "`Email: client1@example.com`\n"
+            "`#Email: client1@example.com`\n"
+
             "`Password: secret1`\n"
             "`Instructions: profil A`\n\n"
-            "`#2`\n"
-            "`Email: client2@example.com`\n"
+            "`#Email: client2@example.com`\n"
+
             "`Password: secret2`\n\n"
             f"Actuellement disponibles : {stats['available']}",
             parse_mode=ParseMode.MARKDOWN,

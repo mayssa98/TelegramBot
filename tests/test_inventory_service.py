@@ -13,15 +13,32 @@ def test_bulk_inventory_parser_uses_hash_as_account_delimiter():
         "#2\nEmail: two@example.com\nPassword: pass2"
     )
     assert items == [
-        "#1\nEmail: one@example.com\nPassword: pass1",
-        "#2\nEmail: two@example.com\nPassword: pass2",
+        "Email: one@example.com\nPassword: pass1",
+        "Email: two@example.com\nPassword: pass2",
     ]
 
+
+def test_hash_attached_to_first_account_line_is_removed():
+    items = inventory_service.parse_bulk_inventory(
+        "#first@example.com|password1\nRecovery: code1\n"
+        "#second@example.com|password2\nRecovery: code2"
+    )
+
+    assert items == [
+        "first@example.com|password1\nRecovery: code1",
+        "second@example.com|password2\nRecovery: code2",
+    ]
+    assert all(not item.startswith("#") for item in items)
+
+def test_legacy_delivery_markers_are_removed():
+    assert inventory_service.clean_delivery_value("#legacy@example.com|pass") == "legacy@example.com|pass"
+    assert inventory_service.clean_delivery_value("#12\nlegacy@example.com|pass") == "legacy@example.com|pass"
+    assert inventory_service.clean_delivery_value("clean@example.com|pass") == "clean@example.com|pass"
 
 def test_bulk_inventory_parser_rejects_content_before_first_marker():
     import pytest
 
-    with pytest.raises(ValueError, match="commencer par une ligne #"):
+    with pytest.raises(ValueError, match="commencer par #"):
         inventory_service.parse_bulk_inventory("Email: one@example.com\n#2\nEmail: two@example.com")
 
 
