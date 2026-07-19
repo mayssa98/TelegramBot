@@ -14,6 +14,7 @@ from app.domain import affiliate_service
 from bot import (
     AUTO_PAYMENT_MESSAGES,
     AUTO_PAYMENT_TASKS,
+    announce_channel_restock,
     PENDING,
     cb_admin,
     cb_navigation,
@@ -35,6 +36,31 @@ from bot import (
 )
 from i18n import t
 
+
+def test_inventory_restock_announcement_targets_channel_with_offer_deep_link(mock_mongodb):
+    service_id = db.add_service("Chat GPT", "🤖")
+    offer_id = db.add_offer(service_id, "Premium 30 days", 5.0, 3)
+    bot_client = SimpleNamespace(username="blackmarketa_bot", send_message=AsyncMock())
+
+    sent = asyncio.run(announce_channel_restock(SimpleNamespace(bot=bot_client), offer_id, 3, 3))
+
+    assert sent is True
+    bot_client.send_message.assert_awaited_once()
+    call = bot_client.send_message.await_args.kwargs
+    assert call["chat_id"] == "@blackmarketBotChannel"
+    assert "Premium 30 days" in call["text"]
+    assert "3 account" in call["text"]
+    button = call["reply_markup"].inline_keyboard[0][0]
+    assert button.url == f"https://t.me/blackmarketa_bot?start=offer_{offer_id}"
+
+
+def test_zero_added_inventory_does_not_announce(mock_mongodb):
+    bot_client = SimpleNamespace(username="blackmarketa_bot", send_message=AsyncMock())
+
+    sent = asyncio.run(announce_channel_restock(SimpleNamespace(bot=bot_client), 99, 0, 4))
+
+    assert sent is False
+    bot_client.send_message.assert_not_awaited()
 
 def test_delivery_accounts_are_numbered_in_order():
     assert numbered_delivery_content(["first@example.com:pass", "second@example.com:pass"]) == (

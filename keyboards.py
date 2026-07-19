@@ -16,7 +16,7 @@ BUTTON_TEXT_KEYS = {
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_cancel", "btn_continue_payment", "btn_new_order",
-    "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_verify_join",
+    "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_verify_join", "btn_channel_buy_now",
 }
 
 
@@ -93,6 +93,13 @@ def lang_keyboard():
         InlineKeyboardButton("🇬🇧 English", callback_data="lang:en"),
     ]])
 
+
+def channel_offer_keyboard(lang, bot_username, offer_id):
+    """Open a restocked offer privately from a public channel post."""
+    deep_link = f"https://t.me/{str(bot_username).lstrip('@')}?start=offer_{int(offer_id)}"
+    return InlineKeyboardMarkup([[
+        translated_button(lang, "btn_channel_buy_now", url=deep_link, style="success"),
+    ]])
 
 def channel_join_keyboard(lang):
     """Require channel membership before unlocking the customer menu."""

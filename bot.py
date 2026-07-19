@@ -374,6 +374,59 @@ async def send_channel_member_welcome(send, context, user_id, lang):
     )
 
 
+async def announce_channel_restock(context, offer_id, added, stock):
+    """Publish a customizable channel post after real inventory is added."""
+    if int(added or 0) <= 0:
+        return False
+    offer = db.get_offer(int(offer_id))
+    if not offer or not offer.get("active", 1):
+        return False
+    service = db.get_service(offer["service_id"]) or {}
+    username = context.bot.username or (await context.bot.get_me()).username
+    price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f}"
+    await context.bot.send_message(
+        chat_id=REQUIRED_CHANNEL,
+        text=premium_customer_text(
+            DEFAULT_LANG, "channel_stock_announcement",
+            emoji=service.get("emoji") or "📦",
+            service=service.get("name") or "BlackMarket",
+            offer=offer.get("name") or f"Offer #{offer_id}",
+            price=price, cur=CURRENCY, stock=int(stock or 0), added=int(added),
+        ),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.channel_offer_keyboard(DEFAULT_LANG, username, offer_id),
+    )
+    return True
+
+
+async def show_deep_link_offer(update, lang, offer_id):
+    """Open one channel-advertised offer safely in the customer's private chat."""
+    offer = db.get_offer(int(offer_id))
+    if not offer or int(offer.get("stock") or 0) <= 0:
+        await update.message.reply_text(
+            premium_customer_text(lang, "out_of_stock"), parse_mode=ParseMode.HTML,
+        )
+        return
+    detail_text = compact_offer_text(offer, lang)
+    markup = kb.offer_detail_keyboard(lang, offer)
+    if offer.get("photo_file_id"):
+        if len(detail_text) <= 900:
+            await update.message.reply_photo(
+                photo=offer["photo_file_id"], caption=detail_text,
+                parse_mode=ParseMode.HTML, reply_markup=markup,
+            )
+        else:
+            await update.message.reply_photo(photo=offer["photo_file_id"])
+            await update.message.reply_text(
+                detail_text, parse_mode=ParseMode.HTML,
+                link_preview_options=LinkPreviewOptions(is_disabled=True), reply_markup=markup,
+            )
+        return
+    await update.message.reply_text(
+        detail_text, parse_mode=ParseMode.HTML,
+        link_preview_options=LinkPreviewOptions(is_disabled=True), reply_markup=markup,
+    )
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
     is_new = db.upsert_user(u.id, u.username or "", u.first_name or "")
@@ -402,6 +455,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_new:
         await send_channel_member_welcome(update.message.reply_text, context, u.id, lang)
+    elif context.args and context.args[0].startswith("offer_"):
+        try:
+            offer_id = int(context.args[0].split("_", 1)[1])
+        except (ValueError, IndexError):
+            await show_catalog(update, context, lang)
+        else:
+            await show_deep_link_offer(update, lang, offer_id)
     elif context.args and context.args[0] == "catalog":
         await show_catalog(update, context, lang)
     elif context.args and context.args[0] == "orders":
@@ -1340,10 +1400,20 @@ async def handle_pending_input(update, context, lang):
             return
         PENDING.pop(uid, None)
         stock = inventory_service.sync_offer_stock(ref)
+        announcement_line = ""
+        if added:
+            try:
+                sent = await announce_channel_restock(context, ref, added, stock)
+                if sent:
+                    announcement_line = "\n📣 Channel announcement published."
+            except Exception as exc:
+                log.exception("Channel restock announcement failed for offer %s", ref)
+                announcement_line = f"\n⚠️ Channel announcement failed: {html.escape(str(exc))[:200]}"
         await update.message.reply_text(
             f"✅ {added} compte(s) ajouté(s) et chiffré(s).\n"
             f"♻️ Doublons ignorés : {len(items) - added}\n"
-            f"📦 Stock affiché synchronisé : {stock}",
+            f"📦 Stock affiché synchronisé : {stock}"
+            f"{announcement_line}",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
         return

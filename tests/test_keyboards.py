@@ -248,18 +248,15 @@ def test_admin_text_browser_exposes_every_translation_key():
     from i18n import TRANSLATIONS
 
     callbacks = []
-    page = 0
-    while True:
-        keyboard = admin.texts_editor_keyboard(page)
-        page_callbacks = [
+    page_size = 8
+    total_pages = max(1, (len(TRANSLATIONS) + page_size - 1) // page_size)
+    for page in range(total_pages):
+        keyboard = admin.texts_editor_keyboard(page, page_size=page_size)
+        callbacks.extend(
             button.callback_data
             for row in keyboard.inline_keyboard
             for button in row
             if button.callback_data and button.callback_data.startswith("adm_text_key:")
-        ]
-        callbacks.extend(page_callbacks)
-        if len(page_callbacks) < 8:
-            break
-        page += 1
+        )
     assert {value.split(":", 1)[1] for value in callbacks} == set(TRANSLATIONS)
     assert "adm_text_key:order_created" in callbacks
