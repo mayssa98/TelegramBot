@@ -23,6 +23,7 @@ from bot import (
     text_with_custom_emoji_tokens,
     order_service_groups,
     orders_text_export,
+    numbered_delivery_content,
     notify_successful_referral,
     payment_scanner_frame,
     premium_customer_text,
@@ -32,6 +33,11 @@ from bot import (
 )
 from i18n import t
 
+
+def test_delivery_accounts_are_numbered_in_order():
+    assert numbered_delivery_content(["first@example.com:pass", "second@example.com:pass"]) == (
+        "#1\nfirst@example.com:pass\n\n#2\nsecond@example.com:pass"
+    )
 
 def test_main_menu_is_compact_and_actions_match_labels():
     keyboard = kb.main_menu_keyboard("fr", user_id=42)

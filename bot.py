@@ -119,6 +119,14 @@ async def block_maintenance_purchases(update: Update, context: ContextTypes.DEFA
 
 
 
+def numbered_delivery_content(items):
+    """Format delivered inventory items as a clearly numbered account list."""
+    return "\n\n".join(
+        f"#{index}\n{str(item).strip()}"
+        for index, item in enumerate(items or [], start=1)
+        if str(item).strip()
+    )
+
 def lang_of(user_id):
     return db.get_user_lang(user_id) or DEFAULT_LANG
 
@@ -1341,7 +1349,7 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                 parse_mode=ParseMode.HTML,
             )
         if result["delivered_content"]:
-            content = "\n\n".join(result["delivered_content"])
+            content = numbered_delivery_content(result["delivered_content"])
             paid_order = db.get_order(order_id)
             await message.reply_text(
                 premium_customer_text(lang, "delivery_received", oid=order_id,
