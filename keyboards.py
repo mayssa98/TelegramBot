@@ -310,15 +310,10 @@ def duplicate_order_keyboard(lang, existing_order_id, offer_id, qty=1):
 
 
 def post_delivery_keyboard(lang, order_id):
-    """Clavier après livraison : confirmer ou signaler un problème."""
-    return InlineKeyboardMarkup([
-        [translated_button(lang, "btn_delivery_ok", callback_data=f"delivery_ok:{order_id}")],
-        [translated_button(lang, "btn_delivery_problem", callback_data=f"delivery_problem:{order_id}")],
-        [
-            InlineKeyboardButton("⭐ Avis", callback_data=f"rate:{order_id}"),
-            translated_button(lang, "menu_catalog", callback_data="catalog"),
-        ],
-    ])
+    """Clavier minimal affiché après la livraison."""
+    return InlineKeyboardMarkup([[
+        translated_button(lang, "menu_catalog", callback_data="catalog"),
+    ]])
 
 
 def rating_keyboard(order_id):
