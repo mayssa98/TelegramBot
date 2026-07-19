@@ -23,6 +23,7 @@ from bot import (
     compact_offer_text,
     custom_emoji_from_message,
     custom_emojis_from_message,
+    handle_pending_input,
     text_without_custom_emojis,
     text_with_custom_emoji_tokens,
     order_service_groups,
@@ -696,3 +697,66 @@ def test_orders_export_contains_summary_without_delivery_secret():
     assert "ChatGPT" in content
     assert "18.00 USDT" in content
     assert "SECRET-CREDENTIAL" not in content
+
+
+def test_catalog_request_button_supports_admin_premium_emoji(mock_mongodb):
+    db.set_text_override(
+        "catalog_request_button", "en", "Request a product", "premium-catalog-request"
+    )
+
+    keyboard = kb.services_keyboard("en")
+    button = next(
+        button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data == "catalog_request"
+    )
+
+    assert button.text == "Request a product"
+    assert button.icon_custom_emoji_id == "premium-catalog-request"
+
+
+def test_catalog_request_button_prompts_for_customer_need(monkeypatch, mock_mongodb):
+    message = SimpleNamespace(reply_text=AsyncMock())
+    query = SimpleNamespace(
+        data="catalog_request",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+    )
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace()))
+
+    assert PENDING.get(42) == ("catalog_request", 0)
+    message.reply_text.assert_awaited_once()
+    assert "Tell us what you need" in message.reply_text.await_args.args[0]
+    PENDING.pop(42, None)
+
+
+def test_catalog_request_is_saved_and_sent_to_admin(monkeypatch, mock_mongodb):
+    create_ticket = Mock(return_value={"id": 17})
+    monkeypatch.setattr("bot.support_service.create_ticket", create_ticket)
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+    message = SimpleNamespace(
+        text="I need Microsoft 365 for one year",
+        text_html=None,
+        caption_html=None,
+        entities=[],
+        reply_text=AsyncMock(),
+    )
+    user = SimpleNamespace(id=42, full_name="Test Customer", username="buyer")
+    update = SimpleNamespace(effective_user=user, message=message)
+    PENDING[42] = ("catalog_request", 0)
+
+    asyncio.run(handle_pending_input(update, SimpleNamespace(bot=bot_client), "en"))
+
+    create_ticket.assert_called_once_with(
+        42, "I need Microsoft 365 for one year", category="catalog_request"
+    )
+    bot_client.send_message.assert_awaited_once()
+    admin_message = bot_client.send_message.await_args.args[1]
+    assert "New catalog request" in admin_message
+    assert "Microsoft 365" in admin_message
+    assert PENDING.get(42) is None
+    assert "Request sent" in message.reply_text.await_args.args[0]

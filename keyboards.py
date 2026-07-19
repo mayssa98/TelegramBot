@@ -12,6 +12,7 @@ from i18n import t
 BUTTON_TEXT_KEYS = {
     "menu_catalog", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
     "menu_support", "menu_lang", "menu_admin", "btn_main_menu", "support_no_order",
+    "catalog_request_button",
     "topup_claim", "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
@@ -217,6 +218,9 @@ def services_keyboard(lang):
         if row:
             buttons.append(row)
 
+    buttons.append([
+        translated_button(lang, "catalog_request_button", callback_data="catalog_request"),
+    ])
     buttons.append([
         translated_button(lang, "btn_refresh_short", callback_data="catalog"),
         translated_button(lang, "btn_main_menu_short", callback_data="home"),

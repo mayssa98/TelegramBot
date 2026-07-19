@@ -194,6 +194,26 @@ TRANSLATIONS = {
         "en": "🛍️ *{shop} CATALOG*\n\n🟢 Store operational\n⚡ Fast or instant delivery\n🛡️ Verified products with support\n\nChoose your category:",
         "ar": "🛍️ *كتالوج {shop}*\n\n🟢 المتجر يعمل\n⚡ تسليم سريع أو فوري\n🛡️ منتجات موثوقة مع الدعم\n\nاختر الفئة:",
     },
+    "catalog_request_button": {
+        "fr": "🔎 Can't find what you need?",
+        "en": "🔎 Can't find what you need?",
+        "ar": "🔎 Can't find what you need?",
+    },
+    "catalog_request_prompt": {
+        "fr": "✍️ *Tell us what you need*\n\nSend the product or service name and any useful details. Our team will review your request.",
+        "en": "✍️ *Tell us what you need*\n\nSend the product or service name and any useful details. Our team will review your request.",
+        "ar": "✍️ *Tell us what you need*\n\nSend the product or service name and any useful details. Our team will review your request.",
+    },
+    "catalog_request_sent": {
+        "fr": "✅ *Request sent!*\n\nOur team received your request and will contact you when possible.",
+        "en": "✅ *Request sent!*\n\nOur team received your request and will contact you when possible.",
+        "ar": "✅ *Request sent!*\n\nOur team received your request and will contact you when possible.",
+    },
+    "catalog_request_admin": {
+        "fr": "🔎 *New catalog request*\n\n👤 Client: {user}\n🆔 Telegram ID: `{user_id}`\n\n📦 *Requested product/service:*\n{request}",
+        "en": "🔎 *New catalog request*\n\n👤 Client: {user}\n🆔 Telegram ID: `{user_id}`\n\n📦 *Requested product/service:*\n{request}",
+        "ar": "🔎 *New catalog request*\n\n👤 Client: {user}\n🆔 Telegram ID: `{user_id}`\n\n📦 *Requested product/service:*\n{request}",
+    },
     "service_title": {
         "fr": "{emoji} *Choisissez l'offre {name} que vous souhaitez acheter :*",
         "en": "{emoji} *Choose the {name} plan you want to purchase:*",

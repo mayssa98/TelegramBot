@@ -107,7 +107,7 @@ def test_services_keyboard_uses_total_stock_color(monkeypatch):
     keyboard = kb.services_keyboard("fr")
     labels = [
         button.text
-        for row in keyboard.inline_keyboard[:-1]
+        for row in keyboard.inline_keyboard[:-2]
         for button in row
     ]
 

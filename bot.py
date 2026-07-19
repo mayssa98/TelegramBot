@@ -688,6 +688,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_txid",
         "await_topup_txid",
         "await_quantity",
+        "catalog_request",
         "adm_setprice",
         "adm_svcname",
         "adm_svcemoji",
@@ -798,6 +799,14 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             q,
             t(lang, "catalog_title", shop=SHOP_NAME),
             reply_markup=kb.services_keyboard(lang),
+        )
+        return
+    if data == "catalog_request":
+        PENDING[uid] = ("catalog_request", 0)
+        await q.message.reply_text(
+            premium_customer_text(lang, "catalog_request_prompt"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.home_keyboard(lang, uid),
         )
         return
     if data == "orders":
@@ -1197,6 +1206,36 @@ async def handle_pending_input(update, context, lang):
         await send_buy_confirmation(update.message.reply_text, uid, int(ref), qty, lang)
         return
 
+    if kind == "catalog_request":
+        request_text = rich_text_from_message(update.message).strip()
+        if not request_text:
+            await update.message.reply_text(
+                premium_customer_text(lang, "catalog_request_prompt"),
+                parse_mode=ParseMode.HTML,
+            )
+            return
+        ticket = support_service.create_ticket(uid, request_text, category="catalog_request")
+        PENDING.pop(uid, None)
+        user = update.effective_user
+        display_name = getattr(user, "full_name", None) or getattr(user, "username", None) or str(uid)
+        await context.bot.send_message(
+            ADMIN_ID,
+            premium_customer_text(
+                lang,
+                "catalog_request_admin",
+                user=display_name,
+                user_id=uid,
+                request=update.message.text[:2000],
+            ),
+            parse_mode=ParseMode.HTML,
+        )
+        await update.message.reply_text(
+            premium_customer_text(lang, "catalog_request_sent"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.home_keyboard(lang, uid),
+        )
+        log.info("Catalog request ticket %s created by user %s", ticket["id"], uid)
+        return
     if kind == "adm_text_override" and uid == ADMIN_ID:
         saved_key = ""
         override_icon = custom_emoji_from_message(update.message)
