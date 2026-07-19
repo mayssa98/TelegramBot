@@ -5,12 +5,10 @@ du contenu sensible.
 """
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 
 from pymongo import ReturnDocument
-from pymongo.errors import DuplicateKeyError
 
 import database as db
 from app.constants import InventoryStatus, OrderStatus
@@ -82,11 +80,7 @@ def sync_offer_stock(offer_id: int) -> int:
 # ---------------------------------------------------------------------------
 
 def add_items(offer_id: int, items: list[str]) -> int:
-    """Ajoute des éléments d'inventaire chiffrés pour une offre.
-
-    Déduplique par empreinte. Met à jour le stock de l'offre.
-    Renvoie le nombre d'éléments effectivement ajoutés.
-    """
+    """Add every non-empty imported account, including identical accounts."""
     conn = db.get_conn()
     cipher = db._fernet()
     added = 0
@@ -94,33 +88,26 @@ def add_items(offer_id: int, items: list[str]) -> int:
     for value in (x.strip() for x in items):
         if not value:
             continue
-        fingerprint = hashlib.sha256(f"{offer_id}:{value}".encode()).hexdigest()
-        masked = mask_content(value)
-        try:
-            conn.inventory.insert_one({
-                "id": db._next_id("inventory"),
-                "offer_id": offer_id,
-                "payload": cipher.encrypt(value.encode()).decode(),
-                "fingerprint": fingerprint,
-                "masked_preview": masked,
-                "status": InventoryStatus.AVAILABLE,
-                "reserved_order_id": None,
-                "delivered_order_id": None,
-                "created_at": int(time.time()),
-                "reserved_at": None,
-                "delivered_at": None,
-            })
-            added += 1
-        except DuplicateKeyError:
-            log.info("Élément d'inventaire dupliqué ignoré pour l'offre %d", offer_id)
+        conn.inventory.insert_one({
+            "id": db._next_id("inventory"),
+            "offer_id": offer_id,
+            "payload": cipher.encrypt(value.encode()).decode(),
+            "masked_preview": mask_content(value),
+            "status": InventoryStatus.AVAILABLE,
+            "reserved_order_id": None,
+            "delivered_order_id": None,
+            "created_at": int(time.time()),
+            "reserved_at": None,
+            "delivered_at": None,
+        })
+        added += 1
 
     if added:
         sync_offer_stock(offer_id)
         db.audit_event("inventory.added", details={"offer_id": offer_id, "count": added})
-        log.info("%d éléments ajoutés à l'offre %d", added, offer_id)
+        log.info("%d elements added to offer %d", added, offer_id)
 
     return added
-
 
 # ---------------------------------------------------------------------------
 # Réservation atomique

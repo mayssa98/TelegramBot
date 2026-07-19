@@ -57,13 +57,17 @@ def test_add_inventory_items(mock_mongodb):
     items = ["netflix1:pass123", "netflix2:pass456", "   ", "netflix1:pass123"]  # Contient un doublon et du vide
     added = inventory_service.add_items(offer_id, items)
 
-    assert added == 2
+    assert added == 3
     offer = db.get_offer(offer_id)
-    assert offer["stock"] == 2
+    assert offer["stock"] == 3
 
     # Vérifier que les contenus sont bien chiffrés en base et masqués
     db_items = list(mock_mongodb.inventory.find({"offer_id": offer_id}))
-    assert len(db_items) == 2
+    assert len(db_items) == 3
+    decrypted = [db._fernet().decrypt(item["payload"].encode()).decode() for item in db_items]
+    assert decrypted.count("netflix1:pass123") == 2
+    assert all("fingerprint" not in item for item in db_items)
+    assert "fingerprint_1" not in mock_mongodb.inventory.index_information()
     for item in db_items:
         assert isinstance(item["id"], int)
         assert item["status"] == InventoryStatus.AVAILABLE

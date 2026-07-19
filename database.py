@@ -14,7 +14,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def get_conn():
@@ -77,7 +77,9 @@ def init_db():
     db.inventory.create_index([("offer_id", ASCENDING), ("status", ASCENDING)])
     _backfill_inventory_ids(db)
     db.inventory.create_index("id", unique=True, sparse=True)
-    db.inventory.create_index("fingerprint", unique=True)
+    fingerprint_index = db.inventory.index_information().get("fingerprint_1")
+    if fingerprint_index:
+        db.inventory.drop_index("fingerprint_1")
     db.inventory.create_index("reserved_order_id")
     db.processed_updates.create_index("created_at", expireAfterSeconds=604800)
     db.audit_events.create_index("created_at")
@@ -624,23 +626,23 @@ def _fernet():
 
 
 def add_inventory_items(offer_id, items):
-    import hashlib
+    """Legacy importer that stores every non-empty account, including duplicates."""
     db = get_conn()
     cipher = _fernet()
     added = 0
     for value in (x.strip() for x in items):
         if not value:
             continue
-        fingerprint = hashlib.sha256(f"{offer_id}:{value}".encode()).hexdigest()
-        try:
-            db.inventory.insert_one({"offer_id": offer_id, "payload": cipher.encrypt(value.encode()).decode(), "fingerprint": fingerprint, "status": "available", "created_at": int(time.time())})
-            added += 1
-        except DuplicateKeyError:
-            pass
+        db.inventory.insert_one({
+            "offer_id": offer_id,
+            "payload": cipher.encrypt(value.encode()).decode(),
+            "status": "available",
+            "created_at": int(time.time()),
+        })
+        added += 1
     if added:
         db.offers.update_one({"id": offer_id}, {"$inc": {"stock": added}})
     return added
-
 
 def inventory_stats(offer_id):
     db = get_conn()
