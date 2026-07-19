@@ -294,6 +294,21 @@ def test_channel_message_accepts_exact_premium_emojis_and_rich_text(mock_mongodb
     assert '<tg-emoji emoji-id="premium-sale">🎉</tg-emoji>' in rendered
     assert "<b>New sale</b>" in rendered
 
+def test_premium_channel_html_also_renders_admin_markdown_markers(mock_mongodb):
+    db.set_text_override(
+        "channel_stock_announcement",
+        "en",
+        '[[HTML]]<tg-emoji emoji-id="premium-new">🆕</tg-emoji> *NEW STOCK* — _limited_',
+        "premium-new",
+    )
+
+    rendered = premium_customer_text("en", "channel_stock_announcement")
+
+    assert '<tg-emoji emoji-id="premium-new">🆕</tg-emoji>' in rendered
+    assert "<b>NEW STOCK</b>" in rendered
+    assert "<i>limited</i>" in rendered
+    assert "*NEW STOCK*" not in rendered
+
 def test_offer_description_preserves_telegram_rich_formatting(monkeypatch):
     message = SimpleNamespace(
         text="Premium description",

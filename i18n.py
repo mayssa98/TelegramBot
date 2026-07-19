@@ -192,7 +192,8 @@ TRANSLATIONS = {
         "fr": "🎉 *AFFILIATE REWARD UNLOCKED!*\n\n🏆 A community member reached *{count} valid referrals*\n💰 *{reward} USDT* was added instantly to their wallet\n\n🔥 Share your referral link, grow the community and unlock your own rewards!",
         "en": "🎉 *AFFILIATE REWARD UNLOCKED!*\n\n🏆 A community member reached *{count} valid referrals*\n💰 *{reward} USDT* was added instantly to their wallet\n\n🔥 Share your referral link, grow the community and unlock your own rewards!",
         "ar": "🎉 *AFFILIATE REWARD UNLOCKED!*\n\n🏆 A community member reached *{count} valid referrals*\n💰 *{reward} USDT* was added instantly to their wallet\n\n🔥 Share your referral link, grow the community and unlock your own rewards!",
-    },    "channel_stock_announcement": {
+    },
+    "channel_stock_announcement": {
         "fr": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",
         "en": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",
         "ar": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",

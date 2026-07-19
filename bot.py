@@ -353,7 +353,12 @@ def render_stored_rich_text(value, *, parse_legacy_markdown=True):
     """Render trusted admin HTML or legacy Markdown/token text as Telegram HTML."""
     raw_value = str(value or "")
     if raw_value.startswith("[[HTML]]"):
-        return raw_value.removeprefix("[[HTML]]")
+        rendered = raw_value.removeprefix("[[HTML]]")
+        if parse_legacy_markdown:
+            rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
+            rendered = re.sub(r"\*([^*]+)\*", r"<b>\1</b>", rendered)
+            rendered = re.sub(r"_([^_]+)_", r"<i>\1</i>", rendered)
+        return rendered
     rendered = html.escape(raw_value)
     if parse_legacy_markdown:
         rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
