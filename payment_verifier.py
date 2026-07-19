@@ -107,6 +107,40 @@ def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
         return {"status": "failed", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
 
 
+def verify_incoming_transfer_by_memo(user_id, minimum_amount=1, created_at=None, used_txids=None):
+    """Find a recent incoming transfer using the optional Telegram-ID memo."""
+    if not BINANCE_API_KEY or not BINANCE_API_SECRET:
+        return {"status": "failed", "code": "not_configured", "reason": "Automatic verification is not configured"}
+    created_at = int(created_at or time.time())
+    start_ms = (created_at * 1000) - 30_000
+    used_txids = {str(item).strip() for item in (used_txids or []) if item}
+    try:
+        minimum = Decimal(str(minimum_amount))
+        for transaction in _fetch_pay_transactions(start_ms):
+            txid = str(transaction.get("transactionId", "")).strip()
+            if not txid or txid in used_txids:
+                continue
+            transaction_ms = _transaction_time_ms(transaction)
+            if transaction_ms is not None and transaction_ms < start_ms:
+                continue
+            amount = Decimal(str(transaction.get("amount", "0")))
+            asset = str(transaction.get("currency", "")).upper()
+            if amount < minimum or asset != PAY_CURRENCY:
+                continue
+            if _transaction_memo(transaction) != str(user_id):
+                continue
+            return {
+                "status": "confirmed",
+                "code": "confirmed",
+                "txid": txid,
+                "amount": float(amount),
+                "currency": asset,
+                "reason": "Incoming transfer confirmed by Telegram-ID memo",
+            }
+        return {"status": "failed", "code": "not_found", "reason": "No recent transfer with this memo was detected"}
+    except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
+        return {"status": "failed", "code": "temporary_error", "reason": f"Binance API unavailable: {exc}"}
+
 def _transaction_time_ms(transaction):
     for key in ("transactionTime", "createTime", "time", "insertTime", "timestamp"):
         value = transaction.get(key)

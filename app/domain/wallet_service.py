@@ -8,7 +8,7 @@ from typing import Any
 from pymongo.errors import DuplicateKeyError
 
 import database as db
-from payment_verifier import verify_incoming_transfer
+from payment_verifier import verify_incoming_transfer, verify_incoming_transfer_by_memo
 
 
 def balance_cents(user_id: int) -> int:
@@ -49,6 +49,48 @@ def claim_transfer(user_id: int, txid: str) -> dict[str, Any]:
     db.audit_event("wallet.topup_confirmed", actor_id=user_id, details={"txid": txid, "amount_cents": amount_cents})
     return {"status": "confirmed", "amount": amount_cents / 100, "balance": balance_cents(user_id) / 100}
 
+
+def claim_transfer_by_memo(user_id: int, created_at: int) -> dict[str, Any]:
+    """Credit a recent transfer identified by the customer Telegram-ID memo."""
+    conn = db.get_conn()
+    used_txids = conn.wallet_topups.distinct("txid")
+    verification = verify_incoming_transfer_by_memo(
+        user_id,
+        minimum_amount=1,
+        created_at=created_at,
+        used_txids=used_txids,
+    )
+    if verification["status"] != "confirmed":
+        return verification
+    txid = verification["txid"]
+    amount_cents = round(float(verification["amount"]) * 100)
+    try:
+        conn.wallet_topups.insert_one({
+            "txid": txid,
+            "user_id": user_id,
+            "amount_cents": amount_cents,
+            "currency": verification["currency"],
+            "verification_method": "memo",
+            "created_at": int(time.time()),
+        })
+    except DuplicateKeyError:
+        return {"status": "failed", "code": "already_used", "message": "This transfer was already credited."}
+    conn.wallets.update_one(
+        {"user_id": user_id},
+        {"$inc": {"balance_cents": amount_cents}},
+        upsert=True,
+    )
+    db.audit_event(
+        "wallet.topup_confirmed",
+        actor_id=user_id,
+        details={"txid": txid, "amount_cents": amount_cents, "method": "memo"},
+    )
+    return {
+        "status": "confirmed",
+        "amount": amount_cents / 100,
+        "balance": balance_cents(user_id) / 100,
+        "txid": txid,
+    }
 
 def apply_balance(user_id: int, amount: float) -> float:
     requested = max(0, round(amount * 100))

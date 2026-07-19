@@ -14,6 +14,7 @@ from app.domain import affiliate_service
 from bot import (
     AUTO_PAYMENT_MESSAGES,
     AUTO_PAYMENT_TASKS,
+    AUTO_TOPUP_TASKS,
     announce_channel_restock,
     announce_channel_purchase,
     PENDING,
@@ -439,6 +440,8 @@ def test_order_payment_values_are_individually_copyable():
     "payment_wrong_currency", "payment_wrong_memo", "payment_not_found",
     "payment_txid_used", "verify_failed", "delivery_received",
     "loyalty_activated", "affiliate_rewarded",
+    "topup_message", "topup_ask_txid", "topup_scanner", "topup_auto_timeout",
+    "topup_success", "topup_failed",
 ])
 def test_all_payment_flow_texts_support_exact_premium_emoji(key):
     emoji_id = f"premium-{key}"
@@ -760,3 +763,52 @@ def test_catalog_request_is_saved_and_sent_to_admin(monkeypatch, mock_mongodb):
     assert "Microsoft 365" in admin_message
     assert PENDING.get(42) is None
     assert "Request sent" in message.reply_text.await_args.args[0]
+
+def test_topup_verification_keyboard_offers_txid_fallback(mock_mongodb):
+    keyboard = kb.topup_verifying_keyboard("en")
+    callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
+
+    assert callbacks == ["topup_txid", "home"]
+
+
+def test_topup_claim_starts_automatic_scan(monkeypatch, mock_mongodb):
+    created = {}
+
+    class FakeTask:
+        def add_done_callback(self, callback):
+            created["callback"] = callback
+
+        def done(self):
+            return False
+
+        def cancel(self):
+            return None
+
+    def create_task(coro, **kwargs):
+        coro.close()
+        created["kwargs"] = kwargs
+        return FakeTask()
+
+    query = SimpleNamespace(
+        data="topup_claim",
+        from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(),
+        answer=AsyncMock(),
+    )
+    context = SimpleNamespace(application=SimpleNamespace(create_task=create_task))
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), context))
+
+    assert 42 in AUTO_TOPUP_TASKS
+    assert created["kwargs"]["name"] == "topup-scan-42"
+    AUTO_TOPUP_TASKS.pop(42, None)
+
+
+def test_topup_copy_marks_memo_optional_and_starts_without_txid(mock_mongodb):
+    message = t("en", "topup_message", binance_id="123", telegram_id=42)
+
+    assert "Optional" in message
+    assert "Verify Payment" in message
+    assert "Verify with TXID" in message
+    assert t("en", "topup_claim") == "✅ Verify Payment"

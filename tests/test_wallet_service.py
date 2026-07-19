@@ -34,3 +34,19 @@ def test_wallet_pays_order_and_reduces_external_total(mock_mongodb):
     assert order["wallet_amount"] == 10.0
     assert order["total_price"] == 0.0
     assert wallet_service.balance_cents(42) == 0
+
+
+def test_automatic_topup_credits_transfer_matched_by_optional_memo(mock_mongodb, monkeypatch):
+    monkeypatch.setattr(wallet_service, "verify_incoming_transfer_by_memo", lambda *_args, **_kwargs: {
+        "status": "confirmed",
+        "txid": "AUTO_MEMO_TX_123",
+        "amount": 7.5,
+        "currency": "USDT",
+    })
+
+    result = wallet_service.claim_transfer_by_memo(42, 1_700_000_000)
+
+    assert result["status"] == "confirmed"
+    assert result["amount"] == 7.5
+    assert wallet_service.balance_cents(42) == 750
+    assert mock_mongodb.wallet_topups.find_one({"txid": "AUTO_MEMO_TX_123"})["verification_method"] == "memo"

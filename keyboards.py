@@ -188,6 +188,12 @@ def topup_keyboard(lang):
     ])
 
 
+def topup_verifying_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [translated_button(lang, "btn_verify_txid", callback_data="topup_txid")],
+        [translated_button(lang, "btn_main_menu_short", callback_data="home")],
+    ])
+
 def services_keyboard(lang):
     buttons = []
     services = db.list_services_with_stock()

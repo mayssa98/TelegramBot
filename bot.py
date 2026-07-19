@@ -81,6 +81,8 @@ class PendingStates:
 PENDING = PendingStates()
 AUTO_PAYMENT_TASKS = {}
 AUTO_PAYMENT_MESSAGES = {}
+AUTO_TOPUP_TASKS = {}
+AUTO_TOPUP_MESSAGES = {}
 
 
 async def stop_auto_payment_check(order_id):
@@ -95,6 +97,18 @@ async def stop_auto_payment_check(order_id):
         with contextlib.suppress(Exception):
             await scanner.delete()
 
+
+async def stop_auto_topup_check(user_id):
+    """Cancel a running top-up scan and remove its waiting message."""
+    task = AUTO_TOPUP_TASKS.pop(int(user_id), None)
+    if task and not task.done():
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    scanner = AUTO_TOPUP_MESSAGES.pop(int(user_id), None)
+    if scanner:
+        with contextlib.suppress(Exception):
+            await scanner.delete()
 
 async def block_non_channel_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Prevent customers from bypassing the required channel via direct commands."""
@@ -585,8 +599,8 @@ async def show_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     lang = lang_of(uid)
     await update.effective_message.reply_text(
-        t(lang, "topup_message", binance_id=BINANCE_PAY_ID, telegram_id=uid),
-        parse_mode=ParseMode.MARKDOWN,
+        premium_customer_text(lang, "topup_message", binance_id=BINANCE_PAY_ID, telegram_id=uid),
+        parse_mode=ParseMode.HTML,
         reply_markup=kb.topup_keyboard(lang),
     )
 
@@ -815,8 +829,29 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_topup(update, context)
         return
     if data == "topup_claim":
+        await stop_auto_topup_check(uid)
+        started_at = int(datetime.now(UTC).timestamp())
+        task = context.application.create_task(
+            run_auto_topup_check(q.message, context, lang, uid, started_at),
+            update=update,
+            name=f"topup-scan-{uid}",
+        )
+        AUTO_TOPUP_TASKS[uid] = task
+
+        def cleanup_topup_scan(completed_task, user_id=uid):
+            if AUTO_TOPUP_TASKS.get(user_id) is completed_task:
+                AUTO_TOPUP_TASKS.pop(user_id, None)
+                AUTO_TOPUP_MESSAGES.pop(user_id, None)
+
+        task.add_done_callback(cleanup_topup_scan)
+        return
+    if data == "topup_txid":
+        await stop_auto_topup_check(uid)
         PENDING[uid] = ("await_topup_txid", 0)
-        await q.message.reply_text(t(lang, "topup_ask_txid"), parse_mode=ParseMode.MARKDOWN)
+        await q.message.reply_text(
+            premium_customer_text(lang, "topup_ask_txid"),
+            parse_mode=ParseMode.HTML,
+        )
         return
     if data.startswith("orders_group:") or data == "orders_export:all":
         orders = db.list_user_orders(uid, limit=500)
@@ -1368,14 +1403,14 @@ async def handle_pending_input(update, context, lang):
         if result["status"] == "confirmed":
             PENDING.pop(uid, None)
             await update.message.reply_text(
-                t(lang, "topup_success", amount=f"{result['amount']:.2f}", balance=f"{result['balance']:.2f}"),
-                parse_mode=ParseMode.MARKDOWN,
+                premium_customer_text(lang, "topup_success", amount=f"{result['amount']:.2f}", balance=f"{result['balance']:.2f}"),
+                parse_mode=ParseMode.HTML,
                 reply_markup=kb.home_keyboard(lang, uid),
             )
         else:
             await update.message.reply_text(
-                t(lang, "topup_failed"),
-                parse_mode=ParseMode.MARKDOWN,
+                premium_customer_text(lang, "topup_failed"),
+                parse_mode=ParseMode.HTML,
                 reply_markup=kb.topup_keyboard(lang),
             )
         return
@@ -1700,6 +1735,48 @@ async def run_auto_payment_check(message, context, lang, order_id, uid):
     )
     AUTO_PAYMENT_MESSAGES[order_id] = scanner
 
+
+async def run_auto_topup_check(message, context, lang, uid, started_at):
+    """Scan recent transfers by optional Telegram-ID memo, with TXID fallback."""
+    scanner = await message.reply_text(
+        premium_customer_text(lang, "topup_scanner", frame=payment_scanner_frame(0)),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.topup_verifying_keyboard(lang),
+    )
+    AUTO_TOPUP_MESSAGES[uid] = scanner
+    deadline = asyncio.get_running_loop().time() + 120
+    step = 0
+    while asyncio.get_running_loop().time() < deadline:
+        result = await asyncio.to_thread(wallet_service.claim_transfer_by_memo, uid, started_at)
+        if result.get("status") == "confirmed":
+            AUTO_TOPUP_MESSAGES.pop(uid, None)
+            with contextlib.suppress(Exception):
+                await scanner.edit_text(
+                    premium_customer_text(
+                        lang,
+                        "topup_success",
+                        amount=f"{result['amount']:.2f}",
+                        balance=f"{result['balance']:.2f}",
+                    ),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=kb.home_keyboard(lang, uid),
+                )
+            return
+        step += 1
+        with contextlib.suppress(Exception):
+            await scanner.edit_text(
+                premium_customer_text(lang, "topup_scanner", frame=payment_scanner_frame(step)),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.topup_verifying_keyboard(lang),
+            )
+        await asyncio.sleep(2)
+    with contextlib.suppress(Exception):
+        await scanner.edit_text(
+            premium_customer_text(lang, "topup_auto_timeout"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.topup_verifying_keyboard(lang),
+        )
+    AUTO_TOPUP_MESSAGES[uid] = scanner
 
 def premium_customer_text(lang: str, key: str, **kwargs) -> str:
     """Render selected customer texts as HTML with their Premium emoji."""
