@@ -41,6 +41,7 @@ from config import (
     BOT_TOKEN,
     CURRENCY,
     DEFAULT_LANG,
+    REQUIRED_CHANNEL,
     SHOP_NAME,
     configuration_issues,
 )
@@ -94,6 +95,28 @@ async def stop_auto_payment_check(order_id):
         with contextlib.suppress(Exception):
             await scanner.delete()
 
+
+async def block_non_channel_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Prevent customers from bypassing the required channel via direct commands."""
+    user = update.effective_user
+    if not user or user.id == ADMIN_ID:
+        return
+    if update.callback_query and update.callback_query.data == "verify_channel_join":
+        return
+    message_text = getattr(update.effective_message, "text", "") or ""
+    if message_text.startswith("/start"):
+        return
+    if await is_required_channel_member(context.bot, user.id):
+        return
+    lang = lang_of(user.id)
+    if update.callback_query:
+        await update.callback_query.answer()
+    await update.effective_message.reply_text(
+        premium_customer_text(lang, "channel_join_required"),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.channel_join_keyboard(lang),
+    )
+    raise ApplicationHandlerStop
 
 async def block_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -313,22 +336,72 @@ def render_stored_rich_text(value, *, parse_legacy_markdown=True):
 
 
 # ---------------- /start ----------------
+async def is_required_channel_member(bot, user_id):
+    """Return whether a customer currently belongs to the required channel."""
+    if user_id == ADMIN_ID:
+        return True
+    try:
+        member = await bot.get_chat_member(REQUIRED_CHANNEL, user_id)
+    except Exception as exc:
+        log.warning("Unable to verify channel membership for %s: %s", user_id, exc)
+        return False
+    status = getattr(getattr(member, "status", None), "value", getattr(member, "status", ""))
+    return str(status) in {"creator", "administrator", "member"} or (
+        str(status) == "restricted" and bool(getattr(member, "is_member", False))
+    )
+
+
+async def register_start_referral(context, referred_id, referrer_id):
+    """Register a preserved start-link referral only after channel verification."""
+    if not referrer_id:
+        return
+    accepted = affiliate_service.register_referral_link(referred_id, int(referrer_id))
+    if accepted:
+        with contextlib.suppress(Exception):
+            await notify_successful_referral(context, int(referrer_id))
+
+
+async def send_channel_member_welcome(send, context, user_id, lang):
+    """Show the post-verification marketing welcome and unlock the main menu."""
+    username = context.bot.username or (await context.bot.get_me()).username
+    referral_link = f"https://t.me/{username}?start=ref_{user_id}"
+    await send(
+        premium_customer_text(
+            lang, "channel_member_welcome", shop=SHOP_NAME, link=referral_link,
+        ),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.home_keyboard(lang, user_id),
+    )
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
     is_new = db.upsert_user(u.id, u.username or "", u.first_name or "")
-    if is_new and context.args and context.args[0].startswith("ref_"):
-        try:
+    lang = DEFAULT_LANG
+    if db.get_user_lang(u.id) != DEFAULT_LANG:
+        db.set_user_lang(u.id, DEFAULT_LANG)
+
+    pending = PENDING.get(u.id)
+    referrer_id = pending[1] if pending and pending[0] == "await_channel_join" else 0
+    if context.args and context.args[0].startswith("ref_"):
+        with contextlib.suppress(ValueError, TypeError):
             referrer_id = int(context.args[0][4:])
-            accepted = affiliate_service.register_referral_link(u.id, referrer_id)
-            if accepted:
-                with contextlib.suppress(Exception):
-                    await notify_successful_referral(context, referrer_id)
-        except (ValueError, TypeError):
-            pass
-    lang = db.get_user_lang(u.id)
-    if not lang:
-        await update.message.reply_text(t(DEFAULT_LANG, "choose_lang"),
-                                        reply_markup=kb.lang_keyboard())
+
+    if not await is_required_channel_member(context.bot, u.id):
+        PENDING[u.id] = ("await_channel_join", int(referrer_id or 0))
+        await update.message.reply_text(
+            premium_customer_text(lang, "channel_join_required"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.channel_join_keyboard(lang),
+        )
+        return
+
+    if pending and pending[0] == "await_channel_join":
+        PENDING.pop(u.id, None)
+    await register_start_referral(context, u.id, referrer_id)
+
+    if is_new:
+        await send_channel_member_welcome(update.message.reply_text, context, u.id, lang)
     elif context.args and context.args[0] == "catalog":
         await show_catalog(update, context, lang)
     elif context.args and context.args[0] == "orders":
@@ -585,6 +658,20 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
     await q.answer()
 
+    if data == "verify_channel_join":
+        if not await is_required_channel_member(context.bot, uid):
+            await q.message.reply_text(
+                premium_customer_text(lang, "channel_join_not_verified"),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.channel_join_keyboard(lang),
+            )
+            return
+        pending = PENDING.pop(uid, None)
+        referrer_id = pending[1] if pending and pending[0] == "await_channel_join" else 0
+        db.set_user_lang(uid, DEFAULT_LANG)
+        await register_start_referral(context, uid, referrer_id)
+        await send_channel_member_welcome(q.edit_message_text, context, uid, DEFAULT_LANG)
+        return
     if data.startswith("tour:"):
         step = max(1, min(3, int(data.split(":", 1)[1])))
         await q.edit_message_text(
@@ -1885,7 +1972,9 @@ def build_app():
     from telegram.request import HTTPXRequest
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     app = Application.builder().token(BOT_TOKEN).request(request).build()
-    # Groupe -2 : blocage des utilisateurs bannis avant les handlers du groupe 0.
+    # Group -3: required channel membership before all customer actions.
+    app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-3)
+    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-3)    # Groupe -2 : blocage des utilisateurs bannis avant les handlers du groupe 0.
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(

@@ -27,7 +27,7 @@ def text_category_for_key(key):
         ("orders", ("orders_", "order_", "delivery_", "status_", "duplicate_order", "already_paid", "cancelled_")),
         ("support", ("support_", "ticket_", "rating_")),
         ("affiliate", ("affiliate_", "loyalty_")),
-        ("account", ("profile_", "terms_", "privacy_", "help_", "welcome", "onboarding_", "lang_")),
+        ("account", ("profile_", "terms_", "privacy_", "help_", "welcome", "onboarding_", "lang_", "channel_")),
         ("menus", ("menu_", "btn_")),
     ]
     for category, prefixes in rules:

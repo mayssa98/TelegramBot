@@ -45,7 +45,23 @@ TRANSLATIONS = {
         "en": "✨ *Welcome to {shop}*\n\nDiscover a curated selection of premium digital services, clearly presented and regularly updated.\n\n⚡ Quick access to available offers\n🛡️ Clear information and reliable service\n🎯 Dedicated assistance at every step\n\nChoose where you would like to begin:",
         "ar": "✨ *مرحبًا بك في {shop}*\n\nاكتشف مجموعة مختارة من الخدمات الرقمية المميزة، مع عرض واضح وتحديث مستمر.\n\n⚡ وصول سريع إلى العروض المتاحة\n🛡️ معلومات واضحة وخدمة موثوقة\n🎯 مساعدة مخصصة في كل خطوة\n\nاختر القسم الذي تريد البدء منه:",
     },
-    # ---------------- Menu principal ----------------
+    "channel_join_required": {
+        "fr": "🔒 *Members-only access*\n\nJoin our official channel to unlock BlackMarket offers, instant delivery, affiliate rewards and exclusive discounts.\n\n👇 Join the channel, then tap *Verify joining*.",
+        "en": "🔒 *MEMBERS-ONLY ACCESS*\n\nJoin our official channel to unlock BlackMarket offers, instant delivery, affiliate rewards and exclusive discounts.\n\n👇 Join the channel, then tap *Verify joining*.",
+        "ar": "🔒 *Members-only access*\n\nJoin our official channel to unlock BlackMarket offers, instant delivery, affiliate rewards and exclusive discounts.\n\n👇 Join the channel, then tap *Verify joining*.",
+    },
+    "btn_join_channel": {"fr": "📢 Join our channel", "en": "📢 Join our channel", "ar": "📢 Join our channel"},
+    "btn_verify_join": {"fr": "✅ Verify joining", "en": "✅ Verify joining", "ar": "✅ Verify joining"},
+    "channel_join_not_verified": {
+        "fr": "❌ *Membership not detected*\n\nJoin @blackmarketBotChannel first, then tap *Verify joining* again.",
+        "en": "❌ *MEMBERSHIP NOT DETECTED*\n\nJoin @blackmarketBotChannel first, then tap *Verify joining* again.",
+        "ar": "❌ *Membership not detected*\n\nJoin @blackmarketBotChannel first, then tap *Verify joining* again.",
+    },
+    "channel_member_welcome": {
+        "fr": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *2 USDT for every 10 valid referrals*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 30 USDT → *8% OFF*\n🥈 *Silver* — spend 70 USDT → *16% OFF*\n💎 *Platinum* — spend 200 USDT → *24% OFF*\n👑 *Diamond* — spend 500 USDT → *30% OFF*\n\nEach unlocked discount applies to every product for *7 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
+        "en": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *2 USDT for every 10 valid referrals*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 30 USDT → *8% OFF*\n🥈 *Silver* — spend 70 USDT → *16% OFF*\n💎 *Platinum* — spend 200 USDT → *24% OFF*\n👑 *Diamond* — spend 500 USDT → *30% OFF*\n\nEach unlocked discount applies to every product for *7 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
+        "ar": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *2 USDT for every 10 valid referrals*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 30 USDT → *8% OFF*\n🥈 *Silver* — spend 70 USDT → *16% OFF*\n💎 *Platinum* — spend 200 USDT → *24% OFF*\n👑 *Diamond* — spend 500 USDT → *30% OFF*\n\nEach unlocked discount applies to every product for *7 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
+    },    # ---------------- Menu principal ----------------
     "menu_catalog": {"fr": "🛍️ Catalogue", "en": "🛍️ Catalog", "ar": "🛍️ المتجر"},
     "menu_orders": {"fr": "🧾 Mes commandes", "en": "🧾 My orders", "ar": "🧾 طلباتي"},
     "menu_topup": {"fr": "💳 Recharger le solde", "en": "💳 Top Up Balance", "ar": "💳 شحن الرصيد"},

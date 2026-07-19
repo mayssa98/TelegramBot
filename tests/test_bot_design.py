@@ -14,8 +14,10 @@ from app.domain import affiliate_service
 from bot import (
     AUTO_PAYMENT_MESSAGES,
     AUTO_PAYMENT_TASKS,
+    PENDING,
     cb_admin,
     cb_navigation,
+    cmd_start,
     compact_offer_text,
     custom_emoji_from_message,
     custom_emojis_from_message,
@@ -38,6 +40,49 @@ def test_delivery_accounts_are_numbered_in_order():
     assert numbered_delivery_content(["first@example.com:pass", "second@example.com:pass"]) == (
         "#1\nfirst@example.com:pass\n\n#2\nsecond@example.com:pass"
     )
+
+def test_start_requires_channel_membership(monkeypatch):
+    message = SimpleNamespace(reply_text=AsyncMock())
+    user = SimpleNamespace(id=42, username="buyer", first_name="Buyer")
+    bot_client = SimpleNamespace(get_chat_member=AsyncMock(return_value=SimpleNamespace(status="left")))
+    update = SimpleNamespace(effective_user=user, message=message)
+    context = SimpleNamespace(bot=bot_client, args=[])
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+
+    asyncio.run(cmd_start(update, context))
+
+    message.reply_text.assert_awaited_once()
+    call = message.reply_text.await_args
+    assert "MEMBERS-ONLY ACCESS" in call.args[0]
+    callbacks = [button.callback_data for row in call.kwargs["reply_markup"].inline_keyboard for button in row]
+    assert "verify_channel_join" in callbacks
+
+
+def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
+    message = SimpleNamespace(reply_text=AsyncMock())
+    query = SimpleNamespace(
+        data="verify_channel_join",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+    )
+    bot_client = SimpleNamespace(
+        username="blackmarket_test_bot",
+        get_chat_member=AsyncMock(return_value=SimpleNamespace(status="member")),
+    )
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    db.upsert_user(42, "buyer", "Buyer")
+    PENDING[42] = ("await_channel_join", 0)
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace(bot=bot_client)))
+
+    query.edit_message_text.assert_awaited_once()
+    rendered = query.edit_message_text.await_args.args[0]
+    assert "WELCOME TO" in rendered
+    assert "2 USDT" in rendered
+    assert "30% OFF" in rendered
+    assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
 
 def test_main_menu_is_compact_and_actions_match_labels():
     keyboard = kb.main_menu_keyboard("fr", user_id=42)

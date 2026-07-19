@@ -5,7 +5,7 @@ import re
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 import database as db
-from config import ADMIN_ID
+from config import ADMIN_ID, REQUIRED_CHANNEL
 from i18n import t
 
 
@@ -16,7 +16,7 @@ BUTTON_TEXT_KEYS = {
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_cancel", "btn_continue_payment", "btn_new_order",
-    "affiliate_copy", "affiliate_share", "orders_all",
+    "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_verify_join",
 }
 
 
@@ -93,6 +93,14 @@ def lang_keyboard():
         InlineKeyboardButton("🇬🇧 English", callback_data="lang:en"),
     ]])
 
+
+def channel_join_keyboard(lang):
+    """Require channel membership before unlocking the customer menu."""
+    channel_url = f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"
+    return InlineKeyboardMarkup([
+        [translated_button(lang, "btn_join_channel", url=channel_url, style="primary")],
+        [translated_button(lang, "btn_verify_join", callback_data="verify_channel_join", style="success")],
+    ])
 
 def support_category_keyboard(lang):
     categories = ("payment", "delivery", "invalid_content", "order", "affiliation", "other")
