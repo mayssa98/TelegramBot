@@ -77,6 +77,8 @@ TRANSLATIONS = {
         "ar": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay Top Up*\n\nSend the amount to our Binance Pay ID:\n`{binance_id}`\n\n⚡ *Optional — faster automatic detection*\nAdd your Telegram ID in the Notes / Memo field:\n`{telegram_id}`\n\nAfter transferring, tap *Verify Payment*. If the automatic scan does not find it, use *Verify with TXID*.",
     },
     "topup_claim": {"fr": "✅ Verify Payment", "en": "✅ Verify Payment", "ar": "✅ Verify Payment"},
+    "topup_verify_txid": {"fr": "🧾 Verify with TXID", "en": "🧾 Verify with TXID", "ar": "🧾 Verify with TXID"},
+    "topup_home_button": {"fr": "🏠 Home", "en": "🏠 Home", "ar": "🏠 Home"},
     "topup_ask_txid": {
         "fr": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
         "en": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",

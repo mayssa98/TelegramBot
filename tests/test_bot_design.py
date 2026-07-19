@@ -835,3 +835,27 @@ def test_topup_copy_marks_memo_optional_and_starts_without_txid(mock_mongodb):
     assert "Verify Payment" in message
     assert "Verify with TXID" in message
     assert t("en", "topup_claim") == "✅ Verify Payment"
+
+def test_every_topup_button_supports_exact_premium_emoji(mock_mongodb):
+    overrides = {
+        "topup_claim": ("Verify Payment", "premium-topup-verify"),
+        "topup_verify_txid": ("Verify with TXID", "premium-topup-txid"),
+        "topup_home_button": ("Home", "premium-topup-home"),
+    }
+    for key, (label, emoji_id) in overrides.items():
+        db.set_text_override(key, "en", label, emoji_id)
+
+    initial = kb.topup_keyboard("en")
+    scanning = kb.topup_verifying_keyboard("en")
+    buttons = {
+        button.callback_data: button
+        for keyboard in (initial, scanning)
+        for row in keyboard.inline_keyboard
+        for button in row
+    }
+
+    assert buttons["topup_claim"].icon_custom_emoji_id == "premium-topup-verify"
+    assert buttons["topup_txid"].icon_custom_emoji_id == "premium-topup-txid"
+    assert buttons["home"].icon_custom_emoji_id == "premium-topup-home"
+    assert buttons["topup_claim"].text == "Verify Payment"
+    assert buttons["topup_txid"].text == "Verify with TXID"

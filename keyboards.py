@@ -13,7 +13,8 @@ BUTTON_TEXT_KEYS = {
     "menu_catalog", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
     "menu_support", "menu_lang", "menu_admin", "btn_main_menu", "support_no_order",
     "catalog_request_button",
-    "topup_claim", "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
+    "topup_claim", "topup_verify_txid", "topup_home_button",
+    "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_cancel", "btn_continue_payment", "btn_new_order",
@@ -184,14 +185,14 @@ def home_keyboard(lang, user_id):
 def topup_keyboard(lang):
     return InlineKeyboardMarkup([
         [translated_button(lang, "topup_claim", callback_data="topup_claim", style="success")],
-        [translated_button(lang, "btn_main_menu_short", callback_data="home")],
+        [translated_button(lang, "topup_home_button", callback_data="home")],
     ])
 
 
 def topup_verifying_keyboard(lang):
     return InlineKeyboardMarkup([
-        [translated_button(lang, "btn_verify_txid", callback_data="topup_txid")],
-        [translated_button(lang, "btn_main_menu_short", callback_data="home")],
+        [translated_button(lang, "topup_verify_txid", callback_data="topup_txid")],
+        [translated_button(lang, "topup_home_button", callback_data="home")],
     ])
 
 def services_keyboard(lang):
