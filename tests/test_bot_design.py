@@ -366,10 +366,11 @@ def test_support_flow_always_offers_a_home_action():
     assert keyboard.inline_keyboard[-1][0].callback_data == "home"
 
 
-def test_referrer_receives_progress_and_wallet_success_messages(mock_mongodb):
+def test_referrer_receives_progress_and_wallet_success_messages(mock_mongodb, monkeypatch):
     referrer_id = 999
     mock_mongodb.users.insert_one({"telegram_id": referrer_id, "lang": "en"})
     context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+    monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@affiliate_channel")
 
     for index in range(9):
         user_id = 100 + index
@@ -383,10 +384,16 @@ def test_referrer_receives_progress_and_wallet_success_messages(mock_mongodb):
     mock_mongodb.users.insert_one({"telegram_id": 109})
     assert affiliate_service.register_referral_link(109, referrer_id)
     asyncio.run(notify_successful_referral(context, referrer_id))
-    success_message = context.bot.send_message.await_args.args[1]
+    private_call, channel_call = context.bot.send_message.await_args_list[-2:]
+    success_message = private_call.args[1]
+    assert private_call.args[0] == referrer_id
     assert "10 valid referrals" in success_message
     assert "2 USDT" in success_message
     assert "2.00 USDT" in success_message
+    assert channel_call.args[0] == "@affiliate_channel"
+    assert "AFFILIATE REWARD UNLOCKED" in channel_call.args[1]
+    assert "10 valid referrals" in channel_call.args[1]
+    assert "2 USDT" in channel_call.args[1]
 
 
 def test_payment_scanner_moves_without_fake_percentage():
@@ -442,6 +449,7 @@ def test_order_payment_values_are_individually_copyable():
     "loyalty_activated", "affiliate_rewarded",
     "topup_message", "topup_ask_txid", "topup_scanner", "topup_auto_timeout",
     "topup_success", "topup_failed",
+    "affiliate_referral_success", "affiliate_ten_success", "channel_affiliate_reward",
 ])
 def test_all_payment_flow_texts_support_exact_premium_emoji(key):
     emoji_id = f"premium-{key}"

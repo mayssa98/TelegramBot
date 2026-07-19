@@ -194,6 +194,23 @@ async def notify_successful_referral(context, referrer_id):
         premium_customer_text(lang, key, **values),
         parse_mode=ParseMode.HTML,
     )
+    if stats["referrals"] and stats["referrals"] % 10 == 0:
+        try:
+            await context.bot.send_message(
+                REQUIRED_CHANNEL,
+                premium_customer_text(
+                    DEFAULT_LANG,
+                    "channel_affiliate_reward",
+                    count=stats["referrals"],
+                    reward="2",
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception:
+            log.exception(
+                "Unable to publish affiliate milestone for referrer %s",
+                referrer_id,
+            )
 
 
 def offer_detail_fields(description: str, note: str) -> dict[str, str]:
