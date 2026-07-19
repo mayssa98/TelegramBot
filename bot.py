@@ -710,6 +710,9 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "adm_deliver",
     }
 
+    if pending and pending[0] in blocking_states:
+        await handle_pending_input(update, context, lang)
+        return
     if text == t(lang, "menu_catalog"):
         clear_support_pending()
         await show_catalog(update, context, lang)
@@ -734,7 +737,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clear_support_pending()
         await update.message.reply_text("\U0001f6e0\ufe0f *Panneau Admin*", parse_mode=ParseMode.MARKDOWN,
                                         reply_markup=admin.admin_panel_keyboard())
-    elif pending and (pending[0] in blocking_states or pending[0].startswith(("support", "ticket_"))):
+    elif pending and pending[0].startswith(("support", "ticket_")):
         await handle_pending_input(update, context, lang)
     else:
         await send_main_menu(update, context, lang)

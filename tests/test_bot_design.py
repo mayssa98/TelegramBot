@@ -29,6 +29,7 @@ from bot import (
     orders_text_export,
     numbered_delivery_content,
     notify_successful_referral,
+    on_text_menu,
     payment_scanner_frame,
     premium_customer_text,
     rich_text_from_message,
@@ -158,6 +159,40 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     assert "2 USDT" in rendered
     assert "30% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
+
+@pytest.mark.parametrize(
+    ("key", "incoming_text", "emoji_id"),
+    [
+        ("menu_topup", "💳 Top Up Balance", "premium-topup"),
+        ("menu_account", "👤 My account", "premium-profile"),
+    ],
+)
+def test_admin_can_edit_topup_and_profile_even_when_text_matches_current_button(
+    mock_mongodb, monkeypatch, key, incoming_text, emoji_id,
+):
+    admin_id = 999
+    db.upsert_user(admin_id, "admin", "Admin")
+    db.set_user_lang(admin_id, "en")
+    PENDING[admin_id] = ("adm_text_override", f"{key}|en")
+    message = SimpleNamespace(
+        text=incoming_text,
+        caption=None,
+        entities=[SimpleNamespace(type="custom_emoji", custom_emoji_id=emoji_id, offset=0, length=2)],
+        caption_entities=[],
+        reply_text=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=admin_id),
+        message=message,
+    )
+    monkeypatch.setattr("bot.ADMIN_ID", admin_id)
+
+    asyncio.run(on_text_menu(update, SimpleNamespace()))
+
+    assert db.get_text_override(key, "en") in {"Top Up Balance", "My account"}
+    assert db.get_text_override_icon(key, "en") == emoji_id
+    assert PENDING.get(admin_id) is None
+    assert "enregistr" in message.reply_text.await_args.args[0].lower()
 
 def test_main_menu_is_compact_and_actions_match_labels():
     keyboard = kb.main_menu_keyboard("fr", user_id=42)
