@@ -372,6 +372,23 @@ def test_catalog_from_photo_caption_sends_a_new_text_screen(monkeypatch):
     query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
 
 
+def test_out_of_stock_offer_click_sends_customer_message(monkeypatch):
+    message = SimpleNamespace(reply_text=AsyncMock())
+    query = SimpleNamespace(
+        data="off:9",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+    )
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+    monkeypatch.setattr("bot.db.get_offer", lambda _oid: {"id": 9, "stock": 0})
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace()))
+
+    message.reply_text.assert_awaited_once()
+    assert "Out of stock" in message.reply_text.await_args.args[0]
+    assert message.reply_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
+
 def test_offer_back_button_from_photo_opens_service_without_editing_photo(monkeypatch):
     message = SimpleNamespace(text=None, reply_text=AsyncMock())
     query = SimpleNamespace(

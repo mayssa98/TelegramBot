@@ -679,6 +679,12 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("off:"):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
+        if not off or int(off.get("stock") or 0) <= 0:
+            await q.message.reply_text(
+                premium_customer_text(lang, "out_of_stock"),
+                parse_mode=ParseMode.HTML,
+            )
+            return
         svc = db.get_service(off["service_id"])
         detail_text = compact_offer_text(off, lang)
         photo_file_id = off.get("photo_file_id")
