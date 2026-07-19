@@ -143,7 +143,7 @@ async def block_maintenance_purchases(update: Update, context: ContextTypes.DEFA
 
 
 def numbered_delivery_content(items):
-    """Join delivered accounts without exposing import delimiters or numbering."""
+    """Number delivered accounts without exposing the # import delimiter."""
     cleaned = []
     for item in items or []:
         value = str(item).strip()
@@ -156,7 +156,7 @@ def numbered_delivery_content(items):
                 value = remainder.strip()
         if value:
             cleaned.append(value)
-    return "\n\n".join(cleaned)
+    return "\n\n".join(f"{index}.\n{value}" for index, value in enumerate(cleaned, start=1))
 
 def lang_of(user_id):
     return db.get_user_lang(user_id) or DEFAULT_LANG
