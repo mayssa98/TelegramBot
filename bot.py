@@ -177,10 +177,12 @@ def lang_of(user_id):
 
 
 async def notify_successful_referral(context, referrer_id):
-    """Notify the referrer after every valid referral and each 10-member reward."""
+    """Notify the referrer after every valid referral and each reward milestone."""
     stats = affiliate_service.get_stats(referrer_id)
     lang = lang_of(referrer_id)
-    if stats["referrals"] and stats["referrals"] % 10 == 0:
+    target = affiliate_service.REFERRAL_TARGET
+    reward = affiliate_service.REFERRAL_REWARD_CENTS / 100
+    if stats["referrals"] and stats["referrals"] % target == 0:
         key = "affiliate_ten_success"
         values = {"balance": f"{stats['balance_cents'] / 100:.2f}"}
     else:
@@ -194,7 +196,7 @@ async def notify_successful_referral(context, referrer_id):
         premium_customer_text(lang, key, **values),
         parse_mode=ParseMode.HTML,
     )
-    if stats["referrals"] and stats["referrals"] % 10 == 0:
+    if stats["referrals"] and stats["referrals"] % target == 0:
         try:
             await context.bot.send_message(
                 REQUIRED_CHANNEL,
@@ -202,7 +204,7 @@ async def notify_successful_referral(context, referrer_id):
                     DEFAULT_LANG,
                     "channel_affiliate_reward",
                     count=stats["referrals"],
-                    reward="2",
+                    reward=f"{reward:g}",
                 ),
                 parse_mode=ParseMode.HTML,
             )

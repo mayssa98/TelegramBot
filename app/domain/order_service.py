@@ -78,13 +78,16 @@ def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = 
     after_discount = round(max(0, gross_total - discount_amount), 2)
     wallet_used = 0.0
     if payment_method == "wallet":
-        available = wallet_service.balance_cents(user_id) / 100
-        if available < after_discount:
+        available_cents = wallet_service.balance_cents(user_id)
+        if available_cents <= 0:
             raise ValueError(
-                f"Solde insuffisant : {available:.2f} {CURRENCY} disponible, "
-                f"{after_discount:.2f} {CURRENCY} requis."
+                f"Solde insuffisant : 0.00 {CURRENCY} disponible."
             )
         wallet_used = wallet_service.apply_balance(user_id, after_discount)
+        if wallet_used <= 0:
+            raise ValueError(
+                "Votre solde n'a pas pu être débité. Veuillez réessayer."
+            )
     service = db.get_service(offer["service_id"])
 
     order_id = db._next_id("orders")
@@ -102,7 +105,13 @@ def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = 
         "loyalty_discount_amount": discount_amount,
         "wallet_amount": wallet_used,
         "wallet_refunded": False,
-        "payment_method": payment_method,
+        "payment_method": (
+            "wallet"
+            if payment_method == "wallet" and wallet_used >= after_discount
+            else "wallet_binance"
+            if payment_method == "wallet"
+            else payment_method
+        ),
         "total_price": round(max(0, after_discount - wallet_used), 2),
         "currency": CURRENCY,
         "status": OrderStatus.PENDING_PAYMENT,

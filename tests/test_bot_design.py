@@ -158,7 +158,7 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     query.edit_message_text.assert_awaited_once()
     rendered = query.edit_message_text.await_args.args[0]
     assert "WELCOME TO" in rendered
-    assert "2 USDT" in rendered
+    assert "1 USDT" in rendered
     assert "30% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
 
@@ -387,28 +387,28 @@ def test_referrer_receives_progress_and_wallet_success_messages(mock_mongodb, mo
     context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@affiliate_channel")
 
-    for index in range(9):
+    for index in range(4):
         user_id = 100 + index
         mock_mongodb.users.insert_one({"telegram_id": user_id})
         assert affiliate_service.register_referral_link(user_id, referrer_id)
     asyncio.run(notify_successful_referral(context, referrer_id))
     progress_message = context.bot.send_message.await_args.args[1]
-    assert "9/10" in progress_message
-    assert "2 USDT" in progress_message
+    assert "4/5" in progress_message
+    assert "1 USDT" in progress_message
 
-    mock_mongodb.users.insert_one({"telegram_id": 109})
-    assert affiliate_service.register_referral_link(109, referrer_id)
+    mock_mongodb.users.insert_one({"telegram_id": 104})
+    assert affiliate_service.register_referral_link(104, referrer_id)
     asyncio.run(notify_successful_referral(context, referrer_id))
     private_call, channel_call = context.bot.send_message.await_args_list[-2:]
     success_message = private_call.args[1]
     assert private_call.args[0] == referrer_id
-    assert "10 valid referrals" in success_message
-    assert "2 USDT" in success_message
-    assert "2.00 USDT" in success_message
+    assert "5 valid referrals" in success_message
+    assert "1 USDT" in success_message
+    assert "1.00 USDT" in success_message
     assert channel_call.args[0] == "@affiliate_channel"
     assert "AFFILIATE REWARD UNLOCKED" in channel_call.args[1]
-    assert "10 valid referrals" in channel_call.args[1]
-    assert "2 USDT" in channel_call.args[1]
+    assert "5 valid referrals" in channel_call.args[1]
+    assert "1 USDT" in channel_call.args[1]
 
 
 def test_payment_scanner_moves_without_fake_percentage():

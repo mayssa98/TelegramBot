@@ -1,4 +1,4 @@
-"""Simple referral program: 2 USDT for every 10 valid referrals."""
+"""Simple referral program: 1 USDT for every 5 valid referrals."""
 from __future__ import annotations
 
 import time
@@ -8,12 +8,12 @@ from pymongo.errors import DuplicateKeyError
 
 import database as db
 
-REFERRAL_TARGET = 10
-REFERRAL_REWARD_CENTS = 200
+REFERRAL_TARGET = 5
+REFERRAL_REWARD_CENTS = 100
 
 
 def register_referral_link(referred_id: int, referrer_id: int) -> bool:
-    """Register one unique valid referral and reward each group of ten."""
+    """Register one unique valid referral and reward each group of five."""
     if referred_id == referrer_id:
         return False
     conn = db.get_conn()
