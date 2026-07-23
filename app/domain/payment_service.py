@@ -13,7 +13,7 @@ from typing import Any
 import database as db
 from app.constants import OrderStatus
 from app.domain import affiliate_service, inventory_service, loyalty_service
-from config import ADMIN_ID, CURRENCY
+from config import ADMIN_ID, CURRENCY, TEST_PAYMENT_ENABLED
 from payment_verifier import verify_payment, verify_payment_by_amount
 
 log = logging.getLogger(__name__)
@@ -111,27 +111,36 @@ def _finalize_admin_test_payment(order_id: int, user_id: int, txid: str) -> dict
     if not order:
         result["error_code"] = "order_not_found"
         return result
-    if order.get("status") not in (OrderStatus.PAYMENT_CONFIRMED, OrderStatus.PAID):
-        if not db.mark_order_paid(order_id, "admin_test"):
-            result["error_code"] = "payment_failed"
-            return result
     qty = max(1, int(order.get("qty", 1)))
     samples = [
         f"SAMPLE TEST PRODUCT {index}/{qty} — NOT A REAL PRODUCT — ORDER #{order_id}"
         for index in range(1, qty + 1)
     ]
     now = int(time.time())
-    db.get_conn().orders.update_one(
-        {"id": order_id},
+    updated = db.get_conn().orders.update_one(
+        {
+            "id": order_id,
+            "user_id": user_id,
+            "status": {"$in": [
+                OrderStatus.PENDING_PAYMENT,
+                OrderStatus.AWAITING_VERIFICATION,
+                OrderStatus.VERIFICATION_FAILED,
+                OrderStatus.MANUAL_REVIEW,
+            ]},
+        },
         {"$set": {
             "status": OrderStatus.DELIVERED,
             "txid": txid,
             "verify_method": "admin_test",
             "delivery_text": "[admin test samples]",
+            "paid_at": now,
             "delivered_at": now,
             "updated_at": now,
         }},
     )
+    if updated.modified_count != 1:
+        result["error_code"] = "payment_failed"
+        return result
     db.audit_event(
         "payment.admin_test_delivered", actor_id=user_id,
         details={"order_id": order_id, "items_count": qty},
@@ -222,10 +231,10 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
 
     # Explicit administrator-only test path. Customers can never use it.
     if txid.upper() == "TEST-PAYMENT":
-        test_enabled = str(db.get_setting("admin_test_payment_enabled", "false")).lower() in {
+        database_enabled = str(db.get_setting("admin_test_payment_enabled", "false")).lower() in {
             "1", "true", "yes", "on",
         }
-        if user_id != ADMIN_ID or not test_enabled:
+        if user_id != ADMIN_ID or not (TEST_PAYMENT_ENABLED or database_enabled):
             result["error_code"] = "not_found"
             result["error_message"] = "Transaction not found."
             return result
@@ -244,8 +253,10 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
     db.update_order(order_id, txid=txid, status=OrderStatus.AWAITING_VERIFICATION)
 
     # 5. Vérification automatique
+    # A submitted TXID is the fallback identifier, so match TXID + exact
+    # amount. The memo is required only by the first automatic amount scan.
     verification = verify_payment(
-        txid, order["total_price"], CURRENCY, order.get("created_at"), expected_memo=user_id
+        txid, order["total_price"], CURRENCY, order.get("created_at")
     )
 
     if verification["status"] == "confirmed":

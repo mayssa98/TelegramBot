@@ -30,6 +30,9 @@ BINANCE_API_BASE: str = os.environ.get(
     "HP_BINANCE_API_BASE", "https://api.binance.com"
 ).rstrip("/")
 PAY_CURRENCY: str = os.environ.get("HP_PAY_CURRENCY", "USDT").upper().strip()
+TEST_PAYMENT_ENABLED: bool = os.environ.get(
+    "HP_TEST_PAYMENT_ENABLED", "false"
+).strip().lower() in {"1", "true", "yes", "on"}
 
 # ---------------------------------------------------------------------------
 # Vérification via Gmail / Manus (optionnel)

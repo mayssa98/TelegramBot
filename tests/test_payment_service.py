@@ -106,6 +106,59 @@ def test_auto_check_payment_by_exact_amount_delivers(mock_mongodb, monkeypatch):
     assert order["txid"] == "AUTO_TX_123456"
 
 
+def test_txid_fallback_does_not_require_memo(mock_mongodb, monkeypatch):
+    captured = {}
+
+    def verifier(txid, amount, currency=None, created_at=None, expected_memo=None):
+        captured.update({
+            "txid": txid,
+            "amount": amount,
+            "expected_memo": expected_memo,
+        })
+        return {"status": "confirmed", "reason": "confirmed"}
+
+    monkeypatch.setattr(payment_service, "verify_payment", verifier)
+    db.add_service("VOD", "T")
+    offer_id = db.add_offer(service_id=1, name="Netflix", price=5.0, stock=1)
+    db.add_inventory_items(offer_id, ["delivery"])
+    db.get_conn().orders.insert_one({
+        "id": 12, "user_id": 123, "offer_id": offer_id,
+        "service_name": "VOD", "offer_name": "Netflix", "qty": 1,
+        "total_price": 5.0, "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "", "created_at": 100, "expires_at": 9999999999,
+    })
+
+    result = payment_service.submit_payment(12, "BINANCE_TX_123", 123)
+
+    assert result["status"] == "delivered"
+    assert captured == {
+        "txid": "BINANCE_TX_123",
+        "amount": 5.0,
+        "expected_memo": None,
+    }
+
+
+def test_first_automatic_verification_requires_amount_and_memo(
+    mock_mongodb, monkeypatch
+):
+    captured = {}
+
+    def verifier(amount, currency=None, created_at=None, used_txids=None, expected_memo=None):
+        captured.update({"amount": amount, "expected_memo": expected_memo})
+        return {"status": "failed", "code": "not_found"}
+
+    monkeypatch.setattr(payment_service, "verify_payment_by_amount", verifier)
+    db.get_conn().orders.insert_one({
+        "id": 13, "user_id": 123, "offer_id": 1, "qty": 1,
+        "total_price": 5.0, "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "", "created_at": 100, "expires_at": 9999999999,
+    })
+
+    payment_service.auto_check_payment(13, 123)
+
+    assert captured == {"amount": 5.0, "expected_memo": 123}
+
+
 def test_submit_payment_duplicate_txid(mock_mongodb):
     """Vérifie qu'on ne peut pas réutiliser le même TXID pour une autre commande."""
     conn = db.get_conn()
@@ -226,6 +279,7 @@ def test_admin_test_payment_bypasses_binance_and_delivers(mock_mongodb, monkeypa
     db.add_service("Test", "🧪")
     offer_id = db.add_offer(1, "Test product", 5.0, 1)
     db.add_inventory_items(offer_id, ["test_delivery_content"])
+    stock_before = db.get_offer(offer_id)["stock"]
     db.get_conn().orders.insert_one({
         "id": 40, "user_id": 999, "offer_id": offer_id,
         "service_name": "Test", "offer_name": "Test product",
@@ -241,6 +295,34 @@ def test_admin_test_payment_bypasses_binance_and_delivers(mock_mongodb, monkeypa
         "SAMPLE TEST PRODUCT 1/1 — NOT A REAL PRODUCT — ORDER #40",
     ]
     assert db.get_order(40)["verify_method"] == "admin_test"
+    assert db.inventory_stats(offer_id)["available"] == 1
+    assert db.get_offer(offer_id)["stock"] == stock_before
+
+
+def test_admin_test_payment_can_be_enabled_by_environment_config(
+    mock_mongodb, monkeypatch
+):
+    import time
+
+    monkeypatch.setattr(payment_service, "ADMIN_ID", 999)
+    monkeypatch.setattr(payment_service, "TEST_PAYMENT_ENABLED", True)
+    db.add_service("Test", "T")
+    offer_id = db.add_offer(1, "Test product", 5.0, 1)
+    db.add_inventory_items(offer_id, ["real_inventory_must_remain_available"])
+    stock_before = db.get_offer(offer_id)["stock"]
+    db.get_conn().orders.insert_one({
+        "id": 42, "user_id": 999, "offer_id": offer_id,
+        "service_name": "Test", "offer_name": "Test product",
+        "qty": 1, "total_price": 5.0,
+        "status": OrderStatus.PENDING_PAYMENT, "txid": "",
+        "created_at": int(time.time()), "expires_at": int(time.time()) + 1800,
+    })
+
+    result = payment_service.submit_payment(42, "TEST-PAYMENT", 999)
+
+    assert result["status"] == "delivered"
+    assert db.get_order(42)["verify_method"] == "admin_test"
+    assert db.get_offer(offer_id)["stock"] == stock_before
     assert db.inventory_stats(offer_id)["available"] == 1
 
 
