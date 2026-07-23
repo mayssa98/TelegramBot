@@ -57,7 +57,7 @@ def test_wallet_button_rejects_an_empty_balance(mock_mongodb):
     db.add_service("AI", "T")
     offer_id = db.add_offer(1, "Premium", 10.0, 1)
 
-    with pytest.raises(ValueError, match="0.00 USDT"):
+    with pytest.raises(ValueError, match="Insufficient balance: 0.00 USDT available"):
         order_service.create_order(
             42, db.get_offer(offer_id), payment_method="wallet"
         )

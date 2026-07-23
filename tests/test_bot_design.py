@@ -874,12 +874,12 @@ def test_empty_wallet_click_always_returns_a_visible_message(monkeypatch):
     })
 
     def reject_empty_wallet(*_args, **_kwargs):
-        raise ValueError("Solde insuffisant : 0.00 USDT disponible.")
+        raise ValueError("Insufficient balance: 0.00 USDT available.")
 
     monkeypatch.setattr("bot.order_service.create_order", reject_empty_wallet)
 
     asyncio.run(handle_buy_confirmed(update, SimpleNamespace(), "en", "wallet"))
 
     query.message.reply_text.assert_awaited_once_with(
-        "Solde insuffisant : 0.00 USDT disponible."
+        "Insufficient balance: 0.00 USDT available."
     )

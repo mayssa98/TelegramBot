@@ -81,12 +81,12 @@ def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = 
         available_cents = wallet_service.balance_cents(user_id)
         if available_cents <= 0:
             raise ValueError(
-                f"Solde insuffisant : 0.00 {CURRENCY} disponible."
+                f"Insufficient balance: 0.00 {CURRENCY} available."
             )
         wallet_used = wallet_service.apply_balance(user_id, after_discount)
         if wallet_used <= 0:
             raise ValueError(
-                "Votre solde n'a pas pu être débité. Veuillez réessayer."
+                "Your balance could not be charged. Please try again."
             )
     service = db.get_service(offer["service_id"])
 
