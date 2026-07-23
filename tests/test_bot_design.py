@@ -24,6 +24,7 @@ from bot import (
     compact_offer_text,
     custom_emoji_from_message,
     custom_emojis_from_message,
+    handle_buy_confirmed,
     handle_pending_input,
     text_without_custom_emojis,
     text_with_custom_emoji_tokens,
@@ -859,3 +860,26 @@ def test_every_topup_button_supports_exact_premium_emoji(mock_mongodb):
     assert buttons["home"].icon_custom_emoji_id == "premium-topup-home"
     assert buttons["topup_claim"].text == "Verify Payment"
     assert buttons["topup_txid"].text == "Verify with TXID"
+
+
+def test_empty_wallet_click_always_returns_a_visible_message(monkeypatch):
+    query = SimpleNamespace(
+        data="pay_wallet:9:1",
+        from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(reply_text=AsyncMock()),
+    )
+    update = SimpleNamespace(callback_query=query)
+    monkeypatch.setattr("bot.db.get_offer", lambda _offer_id: {
+        "id": 9, "price": 5.0, "stock": 1,
+    })
+
+    def reject_empty_wallet(*_args, **_kwargs):
+        raise ValueError("Solde insuffisant : 0.00 USDT disponible.")
+
+    monkeypatch.setattr("bot.order_service.create_order", reject_empty_wallet)
+
+    asyncio.run(handle_buy_confirmed(update, SimpleNamespace(), "en", "wallet"))
+
+    query.message.reply_text.assert_awaited_once_with(
+        "Solde insuffisant : 0.00 USDT disponible."
+    )

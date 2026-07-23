@@ -1199,7 +1199,7 @@ async def handle_buy_confirmation(update, context, lang):
     offer_id = int(parts[1])
     qty = int(parts[2]) if len(parts) > 2 else 1
     if not await send_buy_confirmation(q.edit_message_text, uid, offer_id, qty, lang):
-        await q.answer(t(lang, "out_of_stock"), show_alert=True)
+        await q.message.reply_text(t(lang, "out_of_stock"))
 
 
 async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
@@ -1212,14 +1212,16 @@ async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
     offer = db.get_offer(offer_id)
 
     if not offer or offer["price"] is None or offer["stock"] <= 0 or qty < 1 or qty > offer["stock"]:
-        await q.answer(t(lang, "out_of_stock"), show_alert=True)
+        await q.message.reply_text(t(lang, "out_of_stock"))
         return
 
     try:
         order = order_service.create_order(uid, offer, qty=qty, payment_method=payment_method)
         order_service.cancel_incomplete_orders(uid, exclude_order_id=order["id"])
     except ValueError as exc:
-        await q.answer(str(exc), show_alert=True)
+        # cb_navigation already acknowledged this callback. Telegram rejects a
+        # second q.answer(), which previously left wallet errors invisible.
+        await q.message.reply_text(str(exc))
         return
 
     if order["total_price"] == 0:
