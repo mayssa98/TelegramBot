@@ -446,14 +446,9 @@ async def announce_channel_restock(context, offer_id, added, stock):
     return sent
 
 
-def schedule_new_stock_broadcast(context, offer_id, added, stock):
-    """Run a potentially large broadcast without delaying the admin flow."""
-    coroutine = announce_channel_restock(context, offer_id, added, stock)
-    application = getattr(context, "application", None)
-    if application and hasattr(application, "create_task"):
-        application.create_task(coroutine)
-    else:
-        asyncio.create_task(coroutine)
+async def send_new_stock_broadcast(context, offer_id, added, stock):
+    """Finish the broadcast before a serverless webhook request can terminate."""
+    return await announce_channel_restock(context, offer_id, added, stock)
 
 
 async def announce_channel_purchase(context, order_id):
@@ -1539,12 +1534,13 @@ async def handle_pending_input(update, context, lang):
             return
         PENDING.pop(uid, None)
         stock = inventory_service.sync_offer_stock(ref)
+        sent = 0
         if added:
-            schedule_new_stock_broadcast(context, ref, added, stock)
+            sent = await send_new_stock_broadcast(context, ref, added, stock)
         await update.message.reply_text(
             f"✅ {added} compte(s) ajouté(s) et chiffré(s).\n"
             f"📦 Stock affiché synchronisé dans le bot : {stock}\n"
-            "📣 Publicité privée envoyée à tous les utilisateurs.",
+            f"📣 Publicité privée envoyée à {sent} utilisateur(s).",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
         return
@@ -1566,12 +1562,13 @@ async def handle_pending_input(update, context, lang):
             unlimited_stock=False,
         )
         PENDING.pop(uid, None)
+        sent = 0
         if stock > 0:
-            schedule_new_stock_broadcast(context, ref, stock, stock)
+            sent = await send_new_stock_broadcast(context, ref, stock, stock)
         await update.message.reply_text(
             f"✅ Stock manuel activé : {stock}\n"
             "📦 Ce nombre est maintenant visible publiquement.\n"
-            "📣 Publicité privée envoyée à tous les utilisateurs.\n"
+            f"📣 Publicité privée envoyée à {sent} utilisateur(s).\n"
             "👤 Après paiement, le client devra contacter l’admin avec son numéro de commande.",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
