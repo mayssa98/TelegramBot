@@ -403,8 +403,57 @@ async def send_channel_member_welcome(send, context, user_id, lang):
 
 
 async def announce_channel_restock(context, offer_id, added, stock):
-    """Compatibility no-op: stock is displayed directly in the bot catalog."""
-    return False
+    """Broadcast a private new-stock advert to every active bot user."""
+    if int(added or 0) <= 0 or int(stock or 0) <= 0:
+        return 0
+    offer = db.get_offer(int(offer_id))
+    if not offer or not offer.get("active", 1):
+        return 0
+    service = db.get_service(offer["service_id"]) or {}
+    price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f}"
+    sent = 0
+    for user in db.list_broadcast_users():
+        user_id = user.get("telegram_id")
+        if not user_id:
+            continue
+        lang = user.get("lang") or DEFAULT_LANG
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=premium_customer_text(
+                    lang,
+                    "channel_stock_announcement",
+                    emoji=service.get("emoji") or "📦",
+                    service=service.get("name") or SHOP_NAME,
+                    offer=offer.get("name") or f"Offer #{offer_id}",
+                    price=price,
+                    cur=CURRENCY,
+                    stock=int(stock),
+                    added=int(added),
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.offer_detail_keyboard(lang, offer),
+            )
+            sent += 1
+        except Exception as exc:
+            # Telegram rejects future messages when a user blocks/deletes the bot.
+            message = str(exc).lower()
+            if "blocked" in message or "chat not found" in message or "deactivated" in message:
+                db.mark_broadcast_blocked(user_id)
+            else:
+                log.warning("New-stock broadcast failed for user %s: %s", user_id, exc)
+        await asyncio.sleep(0.04)
+    return sent
+
+
+def schedule_new_stock_broadcast(context, offer_id, added, stock):
+    """Run a potentially large broadcast without delaying the admin flow."""
+    coroutine = announce_channel_restock(context, offer_id, added, stock)
+    application = getattr(context, "application", None)
+    if application and hasattr(application, "create_task"):
+        application.create_task(coroutine)
+    else:
+        asyncio.create_task(coroutine)
 
 
 async def announce_channel_purchase(context, order_id):
@@ -677,6 +726,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "adm_text_override",
         "adm_btn_add",
         "adm_inventory",
+        "adm_manual_stock",
         "adm_deliver",
     }
 
@@ -1472,6 +1522,15 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "adm_inventory" and uid == ADMIN_ID:
+        if text.strip() == "#":
+            PENDING[uid] = ("adm_manual_stock", ref)
+            await update.message.reply_text(
+                "📦 *Stock manuel*\n\n"
+                "Envoyez le nombre de comptes à afficher publiquement.\n"
+                "Après chaque achat, ce stock diminuera automatiquement.",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
         try:
             items = inventory_service.parse_bulk_inventory(text)
             added = inventory_service.add_items(ref, items)
@@ -1480,9 +1539,40 @@ async def handle_pending_input(update, context, lang):
             return
         PENDING.pop(uid, None)
         stock = inventory_service.sync_offer_stock(ref)
+        if added:
+            schedule_new_stock_broadcast(context, ref, added, stock)
         await update.message.reply_text(
             f"✅ {added} compte(s) ajouté(s) et chiffré(s).\n"
-            f"📦 Stock affiché synchronisé dans le bot : {stock}",
+            f"📦 Stock affiché synchronisé dans le bot : {stock}\n"
+            "📣 Publicité privée envoyée à tous les utilisateurs.",
+            reply_markup=admin.offer_admin_keyboard(ref),
+        )
+        return
+
+    if kind == "adm_manual_stock" and uid == ADMIN_ID:
+        try:
+            stock = int(text.strip())
+            if stock < 0:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text(
+                "⚠️ Envoyez un nombre entier valide supérieur ou égal à 0."
+            )
+            return
+        db.update_offer(
+            ref,
+            stock=stock,
+            manual_stock=True,
+            unlimited_stock=False,
+        )
+        PENDING.pop(uid, None)
+        if stock > 0:
+            schedule_new_stock_broadcast(context, ref, stock, stock)
+        await update.message.reply_text(
+            f"✅ Stock manuel activé : {stock}\n"
+            "📦 Ce nombre est maintenant visible publiquement.\n"
+            "📣 Publicité privée envoyée à tous les utilisateurs.\n"
+            "👤 Après paiement, le client devra contacter l’admin avec son numéro de commande.",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
         return
@@ -2026,6 +2116,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats = db.inventory_stats(oid)
         await q.message.reply_text(
             "🔐 *Import massif sécurisé*\n\n"
+            "Pour une livraison manuelle, envoyez uniquement `#` : le bot vous demandera le stock public.\n\n"
             "Placez `#` au début de chaque nouveau compte. Le séparateur `#` sert uniquement au calcul du stock et ne sera jamais livré au client.\n"
             "Toutes les lignes suivantes appartiennent à ce compte jusqu'au prochain `#`.\n\n"
             "Exemple :\n"
@@ -2073,6 +2164,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(
             f"🧩 *{off['name']}*\n💵 Prix : {price}\n"
             f"📦 Stock : {'♾ Illimité' if off.get('unlimited_stock') else off['stock']}\n"
+            f"🚚 Livraison : {'Admin' if off.get('manual_stock') else 'Automatique'}\n"
             f"📝 {off['note'] or '—'}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid))
@@ -2100,7 +2192,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
         enabled = not bool(off.get("unlimited_stock"))
-        db.update_offer(oid, unlimited_stock=enabled)
+        db.update_offer(oid, unlimited_stock=enabled, manual_stock=False)
         await q.edit_message_text(
             "✅ Stock illimité activé." if enabled else "✅ Stock illimité désactivé.",
             reply_markup=admin.offer_admin_keyboard(oid),

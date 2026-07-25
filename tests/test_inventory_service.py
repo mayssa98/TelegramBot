@@ -178,6 +178,30 @@ def test_initial_inventory_content_increases_offer_stock(mock_mongodb):
     assert mock_mongodb.inventory.count_documents({"offer_id": offer_id, "status": "available"}) == 2
 
 
+def test_manual_stock_is_not_replaced_by_empty_inventory_count(mock_mongodb):
+    service_id = db.add_service("Manual", "📦")
+    offer_id = db.add_offer(service_id, "Admin delivery", 5.0, 12)
+    db.update_offer(offer_id, manual_stock=True)
+
+    stock = inventory_service.sync_offer_stock(offer_id)
+
+    assert stock == 12
+    assert db.get_offer(offer_id)["stock"] == 12
+
+
+def test_importing_accounts_disables_manual_stock_mode(mock_mongodb):
+    service_id = db.add_service("Manual", "📦")
+    offer_id = db.add_offer(service_id, "Admin delivery", 5.0, 10)
+    db.update_offer(offer_id, manual_stock=True)
+
+    inventory_service.add_items(offer_id, ["account@example.com:password"])
+    inventory_service.sync_offer_stock(offer_id)
+
+    offer = db.get_offer(offer_id)
+    assert offer["manual_stock"] is False
+    assert offer["stock"] == 1
+
+
 def test_inventory_key_can_fallback_to_deployment_secret(mock_mongodb, monkeypatch):
     monkeypatch.setattr(db, "INVENTORY_KEY", "")
     monkeypatch.setenv("HP_BOT_TOKEN", "123456:stable-secret-token")

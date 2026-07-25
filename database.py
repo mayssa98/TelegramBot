@@ -272,6 +272,7 @@ def update_offer(
     photo_file_id=None,
     instructions=None,
     unlimited_stock=None,
+    manual_stock=None,
 ):
     values = {
         key: value
@@ -291,6 +292,7 @@ def update_offer(
             "photo_file_id": photo_file_id,
             "instructions": instructions,
             "unlimited_stock": unlimited_stock,
+            "manual_stock": manual_stock,
         }.items()
         if value is not None
     }
@@ -352,6 +354,7 @@ def add_offer(
     photo_file_id="",
     instructions="",
     unlimited_stock=False,
+    manual_stock=False,
 ):
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
@@ -371,6 +374,7 @@ def add_offer(
         "photo_file_id": photo_file_id,
         "instructions": instructions,
         "unlimited_stock": bool(unlimited_stock),
+        "manual_stock": bool(manual_stock),
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
     })
@@ -402,6 +406,7 @@ def duplicate_offer(offer_id):
         low_stock_threshold=source.get("low_stock_threshold", 5),
         delivery_delay=source.get("delivery_delay", ""),
         unlimited_stock=source.get("unlimited_stock", False),
+        manual_stock=source.get("manual_stock", False),
     )
 
 
@@ -904,6 +909,28 @@ def close_ticket(ticket_id):
 
 def list_users(limit=100):
     return [_public(x) for x in get_conn().users.find({}).sort("created_at", DESCENDING).limit(limit)]
+
+
+def list_broadcast_users():
+    """Return every active bot user eligible for private announcements."""
+    return [
+        _public(row)
+        for row in get_conn().users.find(
+            {
+                "telegram_id": {"$exists": True},
+                "banned": {"$ne": True},
+                "broadcast_blocked": {"$ne": True},
+            },
+            {"telegram_id": 1, "lang": 1},
+        )
+    ]
+
+
+def mark_broadcast_blocked(user_id, blocked=True):
+    get_conn().users.update_one(
+        {"telegram_id": int(user_id)},
+        {"$set": {"broadcast_blocked": bool(blocked)}},
+    )
 
 
 def set_user_banned(user_id, banned):

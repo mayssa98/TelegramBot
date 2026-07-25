@@ -68,7 +68,7 @@ def clean_delivery_value(value: str) -> str:
 def sync_offer_stock(offer_id: int) -> int:
     conn = db.get_conn()
     offer = conn.offers.find_one({"id": offer_id}) or {}
-    if offer.get("unlimited_stock"):
+    if offer.get("unlimited_stock") or offer.get("manual_stock"):
         return int(offer.get("stock") or 0)
     available = conn.inventory.count_documents({
         "offer_id": offer_id,
@@ -85,6 +85,11 @@ def sync_offer_stock(offer_id: int) -> int:
 def add_items(offer_id: int, items: list[str]) -> int:
     """Add every non-empty imported account, including identical accounts."""
     conn = db.get_conn()
+    # Importing actual credentials restores automatic, inventory-backed stock.
+    conn.offers.update_one(
+        {"id": offer_id},
+        {"$set": {"manual_stock": False, "unlimited_stock": False}},
+    )
     cipher = db._fernet()
     added = 0
 

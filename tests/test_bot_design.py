@@ -42,15 +42,27 @@ from bot import (
 from i18n import t
 
 
-def test_inventory_restock_stays_in_private_bot_catalog(mock_mongodb):
+def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb):
     service_id = db.add_service("Chat GPT", "🤖")
     offer_id = db.add_offer(service_id, "Premium 30 days", 5.0, 3)
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101, "lang": "en"},
+        {"telegram_id": 202, "lang": "en"},
+    ])
     bot_client = SimpleNamespace(username="blackmarketa_bot", send_message=AsyncMock())
 
     sent = asyncio.run(announce_channel_restock(SimpleNamespace(bot=bot_client), offer_id, 3, 3))
 
-    assert sent is False
-    bot_client.send_message.assert_not_awaited()
+    assert sent == 2
+    assert bot_client.send_message.await_count == 2
+    calls = bot_client.send_message.await_args_list
+    assert {call.kwargs["chat_id"] for call in calls} == {101, 202}
+    assert all(call.kwargs["chat_id"] != "@blackmarketBotChannel" for call in calls)
+    assert all("NEW STOCK JUST DROPPED" in call.kwargs["text"] for call in calls)
+    assert all(
+        call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
+        for call in calls
+    )
 
 
 def test_successful_purchase_is_not_announced_to_channel(mock_mongodb):
@@ -89,7 +101,7 @@ def test_admin_test_purchase_is_never_announced(mock_mongodb):
 
     sent = asyncio.run(announce_channel_purchase(SimpleNamespace(bot=bot_client), 78))
 
-    assert sent is False
+    assert sent == 0
     bot_client.send_message.assert_not_awaited()
 
 def test_zero_added_inventory_does_not_announce(mock_mongodb):
@@ -97,7 +109,7 @@ def test_zero_added_inventory_does_not_announce(mock_mongodb):
 
     sent = asyncio.run(announce_channel_restock(SimpleNamespace(bot=bot_client), 99, 0, 4))
 
-    assert sent is False
+    assert sent == 0
     bot_client.send_message.assert_not_awaited()
 
 def test_delivery_accounts_use_numeric_labels_without_hash_delimiters():
