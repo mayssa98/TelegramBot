@@ -42,24 +42,18 @@ from bot import (
 from i18n import t
 
 
-def test_inventory_restock_announcement_targets_channel_with_offer_deep_link(mock_mongodb):
+def test_inventory_restock_stays_in_private_bot_catalog(mock_mongodb):
     service_id = db.add_service("Chat GPT", "🤖")
     offer_id = db.add_offer(service_id, "Premium 30 days", 5.0, 3)
     bot_client = SimpleNamespace(username="blackmarketa_bot", send_message=AsyncMock())
 
     sent = asyncio.run(announce_channel_restock(SimpleNamespace(bot=bot_client), offer_id, 3, 3))
 
-    assert sent is True
-    bot_client.send_message.assert_awaited_once()
-    call = bot_client.send_message.await_args.kwargs
-    assert call["chat_id"] == "@blackmarketBotChannel"
-    assert "Premium 30 days" in call["text"]
-    assert "3 account" in call["text"]
-    button = call["reply_markup"].inline_keyboard[0][0]
-    assert button.url == f"https://t.me/blackmarketa_bot?start=offer_{offer_id}"
+    assert sent is False
+    bot_client.send_message.assert_not_awaited()
 
 
-def test_successful_purchase_is_announced_once_without_customer_secrets(mock_mongodb):
+def test_successful_purchase_is_not_announced_to_channel(mock_mongodb):
     service_id = db.add_service("Chat GPT", "🤖")
     offer_id = db.add_offer(service_id, "Premium 30 days", 5.0, 4)
     mock_mongodb.orders.insert_one({
@@ -82,14 +76,9 @@ def test_successful_purchase_is_announced_once_without_customer_secrets(mock_mon
     first = asyncio.run(announce_channel_purchase(context, 77))
     second = asyncio.run(announce_channel_purchase(context, 77))
 
-    assert first is True
+    assert first is False
     assert second is False
-    bot_client.send_message.assert_awaited_once()
-    text = bot_client.send_message.await_args.kwargs["text"]
-    assert "SUCCESSFUL PURCHASE" in text
-    assert "Premium 30 days" in text
-    assert "987654321" not in text
-    assert "REAL_TXID_SECRET" not in text
+    bot_client.send_message.assert_not_awaited()
 
 
 def test_admin_test_purchase_is_never_announced(mock_mongodb):
@@ -123,7 +112,10 @@ def test_delivery_accounts_use_numeric_labels_without_hash_delimiters():
 def test_start_requires_channel_membership(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     user = SimpleNamespace(id=42, username="buyer", first_name="Buyer")
-    bot_client = SimpleNamespace(get_chat_member=AsyncMock(return_value=SimpleNamespace(status="left")))
+    bot_client = SimpleNamespace(
+        username="blackmarketa_bot",
+        get_chat_member=AsyncMock(return_value=SimpleNamespace(status="left")),
+    )
     update = SimpleNamespace(effective_user=user, message=message)
     context = SimpleNamespace(bot=bot_client, args=[])
     monkeypatch.setattr("bot.ADMIN_ID", 999)
@@ -400,16 +392,13 @@ def test_referrer_receives_progress_and_wallet_success_messages(mock_mongodb, mo
     mock_mongodb.users.insert_one({"telegram_id": 104})
     assert affiliate_service.register_referral_link(104, referrer_id)
     asyncio.run(notify_successful_referral(context, referrer_id))
-    private_call, channel_call = context.bot.send_message.await_args_list[-2:]
+    private_call = context.bot.send_message.await_args_list[-1]
     success_message = private_call.args[1]
     assert private_call.args[0] == referrer_id
     assert "5 valid referrals" in success_message
     assert "1 USDT" in success_message
     assert "1.00 USDT" in success_message
-    assert channel_call.args[0] == "@affiliate_channel"
-    assert "AFFILIATE REWARD UNLOCKED" in channel_call.args[1]
-    assert "5 valid referrals" in channel_call.args[1]
-    assert "1 USDT" in channel_call.args[1]
+    assert context.bot.send_message.await_count == 2
 
 
 def test_payment_scanner_moves_without_fake_percentage():

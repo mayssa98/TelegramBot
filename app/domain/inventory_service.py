@@ -67,6 +67,9 @@ def clean_delivery_value(value: str) -> str:
 
 def sync_offer_stock(offer_id: int) -> int:
     conn = db.get_conn()
+    offer = conn.offers.find_one({"id": offer_id}) or {}
+    if offer.get("unlimited_stock"):
+        return int(offer.get("stock") or 0)
     available = conn.inventory.count_documents({
         "offer_id": offer_id,
         "status": InventoryStatus.AVAILABLE,

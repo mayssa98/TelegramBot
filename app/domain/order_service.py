@@ -63,11 +63,11 @@ def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = 
     """
     if not offer or offer.get("price") is None or not offer.get("active", 1):
         raise ValueError("Cette offre n'est pas disponible à l'achat.")
-    if offer.get("stock", 0) <= 0:
+    if not db.offer_has_stock(offer):
         raise ValueError("Cette offre est en rupture de stock.")
     if qty < 1:
         raise ValueError("La quantité doit être au minimum 1.")
-    if qty > offer.get("stock", 0):
+    if not db.offer_has_stock(offer, qty):
         raise ValueError("La quantité demandée dépasse le stock disponible.")
 
     now = int(time.time())
@@ -221,7 +221,12 @@ def cancel_order(order_id: int, reason: str = "") -> bool:
 
     # Rétablir le stock si le paiement avait été confirmé
     if order["status"] in PAID_STATUSES and order.get("offer_id"):
-        conn.offers.update_one({"id": order["offer_id"]}, {"$inc": {"stock": order.get("qty", 1)}})
+        offer = conn.offers.find_one({"id": order["offer_id"]}) or {}
+        if not offer.get("unlimited_stock"):
+            conn.offers.update_one(
+                {"id": order["offer_id"]},
+                {"$inc": {"stock": order.get("qty", 1)}},
+            )
 
     _release_reserved_inventory(conn, order_id)
     wallet_service.refund_balance(order["user_id"], order.get("wallet_amount", 0), order_id)

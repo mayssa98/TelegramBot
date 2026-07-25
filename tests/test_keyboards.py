@@ -19,6 +19,17 @@ def test_quantity_keyboard_uses_stock_as_maximum():
     assert "buyq:9:8" not in callbacks
 
 
+def test_delivery_offers_admin_account_collection_with_order_id(monkeypatch):
+    monkeypatch.setattr("keyboards.ADMIN_USERNAME", "@Anwer_07")
+
+    keyboard = kb.post_delivery_keyboard("en", 6074)
+    button = keyboard.inline_keyboard[0][0]
+
+    assert "@Anwer_07" in button.text
+    assert button.url.startswith("https://t.me/Anwer_07?text=")
+    assert "6074" in button.url
+
+
 def test_quantity_confirmation_keeps_selected_quantity():
     keyboard = kb.confirm_buy_keyboard("fr", 9, 4)
 
@@ -59,6 +70,21 @@ def test_offer_button_always_keeps_live_stock_visible_with_long_name():
 
     assert label.endswith("| Stock: 35")
     assert len(label) <= 64
+
+
+def test_unlimited_offer_displays_infinity_and_remains_buyable():
+    offer = {
+        "id": 9, "service_id": 1, "name": "Managed accounts",
+        "price": 5.0, "stock": 0, "unlimited_stock": True,
+    }
+
+    assert "Stock: ∞" in offer_button_label("en", offer)
+    callbacks = [
+        button.callback_data
+        for row in kb.offer_detail_keyboard("en", offer).inline_keyboard
+        for button in row
+    ]
+    assert "buy:9" in callbacks
 
 
 def test_stock_label_is_listed_in_catalog_admin_category():

@@ -95,6 +95,21 @@ def test_create_order_rejects_quantity_above_stock(mock_mongodb):
         order_service.create_order(user_id=12345, offer=offer, qty=3)
 
 
+def test_create_order_allows_unlimited_offer_with_zero_physical_stock(mock_mongodb):
+    db.add_service("Managed", "♾")
+    offer_id = db.add_offer(
+        service_id=1, name="Managed account", price=5.0, stock=0,
+        unlimited_stock=True,
+    )
+
+    order = order_service.create_order(
+        user_id=12345, offer=db.get_offer(offer_id), qty=25,
+    )
+
+    assert order["qty"] == 25
+    assert db.get_offer(offer_id)["stock"] == 0
+
+
 def test_check_duplicate_pending_order(mock_mongodb):
     """Vérifie la détection de commandes en cours dupliquées."""
     db.add_service("Discord", "🎮")

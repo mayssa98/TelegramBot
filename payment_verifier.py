@@ -43,6 +43,20 @@ def _transaction_memo(transaction):
     return ""
 
 
+def _transaction_identifiers(transaction):
+    """Return every Binance identifier a customer may see on a receipt.
+
+    Binance's Pay history response has an internal ``transactionId`` as well
+    as an ``orderId``.  The mobile app labels the latter "Order ID", so either
+    value must be accepted when a customer submits the receipt identifier.
+    """
+    return {
+        str(transaction.get(key, "")).strip()
+        for key in ("transactionId", "orderId")
+        if transaction.get(key) is not None
+    } - {""}
+
+
 def verify_payment(txid, amount, currency=None, created_at=None, expected_memo=None):
     txid = (txid or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
@@ -56,7 +70,7 @@ def verify_payment(txid, amount, currency=None, created_at=None, expected_memo=N
         expected = Decimal(str(amount)).quantize(Decimal("0.00000001"))
         transactions = _fetch_pay_transactions(start_ms)
         for transaction in transactions:
-            if str(transaction.get("transactionId", "")).strip() != txid:
+            if txid not in _transaction_identifiers(transaction):
                 continue
             received = Decimal(str(transaction.get("amount", "0"))).quantize(
                 Decimal("0.00000001")

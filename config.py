@@ -14,6 +14,7 @@ load_dotenv()
 BOT_TOKEN: str = os.environ.get("HP_BOT_TOKEN", "")
 
 ADMIN_ID: int = int(os.environ.get("HP_ADMIN_ID", "0"))
+ADMIN_USERNAME: str = os.environ.get("HP_ADMIN_USERNAME", "@Anwer_07").strip()
 REQUIRED_CHANNEL: str = os.environ.get("HP_REQUIRED_CHANNEL", "@blackmarketBotChannel").strip()
 
 # ---------------------------------------------------------------------------

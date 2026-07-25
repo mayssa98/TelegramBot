@@ -220,7 +220,11 @@ def list_services_with_stock(active_only=True):
         ])
     }
     for service in services:
-        service["total_stock"] = totals.get(service["id"], 0)
+        has_unlimited = conn.offers.count_documents({
+            "service_id": service["id"], "active": 1, "unlimited_stock": True,
+        }) > 0
+        service["unlimited_stock"] = has_unlimited
+        service["total_stock"] = -1 if has_unlimited else totals.get(service["id"], 0)
     return services
 
 
@@ -237,6 +241,13 @@ def list_offers(service_id, active_only=True):
 
 def get_offer(offer_id):
     return _public(get_conn().offers.find_one({"id": offer_id}))
+
+
+def offer_has_stock(offer, qty=1):
+    """Return whether an offer can fulfill a quantity, including unlimited offers."""
+    if not offer or int(qty or 0) < 1:
+        return False
+    return bool(offer.get("unlimited_stock")) or int(offer.get("stock") or 0) >= int(qty)
 
 
 def service_total_stock(service_id):
@@ -260,6 +271,7 @@ def update_offer(
     custom_emoji_id=None,
     photo_file_id=None,
     instructions=None,
+    unlimited_stock=None,
 ):
     values = {
         key: value
@@ -278,6 +290,7 @@ def update_offer(
             "custom_emoji_id": custom_emoji_id,
             "photo_file_id": photo_file_id,
             "instructions": instructions,
+            "unlimited_stock": unlimited_stock,
         }.items()
         if value is not None
     }
@@ -338,6 +351,7 @@ def add_offer(
     custom_emoji_id="",
     photo_file_id="",
     instructions="",
+    unlimited_stock=False,
 ):
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
@@ -356,6 +370,7 @@ def add_offer(
         "custom_emoji_id": custom_emoji_id,
         "photo_file_id": photo_file_id,
         "instructions": instructions,
+        "unlimited_stock": bool(unlimited_stock),
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
     })
@@ -386,6 +401,7 @@ def duplicate_offer(offer_id):
         currency=source.get("currency", "USDT"), auto_delivery=source.get("auto_delivery", True),
         low_stock_threshold=source.get("low_stock_threshold", 5),
         delivery_delay=source.get("delivery_delay", ""),
+        unlimited_stock=source.get("unlimited_stock", False),
     )
 
 
@@ -405,10 +421,16 @@ def mark_order_paid(order_id, verify_method):
         "manual_review",
     ):
         return False
-    if order.get("offer_id"):
-        stock = db.offers.update_one({"id": order["offer_id"], "stock": {"$gte": order["qty"]}}, {"$inc": {"stock": -order["qty"]}})
+    offer = db.offers.find_one({"id": order.get("offer_id")}) if order.get("offer_id") else None
+    stock_decremented = False
+    if offer and not offer.get("unlimited_stock"):
+        stock = db.offers.update_one(
+            {"id": order["offer_id"], "stock": {"$gte": order["qty"]}},
+            {"$inc": {"stock": -order["qty"]}},
+        )
         if stock.modified_count != 1:
             return False
+        stock_decremented = True
     paid = db.orders.update_one(
         {"id": order_id, "status": order["status"]},
         {
@@ -420,7 +442,7 @@ def mark_order_paid(order_id, verify_method):
             }
         },
     )
-    if paid.modified_count != 1 and order.get("offer_id"):
+    if paid.modified_count != 1 and stock_decremented:
         db.offers.update_one({"id": order["offer_id"]}, {"$inc": {"stock": order["qty"]}})
     return paid.modified_count == 1
 

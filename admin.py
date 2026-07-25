@@ -218,6 +218,11 @@ def offer_admin_keyboard(offer_id):
         [InlineKeyboardButton("🔐 Ajouter plusieurs comptes", callback_data=f"adm_inventory:{offer_id}")],
         [InlineKeyboardButton("🖼 Modifier l’image", callback_data=f"adm_offimage:{offer_id}")],
         [InlineKeyboardButton("💵 Modifier le prix", callback_data=f"adm_setprice:{offer_id}")],
+        [InlineKeyboardButton(
+            "♾ Désactiver le stock illimité" if off.get("unlimited_stock")
+            else "♾ Activer le stock illimité",
+            callback_data=f"adm_unlimited:{offer_id}",
+        )],
         [InlineKeyboardButton("✏️ Modifier le nom", callback_data=f"adm_offname:{offer_id}")],
         [InlineKeyboardButton("🎨 Emoji animé", callback_data=f"adm_offemoji:{offer_id}")],
         [InlineKeyboardButton("📄 Description", callback_data=f"adm_offdesc:{offer_id}")],

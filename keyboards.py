@@ -1,11 +1,12 @@
 """Constructeurs de claviers inline et reply."""
 import html
 import re
+from urllib.parse import quote
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 import database as db
-from config import ADMIN_ID, REQUIRED_CHANNEL
+from config import ADMIN_ID, ADMIN_USERNAME, REQUIRED_CHANNEL
 from i18n import t
 
 
@@ -19,6 +20,7 @@ BUTTON_TEXT_KEYS = {
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_cancel", "btn_continue_payment", "btn_new_order",
     "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_verify_join", "btn_channel_buy_now",
+    "btn_receive_accounts_admin",
 }
 
 
@@ -81,6 +83,11 @@ def clean_button_name(value):
 
 
 def offer_button_label(lang, offer):
+    if offer.get("unlimited_stock"):
+        stock_text = f"{t(lang, 'stock_label').title()}: ∞"
+        max_name_length = max(8, 64 - len(stock_text) - 3)
+        name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
+        return f"{name} | {stock_text}"
     stock = int(offer.get("stock") or 0)
     stock_text = f"{t(lang, 'stock_label').title()}: {stock}"
     # Telegram limits button labels to 64 characters. Always reserve room for
@@ -216,7 +223,7 @@ def services_keyboard(lang):
             row.append(InlineKeyboardButton(
                 label,
                 callback_data=f"svc:{svc['id']}",
-                style=stock_button_style(total),
+                style="success" if svc.get("unlimited_stock") else stock_button_style(total),
                 icon_custom_emoji_id=svc.get("custom_emoji_id") or None,
             ))
             if len(row) == 2:
@@ -253,7 +260,7 @@ def offers_keyboard(lang, service_id):
         buttons.append([InlineKeyboardButton(
             offer_button_label(lang, safe_offer),
             callback_data=f"off:{off['id']}",
-            style=stock_button_style(off.get("stock")),
+            style="success" if off.get("unlimited_stock") else stock_button_style(off.get("stock")),
             icon_custom_emoji_id=(
                 db.get_text_override_icon("stock_label", lang)
                 or off.get("custom_emoji_id")
@@ -266,14 +273,14 @@ def offers_keyboard(lang, service_id):
 
 def offer_detail_keyboard(lang, offer):
     buttons = []
-    if offer["price"] is not None and offer["stock"] > 0:
+    if offer["price"] is not None and db.offer_has_stock(offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
     buttons.append([translated_button(lang, "btn_back", callback_data=f"svc:{offer['service_id']}")])
     return InlineKeyboardMarkup(buttons)
 
 
 def quantity_keyboard(lang, offer, page=0, page_size=20):
-    stock = max(1, int(offer.get("stock", 1)))
+    stock = 100 if offer.get("unlimited_stock") else max(1, int(offer.get("stock", 1)))
     total_pages = max(1, (stock + page_size - 1) // page_size)
     page = max(0, min(int(page), total_pages - 1))
     start = page * page_size + 1
@@ -362,10 +369,19 @@ def duplicate_order_keyboard(lang, existing_order_id, offer_id, qty=1):
 
 
 def post_delivery_keyboard(lang, order_id):
-    """Clavier minimal affiché après la livraison."""
-    return InlineKeyboardMarkup([[
-        translated_button(lang, "menu_catalog", callback_data="catalog"),
-    ]])
+    """Offer direct admin contact for account collection after every delivery."""
+    username = ADMIN_USERNAME.lstrip("@")
+    draft = quote(t(lang, "receive_accounts_admin_draft", oid=order_id))
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            f"{clean_translated_button_text(t(lang, 'btn_receive_accounts_admin'))} @{username}"[:64],
+            url=f"https://t.me/{username}?text={draft}",
+            icon_custom_emoji_id=db.get_text_override_icon(
+                "btn_receive_accounts_admin", lang,
+            ) or None,
+        )],
+        [translated_button(lang, "menu_catalog", callback_data="catalog")],
+    ])
 
 
 def rating_keyboard(order_id):

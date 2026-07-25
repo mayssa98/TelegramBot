@@ -181,7 +181,6 @@ async def notify_successful_referral(context, referrer_id):
     stats = affiliate_service.get_stats(referrer_id)
     lang = lang_of(referrer_id)
     target = affiliate_service.REFERRAL_TARGET
-    reward = affiliate_service.REFERRAL_REWARD_CENTS / 100
     if stats["referrals"] and stats["referrals"] % target == 0:
         key = "affiliate_ten_success"
         values = {"balance": f"{stats['balance_cents'] / 100:.2f}"}
@@ -196,23 +195,6 @@ async def notify_successful_referral(context, referrer_id):
         premium_customer_text(lang, key, **values),
         parse_mode=ParseMode.HTML,
     )
-    if stats["referrals"] and stats["referrals"] % target == 0:
-        try:
-            await context.bot.send_message(
-                REQUIRED_CHANNEL,
-                premium_customer_text(
-                    DEFAULT_LANG,
-                    "channel_affiliate_reward",
-                    count=stats["referrals"],
-                    reward=f"{reward:g}",
-                ),
-                parse_mode=ParseMode.HTML,
-            )
-        except Exception:
-            log.exception(
-                "Unable to publish affiliate milestone for referrer %s",
-                referrer_id,
-            )
 
 
 def offer_detail_fields(description: str, note: str) -> dict[str, str]:
@@ -265,7 +247,7 @@ def compact_offer_text(offer: dict, lang: str) -> str:
     return (
         f"🏷 <b>{html.escape(offer['name'])}</b>\n\n"
         f"💎 <b>{price_label}:</b> {price} {html.escape(offer.get('currency', CURRENCY))}\n"
-        f"📦 <b>{stock_label}:</b> {int(offer.get('stock') or 0)}\n"
+        f"📦 <b>{stock_label}:</b> {'∞' if offer.get('unlimited_stock') else int(offer.get('stock') or 0)}\n"
         f"🛒 <b>{sold_label}:</b> {sold}\n"
         f"🛡 <b>{warranty_label}:</b> {html.escape(warranty[:120])}\n\n"
         f"💬 <b>{description_label}:</b>\n{render_stored_rich_text(description, parse_legacy_markdown=False)}"
@@ -421,73 +403,22 @@ async def send_channel_member_welcome(send, context, user_id, lang):
 
 
 async def announce_channel_restock(context, offer_id, added, stock):
-    """Publish a customizable channel post after real inventory is added."""
-    if int(added or 0) <= 0:
-        return False
-    offer = db.get_offer(int(offer_id))
-    if not offer or not offer.get("active", 1):
-        return False
-    service = db.get_service(offer["service_id"]) or {}
-    username = context.bot.username or (await context.bot.get_me()).username
-    price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f}"
-    await context.bot.send_message(
-        chat_id=REQUIRED_CHANNEL,
-        text=premium_customer_text(
-            DEFAULT_LANG, "channel_stock_announcement",
-            emoji=service.get("emoji") or "📦",
-            service=service.get("name") or "BlackMarket",
-            offer=offer.get("name") or f"Offer #{offer_id}",
-            price=price, cur=CURRENCY, stock=int(stock or 0), added=int(added),
-        ),
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb.channel_offer_keyboard(DEFAULT_LANG, username, offer_id),
-    )
-    return True
+    """Compatibility no-op: stock is displayed directly in the bot catalog."""
+    return False
 
 
 async def announce_channel_purchase(context, order_id):
-    """Publish one privacy-safe success message per real confirmed order."""
-    order = db.get_order(int(order_id))
-    if not order or order.get("verify_method") == "admin_test":
-        return False
-    if str(order.get("txid") or "").startswith("TEST-PAYMENT-"):
-        return False
-    if not db.claim_order_channel_announcement(order_id):
-        return False
-    try:
-        offer = db.get_offer(order["offer_id"]) or {}
-        username = context.bot.username or (await context.bot.get_me()).username
-        qty = int(order.get("qty") or 1)
-        total = float(order.get("gross_total") or (float(order.get("unit_price") or 0) * qty))
-        await context.bot.send_message(
-            chat_id=REQUIRED_CHANNEL,
-            text=premium_customer_text(
-                DEFAULT_LANG, "channel_purchase_success",
-                service=order.get("service_name") or "BlackMarket",
-                offer=order.get("offer_name") or f"Offer #{order.get('offer_id')}",
-                qty=qty, total=f"{total:.2f}", cur=order.get("currency") or CURRENCY,
-                stock=int(offer.get("stock") or 0),
-            ),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.channel_offer_keyboard(DEFAULT_LANG, username, order["offer_id"]),
-        )
-    except Exception:
-        db.release_order_channel_announcement(order_id)
-        raise
-    return True
+    """Compatibility no-op: purchase results stay in the private bot chat."""
+    return False
 
 
 async def safely_announce_channel_purchase(context, order_id):
-    try:
-        return await announce_channel_purchase(context, order_id)
-    except Exception:
-        log.exception("Channel purchase announcement failed for order %s", order_id)
-        return False
+    return False
 
 async def show_deep_link_offer(update, lang, offer_id):
     """Open one channel-advertised offer safely in the customer's private chat."""
     offer = db.get_offer(int(offer_id))
-    if not offer or int(offer.get("stock") or 0) <= 0:
+    if not offer or not db.offer_has_stock(offer):
         await update.message.reply_text(
             premium_customer_text(lang, "out_of_stock"), parse_mode=ParseMode.HTML,
         )
@@ -943,7 +874,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("off:"):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
-        if not off or int(off.get("stock") or 0) <= 0:
+        if not off or not db.offer_has_stock(off):
             await q.message.reply_text(
                 premium_customer_text(lang, "out_of_stock"),
                 parse_mode=ParseMode.HTML,
@@ -1145,7 +1076,7 @@ async def handle_quantity_selection(update, context, lang):
     offer_id = int(parts[1])
     offer = db.get_offer(offer_id)
 
-    if not offer or offer["price"] is None or offer["stock"] <= 0:
+    if not offer or offer["price"] is None or not db.offer_has_stock(offer):
         await q.answer(t(lang, "out_of_stock"), show_alert=True)
         return
 
@@ -1156,7 +1087,7 @@ async def handle_quantity_selection(update, context, lang):
             lang,
             "choose_quantity",
             offer=offer["name"],
-            stock=offer["stock"],
+            stock="∞" if offer.get("unlimited_stock") else offer["stock"],
             price=f"{offer['price']:.2f}",
             cur=CURRENCY,
         ),
@@ -1167,7 +1098,7 @@ async def handle_quantity_selection(update, context, lang):
 async def send_buy_confirmation(send, uid, offer_id, qty, lang):
     """Validate a typed quantity and display the purchase summary."""
     offer = db.get_offer(offer_id)
-    if not offer or offer["price"] is None or offer["stock"] <= 0 or qty < 1 or qty > offer["stock"]:
+    if not offer or offer["price"] is None or not db.offer_has_stock(offer, qty):
         return False
     svc = db.get_service(offer["service_id"])
     gross_total = round(offer["price"] * qty, 2)
@@ -1211,7 +1142,7 @@ async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
     qty = int(parts[2]) if len(parts) > 2 else 1
     offer = db.get_offer(offer_id)
 
-    if not offer or offer["price"] is None or offer["stock"] <= 0 or qty < 1 or qty > offer["stock"]:
+    if not offer or offer["price"] is None or not db.offer_has_stock(offer, qty):
         await q.message.reply_text(t(lang, "out_of_stock"))
         return
 
@@ -1255,8 +1186,8 @@ async def handle_pending_input(update, context, lang):
             qty = int(text)
         except ValueError:
             qty = 0
-        stock = int((offer or {}).get("stock") or 0)
-        if qty < 1 or qty > stock:
+        stock = "∞" if (offer or {}).get("unlimited_stock") else int((offer or {}).get("stock") or 0)
+        if not db.offer_has_stock(offer, qty):
             await update.message.reply_text(
                 t(lang, "quantity_invalid", stock=stock),
                 parse_mode=ParseMode.MARKDOWN,
@@ -1549,19 +1480,9 @@ async def handle_pending_input(update, context, lang):
             return
         PENDING.pop(uid, None)
         stock = inventory_service.sync_offer_stock(ref)
-        announcement_line = ""
-        if added:
-            try:
-                sent = await announce_channel_restock(context, ref, added, stock)
-                if sent:
-                    announcement_line = "\n📣 Channel announcement published."
-            except Exception as exc:
-                log.exception("Channel restock announcement failed for offer %s", ref)
-                announcement_line = f"\n⚠️ Channel announcement failed: {html.escape(str(exc))[:200]}"
         await update.message.reply_text(
             f"✅ {added} compte(s) ajouté(s) et chiffré(s).\n"
-            f"📦 Stock affiché synchronisé : {stock}"
-            f"{announcement_line}",
+            f"📦 Stock affiché synchronisé dans le bot : {stock}",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
         return
@@ -1637,7 +1558,6 @@ async def handle_pending_input(update, context, lang):
 # ---------------- Traitement de paiement ----------------
 async def send_payment_result(message, context, lang, order_id, result, uid):
     if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery"):
-        await safely_announce_channel_purchase(context, order_id)
         affiliate = result.get("affiliate")
         if affiliate:
             referrer_id = affiliate["referrer_id"]
@@ -1676,10 +1596,10 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
             )
         else:
             await message.reply_text(premium_customer_text(lang, "verify_ok", oid=order_id),
-                                     parse_mode=ParseMode.HTML)
+                                     parse_mode=ParseMode.HTML,
+                                     reply_markup=kb.post_delivery_keyboard(lang, order_id))
             await admin.notify_new_order(context, db.get_order(order_id))
     elif result["status"] == "already_paid":
-        await safely_announce_channel_purchase(context, order_id)
         await message.reply_text(premium_customer_text(lang, "already_paid", oid=order_id),
                                  parse_mode=ParseMode.HTML)
     else:
@@ -2151,7 +2071,9 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         off = db.get_offer(oid)
         price = "—" if off["price"] is None else f"{off['price']:.2f} {CURRENCY}"
         await q.edit_message_text(
-            f"🧩 *{off['name']}*\n💵 Prix : {price}\n📦 Stock : {off['stock']}\n📝 {off['note'] or '—'}",
+            f"🧩 *{off['name']}*\n💵 Prix : {price}\n"
+            f"📦 Stock : {'♾ Illimité' if off.get('unlimited_stock') else off['stock']}\n"
+            f"📝 {off['note'] or '—'}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid))
         return
@@ -2173,6 +2095,16 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.update_offer(oid, active=0 if off["active"] else 1)
         await q.edit_message_text("✅ Statut de l'offre modifié.",
                                   reply_markup=admin.service_admin_keyboard(off["service_id"]))
+        return
+    if data.startswith("adm_unlimited:"):
+        oid = int(data.split(":")[1])
+        off = db.get_offer(oid)
+        enabled = not bool(off.get("unlimited_stock"))
+        db.update_offer(oid, unlimited_stock=enabled)
+        await q.edit_message_text(
+            "✅ Stock illimité activé." if enabled else "✅ Stock illimité désactivé.",
+            reply_markup=admin.offer_admin_keyboard(oid),
+        )
         return
     if data.startswith("adm_offdel:"):
         oid = int(data.split(":")[1])
@@ -2208,6 +2140,7 @@ async def deliver_order(update, context, order_id, content):
             t(cl, "delivery_received", oid=order_id, service=o["service_name"],
               offer=o["offer_name"], content=content),
             parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.post_delivery_keyboard(cl, order_id),
         )
         await update.message.reply_text(f"✅ Commande #{order_id} livrée au client.")
     except Exception as e:
@@ -2235,8 +2168,9 @@ def build_app():
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     app = Application.builder().token(BOT_TOKEN).request(request).build()
     # Group -3: required channel membership before all customer actions.
+    # Require channel membership before all customer actions.
     app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-3)
-    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-3)    # Groupe -2 : blocage des utilisateurs bannis avant les handlers du groupe 0.
+    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-3)
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(

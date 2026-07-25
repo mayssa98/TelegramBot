@@ -537,9 +537,19 @@ TRANSLATIONS = {
     "status_verification_failed": {"fr": "❌ Échec de vérification", "en": "❌ Verification failed", "ar": "❌ فشل التحقق"},
     # ---------------- Livraison ----------------
     "delivery_received": {
-        "fr": "🎁 *Votre commande #{oid} est livrée !*\n\nService : *{service}* — {offer}\n\n{content}\n\nMerci pour votre confiance ! 💜",
-        "en": "🎁 *Your order #{oid} has been delivered!*\n\nService: *{service}* — {offer}\n\n{content}\n\nThank you for your trust! 💜",
-        "ar": "🎁 *تم تسليم طلبك #{oid}!*\n\nالخدمة: *{service}* — {offer}\n\n{content}\n\nشكراً لثقتك! 💜",
+        "fr": "🎁 *Votre commande #{oid} est livrée !*\n\nService : *{service}* — {offer}\n\n{content}\n\nPour recevoir vos comptes via l'administrateur, appuyez sur le bouton ci-dessous et envoyez votre numéro de commande *#{oid}*.\n\nMerci pour votre confiance ! 💜",
+        "en": "🎁 *Your order #{oid} has been delivered!*\n\nService: *{service}* — {offer}\n\n{content}\n\nTo receive your accounts from the admin, use the button below and send your order ID *#{oid}*.\n\nThank you for your trust! 💜",
+        "ar": "🎁 *تم تسليم طلبك #{oid}!*\n\nالخدمة: *{service}* — {offer}\n\n{content}\n\nلاستلام حساباتك من المشرف، استخدم الزر أدناه وأرسل رقم الطلب *#{oid}*.\n\nشكراً لثقتك! 💜",
+    },
+    "btn_receive_accounts_admin": {
+        "fr": "👤 Contacter l’admin pour recevoir les comptes",
+        "en": "👤 Contact admin to receive accounts",
+        "ar": "👤 تواصل مع المشرف لاستلام الحسابات",
+    },
+    "receive_accounts_admin_draft": {
+        "fr": "Bonjour, je souhaite recevoir les comptes de ma commande #{oid}.",
+        "en": "Hello, I want to receive the accounts for order #{oid}.",
+        "ar": "مرحباً، أريد استلام حسابات الطلب #{oid}.",
     },
     # ---------------- Aide ----------------
     "help_text": {
