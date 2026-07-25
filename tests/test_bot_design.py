@@ -17,6 +17,7 @@ from bot import (
     AUTO_TOPUP_TASKS,
     announce_channel_restock,
     announce_channel_purchase,
+    broadcast_admin_message,
     PENDING,
     cb_admin,
     cb_navigation,
@@ -62,6 +63,51 @@ def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb)
     assert all(
         call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
         for call in calls
+    )
+
+
+def test_admin_can_reannounce_current_offer_without_adding_stock(mock_mongodb):
+    service_id = db.add_service("Chat GPT", "🤖")
+    offer_id = db.add_offer(service_id, "Premium 30 days", 7.5, 4)
+    mock_mongodb.users.insert_one({"telegram_id": 101, "lang": "en"})
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(
+        announce_channel_restock(SimpleNamespace(bot=bot_client), offer_id, None, 4)
+    )
+
+    assert sent == 1
+    text = bot_client.send_message.await_args.kwargs["text"]
+    assert "AVAILABLE OFFER" in text
+    assert "7.50 USDT" in text
+    assert "4 account" in text
+
+
+def test_admin_custom_announcement_is_copied_to_all_active_users(mock_mongodb):
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101, "lang": "en"},
+        {"telegram_id": 202, "lang": "en"},
+        {"telegram_id": 303, "lang": "en", "banned": True},
+    ])
+    bot_client = SimpleNamespace(copy_message=AsyncMock())
+
+    sent = asyncio.run(
+        broadcast_admin_message(
+            SimpleNamespace(bot=bot_client),
+            source_chat_id=999,
+            message_id=55,
+        )
+    )
+
+    assert sent == 2
+    assert bot_client.copy_message.await_count == 2
+    assert {
+        call.kwargs["chat_id"]
+        for call in bot_client.copy_message.await_args_list
+    } == {101, 202}
+    assert all(
+        call.kwargs["from_chat_id"] == 999 and call.kwargs["message_id"] == 55
+        for call in bot_client.copy_message.await_args_list
     )
 
 

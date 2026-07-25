@@ -70,6 +70,7 @@ def admin_panel_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Commandes payées", callback_data="adm_list:paid")],
         [InlineKeyboardButton("📦 Catalogue", callback_data="adm_catalog")],
+        [InlineKeyboardButton("📢 Créer une annonce", callback_data="adm_broadcast_message")],
         [InlineKeyboardButton("🎫 Tickets support", callback_data="adm_tickets")],
         [InlineKeyboardButton("🎛 Personnaliser le bot", callback_data="adm_customize")],
     ])
@@ -218,6 +219,10 @@ def offer_admin_keyboard(offer_id):
         [InlineKeyboardButton("🔐 Ajouter plusieurs comptes", callback_data=f"adm_inventory:{offer_id}")],
         [InlineKeyboardButton("🖼 Modifier l’image", callback_data=f"adm_offimage:{offer_id}")],
         [InlineKeyboardButton("💵 Modifier le prix", callback_data=f"adm_setprice:{offer_id}")],
+        [InlineKeyboardButton(
+            "📣 Envoyer une annonce (prix + stock)",
+            callback_data=f"adm_broadcast_offer:{offer_id}",
+        )],
         [InlineKeyboardButton(
             "♾ Désactiver le stock illimité" if off.get("unlimited_stock")
             else "♾ Activer le stock illimité",

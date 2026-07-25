@@ -404,10 +404,13 @@ async def send_channel_member_welcome(send, context, user_id, lang):
 
 async def announce_channel_restock(context, offer_id, added, stock):
     """Broadcast a private new-stock advert to every active bot user."""
-    if int(added or 0) <= 0 or int(stock or 0) <= 0:
-        return 0
     offer = db.get_offer(int(offer_id))
     if not offer or not offer.get("active", 1):
+        return 0
+    unlimited = bool(offer.get("unlimited_stock"))
+    if not unlimited and int(stock or 0) <= 0:
+        return 0
+    if added is not None and int(added or 0) <= 0:
         return 0
     service = db.get_service(offer["service_id"]) or {}
     price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f}"
@@ -418,18 +421,27 @@ async def announce_channel_restock(context, offer_id, added, stock):
             continue
         lang = user.get("lang") or DEFAULT_LANG
         try:
+            message_key = (
+                "channel_stock_announcement"
+                if added is not None
+                else "offer_stock_announcement"
+            )
+            values = {
+                "emoji": service.get("emoji") or "📦",
+                "service": service.get("name") or SHOP_NAME,
+                "offer": offer.get("name") or f"Offer #{offer_id}",
+                "price": price,
+                "cur": CURRENCY,
+                "stock": "∞" if unlimited else int(stock),
+            }
+            if added is not None:
+                values["added"] = int(added)
             await context.bot.send_message(
                 chat_id=user_id,
                 text=premium_customer_text(
                     lang,
-                    "channel_stock_announcement",
-                    emoji=service.get("emoji") or "📦",
-                    service=service.get("name") or SHOP_NAME,
-                    offer=offer.get("name") or f"Offer #{offer_id}",
-                    price=price,
-                    cur=CURRENCY,
-                    stock=int(stock),
-                    added=int(added),
+                    message_key,
+                    **values,
                 ),
                 parse_mode=ParseMode.HTML,
                 reply_markup=kb.offer_detail_keyboard(lang, offer),
@@ -449,6 +461,30 @@ async def announce_channel_restock(context, offer_id, added, stock):
 async def send_new_stock_broadcast(context, offer_id, added, stock):
     """Finish the broadcast before a serverless webhook request can terminate."""
     return await announce_channel_restock(context, offer_id, added, stock)
+
+
+async def broadcast_admin_message(context, source_chat_id, message_id):
+    """Copy an admin-authored Telegram message to every active bot user."""
+    sent = 0
+    for user in db.list_broadcast_users():
+        user_id = user.get("telegram_id")
+        if not user_id:
+            continue
+        try:
+            await context.bot.copy_message(
+                chat_id=user_id,
+                from_chat_id=source_chat_id,
+                message_id=message_id,
+            )
+            sent += 1
+        except Exception as exc:
+            message = str(exc).lower()
+            if "blocked" in message or "chat not found" in message or "deactivated" in message:
+                db.mark_broadcast_blocked(user_id)
+            else:
+                log.warning("Admin announcement failed for user %s: %s", user_id, exc)
+        await asyncio.sleep(0.04)
+    return sent
 
 
 async def announce_channel_purchase(context, order_id):
@@ -722,6 +758,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "adm_btn_add",
         "adm_inventory",
         "adm_manual_stock",
+        "adm_broadcast_message",
         "adm_deliver",
     }
 
@@ -1271,6 +1308,19 @@ async def handle_pending_input(update, context, lang):
             reply_markup=kb.home_keyboard(lang, uid),
         )
         log.info("Catalog request ticket %s created by user %s", ticket["id"], uid)
+        return
+
+    if kind == "adm_broadcast_message" and uid == ADMIN_ID:
+        PENDING.pop(uid, None)
+        sent = await broadcast_admin_message(
+            context,
+            update.effective_chat.id,
+            update.message.message_id,
+        )
+        await update.message.reply_text(
+            f"✅ Annonce envoyée à {sent} utilisateur(s).",
+            reply_markup=admin.admin_panel_keyboard(),
+        )
         return
     if kind == "adm_text_override" and uid == ADMIN_ID:
         saved_key = ""
@@ -1976,6 +2026,16 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=admin.text_categories_keyboard(),
         )
         return
+
+    if data == "adm_broadcast_message":
+        PENDING[uid] = ("adm_broadcast_message", 0)
+        await q.message.reply_text(
+            "📢 *Créer une annonce*\n\n"
+            "Envoyez maintenant le message à publier à tous les utilisateurs.\n"
+            "La mise en forme Telegram sera conservée.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
     if data.startswith("adm_text_cat:"):
         category, page = data.removeprefix("adm_text_cat:").rsplit(":", 1)
         labels = dict(admin.TEXT_CATEGORIES)
@@ -2193,6 +2253,23 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(
             "✅ Stock illimité activé." if enabled else "✅ Stock illimité désactivé.",
             reply_markup=admin.offer_admin_keyboard(oid),
+        )
+        return
+    if data.startswith("adm_broadcast_offer:"):
+        oid = int(data.split(":")[1])
+        off = db.get_offer(oid)
+        if not off or not off.get("active", 1):
+            await q.answer("Offre indisponible.", show_alert=True)
+            return
+        stock = int(off.get("stock") or 0)
+        if stock <= 0 and not off.get("unlimited_stock"):
+            await q.answer("Aucun stock disponible à annoncer.", show_alert=True)
+            return
+        sent = await send_new_stock_broadcast(context, oid, None, stock)
+        await q.message.reply_text(
+            f"✅ Annonce envoyée à {sent} utilisateur(s).\n"
+            f"💵 Prix actuel : {float(off.get('price') or 0):.2f} {CURRENCY}\n"
+            f"📦 Stock annoncé : {'∞' if off.get('unlimited_stock') else stock}"
         )
         return
     if data.startswith("adm_offdel:"):

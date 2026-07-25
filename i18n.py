@@ -200,6 +200,11 @@ TRANSLATIONS = {
         "en": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",
         "ar": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",
     },
+    "offer_stock_announcement": {
+        "fr": "📣 *OFFRE DISPONIBLE*\n\n{emoji} *{service} — {offer}*\n💎 Prix actuel : *{price} {cur}*\n📦 Stock disponible : *{stock} compte(s)*\n\n⚡ Commandez directement avant la rupture de stock !",
+        "en": "📣 *AVAILABLE OFFER*\n\n{emoji} *{service} — {offer}*\n💎 Current price: *{price} {cur}*\n📦 Available stock: *{stock} account(s)*\n\n⚡ Order directly before it sells out!",
+        "ar": "📣 *عرض متاح*\n\n{emoji} *{service} — {offer}*\n💎 السعر الحالي: *{price} {cur}*\n📦 المخزون المتاح: *{stock} حساب*\n\n⚡ اطلب مباشرة قبل نفاد المخزون!",
+    },
     "channel_purchase_success": {
         "fr": "🎉 *ANOTHER SUCCESSFUL PURCHASE*\n\n✅ A customer just secured:\n🛍 *{service} — {offer}*\n📦 Quantity: *{qty}*\n💎 Order value: *{total} {cur}*\n🔥 Remaining stock: *{stock} account(s)*\n\nTrusted delivery. Real products. Join the next drop before it sells out!",
         "en": "🎉 *ANOTHER SUCCESSFUL PURCHASE*\n\n✅ A customer just secured:\n🛍 *{service} — {offer}*\n📦 Quantity: *{qty}*\n💎 Order value: *{total} {cur}*\n🔥 Remaining stock: *{stock} account(s)*\n\nTrusted delivery. Real products. Join the next drop before it sells out!",

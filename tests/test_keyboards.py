@@ -239,7 +239,36 @@ def test_admin_cannot_manually_modify_offer_stock(monkeypatch):
     }
 
     assert not any(value and value.startswith("adm_setstock:") for value in callbacks)
+
+
+def test_admin_offer_panel_can_broadcast_current_price_and_stock(monkeypatch):
+    monkeypatch.setattr(
+        admin.db,
+        "get_offer",
+        lambda _offer_id: {
+            "id": 4, "service_id": 1, "active": 1,
+            "unlimited_stock": False,
+        },
+    )
+
+    callbacks = [
+        button.callback_data
+        for row in admin.offer_admin_keyboard(4).inline_keyboard
+        for button in row
+    ]
+
+    assert "adm_broadcast_offer:4" in callbacks
     assert "adm_inventory:4" in callbacks
+
+
+def test_admin_panel_has_custom_announcement_button():
+    callbacks = [
+        button.callback_data
+        for row in admin.admin_panel_keyboard().inline_keyboard
+        for button in row
+    ]
+
+    assert "adm_broadcast_message" in callbacks
 
 
 def test_catalog_never_builds_an_empty_button(monkeypatch):
