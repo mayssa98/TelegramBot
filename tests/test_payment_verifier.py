@@ -2,7 +2,63 @@
 
 from __future__ import annotations
 
+import io
+import json
+from urllib.error import HTTPError
+
 import payment_verifier
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self._body = json.dumps(payload).encode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self):
+        return self._body
+
+
+def test_binance_endpoint_fallback_after_http_451(monkeypatch):
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_KEY", "key")
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_SECRET", "secret")
+    monkeypatch.setattr(
+        payment_verifier,
+        "BINANCE_API_BASES",
+        ("https://blocked.example", "https://working.example"),
+    )
+    requested_hosts = []
+
+    def fake_urlopen(request, timeout):
+        requested_hosts.append(request.full_url.split("/", 3)[2])
+        if "blocked.example" in request.full_url:
+            raise HTTPError(request.full_url, 451, "Unavailable", {}, io.BytesIO())
+        return _FakeResponse({"success": True, "code": "000000", "data": []})
+
+    monkeypatch.setattr(payment_verifier, "urlopen", fake_urlopen)
+
+    assert payment_verifier._fetch_pay_transactions(0) == []
+    assert requested_hosts == ["blocked.example", "working.example"]
+
+
+def test_binance_healthcheck_does_not_expose_credentials(monkeypatch):
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_KEY", "super-secret-key")
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_SECRET", "super-secret-value")
+    monkeypatch.setattr(
+        payment_verifier,
+        "_fetch_pay_transactions_with_base",
+        lambda _start: ([{"transactionId": "tx"}], "https://api1.binance.com"),
+    )
+
+    result = payment_verifier.binance_healthcheck()
+
+    assert result["ok"] is True
+    assert result["transactions_24h"] == 1
+    assert "super-secret" not in json.dumps(result)
 
 
 def test_txid_verification_matches_exact_amount_without_memo(monkeypatch):

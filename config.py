@@ -30,6 +30,25 @@ BINANCE_API_SECRET: str = os.environ.get("HP_BINANCE_API_SECRET", "").strip()
 BINANCE_API_BASE: str = os.environ.get(
     "HP_BINANCE_API_BASE", "https://api.binance.com"
 ).rstrip("/")
+_BINANCE_OFFICIAL_BASES = (
+    "https://api.binance.com",
+    "https://api-gcp.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api4.binance.com",
+)
+BINANCE_API_BASES: tuple[str, ...] = tuple(dict.fromkeys(
+    [
+        BINANCE_API_BASE,
+        *[
+            value.strip().rstrip("/")
+            for value in os.environ.get("HP_BINANCE_API_BASES", "").split(",")
+            if value.strip()
+        ],
+        *_BINANCE_OFFICIAL_BASES,
+    ]
+))
 PAY_CURRENCY: str = os.environ.get("HP_PAY_CURRENCY", "USDT").upper().strip()
 TEST_PAYMENT_ENABLED: bool = os.environ.get(
     "HP_TEST_PAYMENT_ENABLED", "false"

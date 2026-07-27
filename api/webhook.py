@@ -29,6 +29,7 @@ from app.domain import inventory_service, order_service, support_service
 from app.web import dashboard_api
 from bot import build_app
 from config import CURRENCY, DASHBOARD_PASSWORD
+from payment_verifier import binance_healthcheck
 
 _loop = asyncio.new_event_loop()
 _app = None
@@ -199,6 +200,13 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(200, data)
             except Exception as exc:
                 self._reply(500, {"ok": False, "error": str(exc)})
+            return
+
+        elif path == "/admin/api/binance-health":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, binance_healthcheck())
             return
 
         elif path == "/admin/api/ticket-messages":

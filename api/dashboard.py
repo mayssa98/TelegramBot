@@ -805,6 +805,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                 <p class="last-update">Dernière mise à jour : <span id="last-update-time">-</span></p>
             </div>
             <div class="header-actions">
+                <button class="btn btn-secondary" id="binance-test-button" onclick="testBinanceConnection()">🟡 Tester Binance</button>
                 <button class="btn btn-secondary" onclick="refreshDashboardData()">🔄 Actualiser</button>
             </div>
         </header>
@@ -1774,6 +1775,30 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
         }
 
         // Actions Ajax
+        async function testBinanceConnection() {
+            const button = document.getElementById("binance-test-button");
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = "Test en cours...";
+            try {
+                const response = await fetch("/admin/api/binance-health", {
+                    headers: { "Accept": "application/json" }
+                });
+                const result = await response.json();
+                if (!response.ok || !result.ok) {
+                    showToast(result.message || "Connexion Binance indisponible", "error");
+                    return;
+                }
+                const endpoint = new URL(result.endpoint).hostname;
+                showToast(`Binance connecté via ${endpoint} · ${result.transactions_24h} transaction(s) sur 24 h`);
+            } catch (err) {
+                showToast("Impossible de tester Binance depuis Vercel", "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
         async function refreshDashboardData(silent = false) {
             try {
                 const status = document.getElementById("order-filter-status")?.value || "";

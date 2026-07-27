@@ -177,6 +177,14 @@ def test_dashboard_contains_product_sync_fields():
     assert "Livraison :" in page
 
 
+def test_dashboard_contains_binance_health_test():
+    page = render_dashboard({"summary": {}, "alerts": []}, active_tab="overview")
+
+    assert "Tester Binance" in page
+    assert "/admin/api/binance-health" in page
+    assert "testBinanceConnection" in page
+
+
 def test_dashboard_javascript_syntax_is_valid(tmp_path):
     if not shutil.which("node"):
         pytest.skip("node is not installed")

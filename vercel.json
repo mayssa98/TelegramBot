@@ -1,8 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["fra1"],
+  "fluid": true,
   "functions": {
     "api/webhook.py": {
-      "maxDuration": 30
+      "maxDuration": 60,
+      "regions": ["fra1"]
     }
   }
 }
