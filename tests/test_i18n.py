@@ -53,6 +53,14 @@ def test_topup_failure_hides_internal_binance_error():
     assert "capture du paiement" in t("fr", "payment_contact_admin", oid=6074)
 
 
+def test_already_confirmed_topup_has_a_clear_customer_message():
+    message = t("en", "topup_already_confirmed")
+
+    assert "already confirmed" in message
+    assert "already verified and credited" in message
+    assert "not been credited again" in message
+
+
 def test_french_quantity_prompt_mentions_stock_limit():
     message = t("fr", "choose_quantity", offer="Chat GPT Plus", stock=9, price="1.23", cur="USDT")
 

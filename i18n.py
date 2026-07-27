@@ -99,6 +99,11 @@ TRANSLATIONS = {
         "en": "✅ *Top up confirmed*\n\nAmount added: *{amount} USDT*\nNew balance: *{balance} USDT*",
         "ar": "✅ *Top up confirmed*\n\nAmount added: *{amount} USDT*\nNew balance: *{balance} USDT*",
     },
+    "topup_already_confirmed": {
+        "fr": "✅ *Paiement déjà confirmé*\n\nCette transaction a déjà été vérifiée et créditée. Votre solde n'a pas été crédité une deuxième fois.",
+        "en": "✅ *Payment already confirmed*\n\nThis transaction was already verified and credited. Your balance has not been credited again.",
+        "ar": "✅ *تم تأكيد الدفع مسبقاً*\n\nتم التحقق من هذه المعاملة وإضافتها إلى الرصيد مسبقاً. لم تتم إضافة الرصيد مرة أخرى.",
+    },
     "topup_failed": {
         "fr": "⚠️ *Top up not confirmed*\n\nAutomatic verification is temporarily unavailable. Your balance has not been changed. Try again or use the same TXID later.",
         "en": "⚠️ *Top up not confirmed*\n\nAutomatic verification is temporarily unavailable. Your balance has not been changed. Try again or use the same TXID later.",

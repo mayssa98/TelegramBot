@@ -558,7 +558,7 @@ def test_order_payment_values_are_individually_copyable():
     "payment_txid_used", "verify_failed", "delivery_received",
     "loyalty_activated", "affiliate_rewarded",
     "topup_message", "topup_ask_txid", "topup_scanner", "topup_auto_timeout",
-    "topup_success", "topup_failed",
+    "topup_success", "topup_already_confirmed", "topup_failed",
     "affiliate_referral_success", "affiliate_ten_success", "channel_affiliate_reward",
 ])
 def test_all_payment_flow_texts_support_exact_premium_emoji(key):

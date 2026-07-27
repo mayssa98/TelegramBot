@@ -1544,6 +1544,13 @@ async def handle_pending_input(update, context, lang):
                 parse_mode=ParseMode.HTML,
                 reply_markup=kb.home_keyboard(lang, uid),
             )
+        elif result.get("code") == "already_used":
+            PENDING.pop(uid, None)
+            await update.message.reply_text(
+                premium_customer_text(lang, "topup_already_confirmed"),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.home_keyboard(lang, uid),
+            )
         else:
             await update.message.reply_text(
                 premium_customer_text(lang, "topup_failed"),
