@@ -12,7 +12,7 @@ import json
 
 def render_dashboard(data: dict, active_tab: str = "overview") -> str:
     """Génère la page HTML complète du dashboard administrateur."""
-    allowed_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "activity", "settings"}
+    allowed_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "interactions", "activity", "settings"}
     active_tab = active_tab if active_tab in allowed_tabs else "overview"
     summary = data.get("summary", {})
     alerts = data.get("alerts", [])
@@ -737,6 +737,44 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             margin-top: 4px;
             text-align: right;
         }
+
+        .interaction-kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 14px;
+            margin: 18px 0 24px;
+        }
+        .interaction-kpi {
+            padding: 18px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: rgba(255,255,255,.025);
+        }
+        .interaction-kpi strong { display:block; font-size:28px; margin-top:8px; }
+        .live-dot {
+            display:inline-block; width:9px; height:9px; border-radius:50%;
+            background:#22c55e; box-shadow:0 0 12px #22c55e; margin-right:7px;
+        }
+        .analytics-grid {
+            display:grid; grid-template-columns:2fr 1fr; gap:18px; margin-bottom:24px;
+        }
+        .chart-card {
+            border:1px solid var(--border-color); border-radius:12px;
+            padding:18px; background:rgba(255,255,255,.02); min-height:250px;
+        }
+        .daily-chart {
+            display:flex; align-items:flex-end; gap:5px; height:180px;
+            padding-top:18px; overflow-x:auto;
+        }
+        .daily-bar-wrap { min-width:18px; flex:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; }
+        .daily-bar { width:100%; min-height:2px; background:linear-gradient(180deg,#22d3ee,#0891b2); border-radius:5px 5px 2px 2px; }
+        .daily-label { font-size:9px; color:var(--text-muted); margin-top:6px; transform:rotate(-45deg); white-space:nowrap; }
+        .type-row { margin:14px 0; }
+        .type-row-head { display:flex; justify-content:space-between; margin-bottom:5px; }
+        .type-track { height:9px; background:rgba(255,255,255,.07); border-radius:99px; overflow:hidden; }
+        .type-fill { height:100%; background:#22d3ee; border-radius:99px; }
+        .interaction-content { max-width:420px; white-space:normal; word-break:break-word; }
+        @media (max-width: 900px) { .analytics-grid { grid-template-columns:1fr; } }
     </style>
 </head>
 <body>
@@ -753,6 +791,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             <a href="/admin/inventory" data-tab="inventory" class="__ACTIVE_INVENTORY__">Inventaire</a>
             <a href="/admin/customers" data-tab="customers" class="__ACTIVE_CUSTOMERS__">Clients</a>
             <a href="/admin/support" data-tab="support" class="__ACTIVE_SUPPORT__">Support</a>
+            <a href="/admin/interactions" data-tab="interactions" class="__ACTIVE_INTERACTIONS__">Interactions</a>
             <a href="/admin/activity" data-tab="activity" class="__ACTIVE_ACTIVITY__">Activite</a>
             <a href="/admin/settings" data-tab="settings" class="__ACTIVE_SETTINGS__">Parametres</a>
         </nav>
@@ -936,7 +975,52 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             </div>
         </section>
 
-        <!-- 7. ACTIVITE -->
+        <!-- 7. INTERACTIONS CLIENTS -->
+        <section id="interactions" class="panel __PANEL_INTERACTIONS__">
+            <div class="section-header">
+                <div>
+                    <h2>Interactions clients en direct</h2>
+                    <p class="last-update">Messages, commandes et clics sur les boutons du bot.</p>
+                </div>
+                <span><span class="live-dot"></span>Mise à jour automatique</span>
+            </div>
+            <div class="interaction-kpis" id="interaction-kpis"></div>
+            <div class="analytics-grid">
+                <div class="chart-card">
+                    <h3>Interactions par jour — 30 jours</h3>
+                    <div class="daily-chart" id="interactions-daily-chart"></div>
+                </div>
+                <div class="chart-card">
+                    <h3>Répartition des actions</h3>
+                    <div id="interactions-type-chart"></div>
+                </div>
+            </div>
+            <div class="filters">
+                <div class="search-box">
+                    <input id="interaction-search" placeholder="Nom, username, ID, message ou bouton..." oninput="filterInteractions()">
+                </div>
+                <select id="interaction-type" onchange="filterInteractions()">
+                    <option value="">Toutes les interactions</option>
+                    <option value="button">Clic bouton</option>
+                    <option value="message">Message</option>
+                    <option value="command">Commande</option>
+                    <option value="media">Média</option>
+                    <option value="other">Autre</option>
+                </select>
+                <input type="date" id="interaction-date" onchange="filterInteractions()" title="Jour">
+            </div>
+            <div class="table-wrap">
+                <table id="interactions-table">
+                    <thead><tr>
+                        <th>Date</th><th>Nom</th><th>Username</th><th>Telegram ID</th>
+                        <th>Type</th><th>Bouton / commande</th><th>Message / écran</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 8. ACTIVITE -->
         <section id="activity" class="panel __PANEL_ACTIVITY__">
             <h2>Journal d'audit système</h2>
             <div class="table-wrap" style="margin-top:20px;">
@@ -956,7 +1040,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             </div>
         </section>
 
-        <!-- 8. CONFIGURATION -->
+        <!-- 9. CONFIGURATION -->
         <section id="settings" class="panel __PANEL_SETTINGS__">
             <h2>Paramètres de la boutique</h2>
             <div class="table-wrap" style="margin-top:20px; padding:28px;">
@@ -1168,6 +1252,10 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             setupTabNavigation();
             refreshUI();
             refreshDashboardData();
+            setInterval(() => {
+                const panel = document.getElementById("interactions");
+                if (panel && panel.classList.contains("active")) refreshDashboardData(true);
+            }, 10000);
         });
 
         function setupTabNavigation() {
@@ -1257,6 +1345,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             renderInventoryItems();
             renderCustomersTable();
             renderTicketsTable();
+            renderInteractions();
             renderAuditTable();
             fillSettingsForm();
         }
@@ -1574,6 +1663,77 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             });
         }
 
+        function renderInteractions() {
+            const data = dashboardData.interactions || {};
+            const summary = data.summary || {};
+            const kpis = [
+                ["Total interactions", summary.total || 0],
+                ["Aujourd’hui", summary.today || 0],
+                ["Utilisateurs actifs", summary.active_today || 0],
+                ['<span class="live-dot"></span>Actifs (5 min)', summary.live_users || 0],
+                ["Clics boutons (30 j)", summary.button_clicks || 0],
+                ["Messages (30 j)", summary.messages || 0],
+            ];
+            document.getElementById("interaction-kpis").innerHTML = kpis.map(item =>
+                `<div class="interaction-kpi"><span>${item[0]}</span><strong>${item[1]}</strong></div>`
+            ).join("");
+
+            const daily = data.daily || [];
+            const maxDaily = Math.max(1, ...daily.map(item => item.count || 0));
+            document.getElementById("interactions-daily-chart").innerHTML = daily.map(item => {
+                const height = Math.max(2, Math.round((item.count || 0) / maxDaily * 145));
+                return `<div class="daily-bar-wrap" title="${item.date}: ${item.count}">
+                    <span style="font-size:10px">${item.count || ""}</span>
+                    <div class="daily-bar" style="height:${height}px"></div>
+                    <span class="daily-label">${item.date.slice(5)}</span>
+                </div>`;
+            }).join("");
+
+            const types = data.types || {};
+            const typeEntries = Object.entries(types).sort((a,b) => b[1] - a[1]);
+            const maxType = Math.max(1, ...typeEntries.map(item => item[1]));
+            document.getElementById("interactions-type-chart").innerHTML = typeEntries.length
+                ? typeEntries.map(([type, count]) => `<div class="type-row">
+                    <div class="type-row-head"><span>${escapeHtml(type)}</span><strong>${count}</strong></div>
+                    <div class="type-track"><div class="type-fill" style="width:${count / maxType * 100}%"></div></div>
+                </div>`).join("")
+                : '<div class="empty-state">Aucune interaction enregistrée.</div>';
+
+            const tbody = document.querySelector("#interactions-table tbody");
+            const events = data.events || [];
+            tbody.innerHTML = events.length ? events.map(event => {
+                const content = event.content || event.screen || "";
+                const search = [
+                    event.full_name, event.first_name, event.username, event.user_id,
+                    event.interaction_type, event.action, content
+                ].join(" ").toLowerCase();
+                const day = new Date((event.created_at || 0) * 1000).toISOString().slice(0,10);
+                return `<tr data-search="${escapeHtml(search)}" data-type="${escapeHtml(event.interaction_type || "")}" data-day="${day}">
+                    <td>${formatDateTime(event.created_at)}</td>
+                    <td>${escapeHtml(event.full_name || event.first_name || "—")}</td>
+                    <td>${event.username ? "@" + escapeHtml(event.username) : "—"}</td>
+                    <td><code>${event.user_id || "—"}</code></td>
+                    <td><span class="badge badge-info">${escapeHtml(event.interaction_type || "other")}</span></td>
+                    <td><code>${escapeHtml(event.action || "—")}</code></td>
+                    <td class="interaction-content">${escapeHtml(content || "—")}</td>
+                </tr>`;
+            }).join("") : '<tr><td colspan="7" class="empty-state">Aucune interaction disponible.</td></tr>';
+            filterInteractions();
+        }
+
+        function filterInteractions() {
+            const search = (document.getElementById("interaction-search")?.value || "").toLowerCase();
+            const type = document.getElementById("interaction-type")?.value || "";
+            const day = document.getElementById("interaction-date")?.value || "";
+            document.querySelectorAll("#interactions-table tbody tr").forEach(row => {
+                if (!row.dataset.search) return;
+                const visible = (!search || row.dataset.search.includes(search))
+                    && (!type || row.dataset.type === type)
+                    && (!day || row.dataset.day === day);
+                row.style.display = visible ? "" : "none";
+            });
+        }
+
         function renderAuditTable() {
             const tbody = document.querySelector("#audit-table tbody");
             tbody.innerHTML = "";
@@ -1614,7 +1774,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
         }
 
         // Actions Ajax
-        async function refreshDashboardData() {
+        async function refreshDashboardData(silent = false) {
             try {
                 const status = document.getElementById("order-filter-status")?.value || "";
                 const search = document.getElementById("order-search")?.value || "";
@@ -1654,7 +1814,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                     refreshUI();
                     updateOrdersPagination();
                     updateInventoryPagination();
-                    showToast("Données actualisées");
+                    if (!silent) showToast("Données actualisées");
                 } else {
                     showToast("Échec de l'actualisation des données", "error");
                 }

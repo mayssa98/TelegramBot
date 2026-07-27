@@ -14,7 +14,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def get_conn():
@@ -83,6 +83,9 @@ def init_db():
     db.inventory.create_index("reserved_order_id")
     db.processed_updates.create_index("created_at", expireAfterSeconds=604800)
     db.audit_events.create_index("created_at")
+    db.interaction_events.create_index([("created_at", DESCENDING)])
+    db.interaction_events.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
+    db.interaction_events.create_index([("interaction_type", ASCENDING), ("created_at", DESCENDING)])
     db.support_tickets.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
     db.support_tickets.create_index("user_id")
     db.ticket_messages.create_index([("ticket_id", ASCENDING), ("created_at", ASCENDING)])
@@ -703,6 +706,93 @@ def audit_event(action, actor_id=None, details=None):
     get_conn().audit_events.insert_one({"action": action, "actor_id": actor_id, "details": details or {}, "created_at": datetime.now(UTC)})
 
 
+def log_interaction(
+    user_id,
+    *,
+    first_name="",
+    full_name="",
+    username="",
+    interaction_type="message",
+    action="",
+    content="",
+    screen="",
+):
+    """Persist one customer interaction for live dashboard analytics."""
+    now = int(time.time())
+    event = {
+        "user_id": int(user_id),
+        "first_name": str(first_name or "")[:200],
+        "full_name": str(full_name or first_name or "")[:300],
+        "username": str(username or "")[:100],
+        "interaction_type": str(interaction_type or "message")[:50],
+        "action": str(action or "")[:500],
+        "content": str(content or "")[:2000],
+        "screen": str(screen or "")[:1000],
+        "created_at": now,
+    }
+    get_conn().interaction_events.insert_one(event)
+    get_conn().users.update_one(
+        {"telegram_id": int(user_id)},
+        {
+            "$set": {"last_active_at": now},
+            "$inc": {"interaction_count": 1},
+        },
+    )
+    return _public(event)
+
+
+def interaction_analytics(days=30, limit=1000):
+    """Return interaction KPIs, daily chart points, and detailed recent events."""
+    conn = get_conn()
+    now = int(time.time())
+    today_start = now - (now % 86400)
+    start = today_start - (max(1, int(days)) - 1) * 86400
+    live_since = now - 300
+    events = [
+        _public(row)
+        for row in conn.interaction_events.find(
+            {"created_at": {"$gte": start}}
+        ).sort("created_at", DESCENDING).limit(max(1, int(limit)))
+    ]
+    daily_counts = {}
+    type_counts = {}
+    active_today = set()
+    live_users = set()
+    for event in conn.interaction_events.find(
+        {"created_at": {"$gte": start}},
+        {"created_at": 1, "user_id": 1, "interaction_type": 1},
+    ):
+        timestamp = int(event.get("created_at") or 0)
+        day = datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%d")
+        daily_counts[day] = daily_counts.get(day, 0) + 1
+        kind = str(event.get("interaction_type") or "other")
+        type_counts[kind] = type_counts.get(kind, 0) + 1
+        if timestamp >= today_start:
+            active_today.add(event.get("user_id"))
+        if timestamp >= live_since:
+            live_users.add(event.get("user_id"))
+    daily = []
+    for offset in range(max(1, int(days))):
+        day_timestamp = start + offset * 86400
+        day = datetime.fromtimestamp(day_timestamp, UTC).strftime("%Y-%m-%d")
+        daily.append({"date": day, "count": daily_counts.get(day, 0)})
+    return {
+        "summary": {
+            "total": conn.interaction_events.count_documents({}),
+            "today": conn.interaction_events.count_documents(
+                {"created_at": {"$gte": today_start}}
+            ),
+            "active_today": len(active_today),
+            "live_users": len(live_users),
+            "button_clicks": type_counts.get("button", 0),
+            "messages": type_counts.get("message", 0) + type_counts.get("command", 0),
+        },
+        "daily": daily,
+        "types": type_counts,
+        "events": events,
+    }
+
+
 def dashboard_summary():
     """Legacy wrapper — kept for backward compatibility."""
     data = dashboard_data()
@@ -884,6 +974,7 @@ def dashboard_data():
         "users": list_users(limit=200),
         "tickets": list_tickets(limit=50),
         "audits": list_audit_events(limit=100),
+        "interactions": interaction_analytics(days=30, limit=1000),
         **shop_settings(),
     }
 

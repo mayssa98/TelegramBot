@@ -124,6 +124,34 @@ def test_dashboard_support_tab_has_real_page_link():
 
     assert 'href="/admin/support" data-tab="support" class="active"' in page
     assert 'id="support" class="panel active"' in page
+
+
+def test_dashboard_interactions_page_has_live_graphs_and_detail_table():
+    page = render_dashboard({
+        "summary": {},
+        "alerts": [],
+        "interactions": {
+            "summary": {"total": 8, "today": 3, "active_today": 2, "live_users": 1},
+            "daily": [{"date": "2026-07-26", "count": 3}],
+            "types": {"button": 2, "message": 1},
+            "events": [{
+                "created_at": 1785024000,
+                "user_id": 42,
+                "full_name": "Test Buyer",
+                "username": "buyer",
+                "interaction_type": "button",
+                "action": "buy:17",
+                "content": "",
+                "screen": "Offer screen",
+            }],
+        },
+    }, active_tab="interactions")
+
+    assert 'href="/admin/interactions"' in page
+    assert 'id="interactions" class="panel active"' in page
+    assert 'id="interactions-daily-chart"' in page
+    assert 'id="interactions-table"' in page
+    assert "Interactions clients en direct" in page
     assert "__ACTIVE_" not in page
     assert "__PANEL_" not in page
 

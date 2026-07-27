@@ -33,6 +33,7 @@ from bot import (
     orders_text_export,
     numbered_delivery_content,
     notify_successful_referral,
+    notify_admin_interaction,
     on_text_menu,
     payment_scanner_frame,
     premium_customer_text,
@@ -109,6 +110,52 @@ def test_admin_custom_announcement_is_copied_to_all_active_users(mock_mongodb):
         call.kwargs["from_chat_id"] == 999 and call.kwargs["message_id"] == 55
         for call in bot_client.copy_message.await_args_list
     )
+
+
+def test_customer_button_click_is_reported_to_admin(monkeypatch, mock_mongodb):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+    message = SimpleNamespace(text="Offer screen", caption=None)
+    query = SimpleNamespace(data="buy:17", message=message)
+    user = SimpleNamespace(
+        id=42, full_name="Test Buyer", first_name="Test",
+        username="buyer",
+    )
+    update = SimpleNamespace(
+        effective_user=user,
+        callback_query=query,
+        effective_message=message,
+    )
+
+    asyncio.run(
+        notify_admin_interaction(update, SimpleNamespace(bot=bot_client))
+    )
+
+    bot_client.send_message.assert_awaited_once()
+    call = bot_client.send_message.await_args
+    assert call.args[0] == 999
+    assert "buy:17" in call.args[1]
+    assert "Test Buyer" in call.args[1]
+    assert "42" in call.args[1]
+    event = mock_mongodb.interaction_events.find_one({"user_id": 42})
+    assert event["interaction_type"] == "button"
+    assert event["action"] == "buy:17"
+
+
+def test_admin_interaction_does_not_notify_itself(monkeypatch):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=999),
+        callback_query=None,
+        effective_message=SimpleNamespace(text="/admin"),
+    )
+
+    asyncio.run(
+        notify_admin_interaction(update, SimpleNamespace(bot=bot_client))
+    )
+
+    bot_client.send_message.assert_not_awaited()
 
 
 def test_successful_purchase_is_not_announced_to_channel(mock_mongodb):

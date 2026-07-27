@@ -162,7 +162,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
-        admin_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "activity", "settings"}
+        admin_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "interactions", "activity", "settings"}
         if path == "/admin" or path.startswith("/admin/") and path.removeprefix("/admin/") in admin_tabs:
             if not self._dashboard_authorized():
                 self.send_response(401)

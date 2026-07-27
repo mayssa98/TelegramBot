@@ -20,6 +20,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
@@ -131,6 +132,90 @@ async def block_non_channel_members(update: Update, context: ContextTypes.DEFAUL
         reply_markup=kb.channel_join_keyboard(lang),
     )
     raise ApplicationHandlerStop
+
+async def notify_admin_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Privately report every customer message and button action to the admin."""
+    user = update.effective_user
+    if not user or user.id == ADMIN_ID:
+        return
+
+    display_name = html.escape(user.full_name or user.first_name or "Unknown")
+    username = f"@{html.escape(user.username)}" if user.username else "—"
+    header = (
+        "🔔 <b>Bot interaction</b>\n"
+        f"👤 <b>User:</b> {display_name}\n"
+        f"🔗 <b>Username:</b> {username}\n"
+        f"🆔 <b>Telegram ID:</b> <code>{user.id}</code>\n"
+    )
+
+    if update.callback_query:
+        callback = html.escape(str(update.callback_query.data or ""))
+        raw_callback = str(update.callback_query.data or "")
+        source_text = (
+            getattr(update.callback_query.message, "text", None)
+            or getattr(update.callback_query.message, "caption", None)
+            or ""
+        )
+        details = f"🔘 <b>Button:</b> <code>{callback[:500]}</code>"
+        if source_text:
+            details += f"\n📝 <b>Screen:</b> {html.escape(source_text[:700])}"
+        interaction_type = "button"
+        interaction_action = raw_callback
+        interaction_content = ""
+        interaction_screen = source_text
+    elif update.effective_message:
+        message = update.effective_message
+        content = message.text or message.caption
+        if content:
+            details = (
+                "💬 <b>Message:</b>\n"
+                f"<blockquote>{html.escape(content[:1500])}</blockquote>"
+            )
+            interaction_type = "command" if str(content).startswith("/") else "message"
+            interaction_action = str(content).split(maxsplit=1)[0] if interaction_type == "command" else ""
+            interaction_content = content
+        elif message.photo:
+            details = "🖼 <b>Sent a photo</b>"
+            interaction_type, interaction_action, interaction_content = "media", "photo", ""
+        elif message.document:
+            details = "📎 <b>Sent a document</b>"
+            interaction_type, interaction_action, interaction_content = "media", "document", ""
+        elif message.video:
+            details = "🎥 <b>Sent a video</b>"
+            interaction_type, interaction_action, interaction_content = "media", "video", ""
+        elif message.voice:
+            details = "🎙 <b>Sent a voice message</b>"
+            interaction_type, interaction_action, interaction_content = "media", "voice", ""
+        else:
+            details = "📨 <b>Sent an unsupported message type</b>"
+            interaction_type, interaction_action, interaction_content = "other", "unsupported", ""
+        interaction_screen = ""
+    else:
+        return
+
+    try:
+        db.log_interaction(
+            user.id,
+            first_name=user.first_name or "",
+            full_name=user.full_name or "",
+            username=user.username or "",
+            interaction_type=interaction_type,
+            action=interaction_action,
+            content=interaction_content,
+            screen=interaction_screen,
+        )
+    except Exception:
+        log.exception("Unable to persist interaction from user %s", user.id)
+
+    try:
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"{header}{details}",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        log.exception("Unable to notify admin about interaction from user %s", user.id)
+
 
 async def block_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -2333,6 +2418,8 @@ def build_app():
     from telegram.request import HTTPXRequest
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     app = Application.builder().token(BOT_TOKEN).request(request).build()
+    # Observe every customer update without consuming it.
+    app.add_handler(TypeHandler(Update, notify_admin_interaction), group=-4)
     # Group -3: required channel membership before all customer actions.
     # Require channel membership before all customer actions.
     app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-3)
