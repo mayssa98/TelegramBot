@@ -147,7 +147,7 @@ def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
     try:
         minimum = Decimal(str(minimum_amount))
         for transaction in _fetch_pay_transactions(start_ms):
-            if str(transaction.get("transactionId", "")).strip() != txid:
+            if txid not in _transaction_identifiers(transaction):
                 continue
             amount = Decimal(str(transaction.get("amount", "0")))
             asset = str(transaction.get("currency", "")).upper()

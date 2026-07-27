@@ -94,6 +94,24 @@ def test_txid_verification_accepts_order_id_shown_on_binance_receipt(monkeypatch
     assert result["status"] == "confirmed"
 
 
+def test_wallet_topup_accepts_order_id_shown_on_binance_receipt(monkeypatch):
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_KEY", "key")
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_SECRET", "secret")
+    monkeypatch.setattr(payment_verifier, "_fetch_pay_transactions", lambda _start: [{
+        "transactionId": "INTERNAL_PAY_TX_456",
+        "orderId": "445294978919866368",
+        "amount": "5",
+        "currency": "USDT",
+    }])
+
+    result = payment_verifier.verify_incoming_transfer(
+        "445294978919866368", minimum_amount=1
+    )
+
+    assert result["status"] == "confirmed"
+    assert result["amount"] == 5
+
+
 def test_automatic_verification_matches_amount_and_memo(monkeypatch):
     monkeypatch.setattr(payment_verifier, "BINANCE_API_KEY", "key")
     monkeypatch.setattr(payment_verifier, "BINANCE_API_SECRET", "secret")
