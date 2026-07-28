@@ -1,6 +1,7 @@
 """Tests for Telegram keyboard labels."""
 
 import admin
+import database as db
 import keyboards as kb
 from keyboards import offer_button_label, stock_badge, stock_button_style
 
@@ -291,6 +292,27 @@ def test_admin_panel_has_custom_announcement_button():
     ]
 
     assert "adm_broadcast_message" in callbacks
+
+
+def test_admin_panel_has_persistent_maintenance_toggle(mock_mongodb):
+    keyboard = admin.admin_panel_keyboard()
+    button = next(
+        button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data == "adm_maintenance_toggle"
+    )
+    assert "DÉSACTIVÉE" in button.text
+
+    db.set_setting("maintenance_enabled", True)
+    keyboard = admin.admin_panel_keyboard()
+    button = next(
+        button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data == "adm_maintenance_toggle"
+    )
+    assert "ACTIVÉE" in button.text
 
 
 def test_catalog_never_builds_an_empty_button(monkeypatch):

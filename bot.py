@@ -2175,6 +2175,23 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    if data == "adm_maintenance_toggle":
+        enabled = not db.shop_settings()["maintenance_enabled"]
+        db.set_setting("maintenance_enabled", enabled)
+        status = "ACTIVÉE 🔴" if enabled else "DÉSACTIVÉE 🟢"
+        await show_callback_screen(
+            q,
+            "🛠️ *Panneau Admin*\n\n"
+            f"Maintenance : *{status}*\n"
+            "Les nouveaux achats sont bloqués pendant la maintenance."
+            if enabled
+            else "🛠️ *Panneau Admin*\n\n"
+            f"Maintenance : *{status}*\n"
+            "Les achats sont de nouveau disponibles.",
+            reply_markup=admin.admin_panel_keyboard(),
+        )
+        return
+
     if data == "adm_customize":
         await q.edit_message_text(
             "🎛 *Personnalisation du bot*\n\nModifiez les textes, la visibilité des boutons et les liens personnalisés.",
