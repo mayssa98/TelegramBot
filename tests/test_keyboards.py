@@ -261,6 +261,28 @@ def test_admin_offer_panel_can_broadcast_current_price_and_stock(monkeypatch):
     assert "adm_inventory:4" in callbacks
 
 
+def test_admin_offer_panel_can_start_and_stop_flash_sale(monkeypatch):
+    offer = {
+        "id": 4, "service_id": 1, "active": 1,
+        "unlimited_stock": False, "flash_sale_active": False,
+    }
+    monkeypatch.setattr(admin.db, "get_offer", lambda _offer_id: offer)
+    callbacks = {
+        button.callback_data
+        for row in admin.offer_admin_keyboard(4).inline_keyboard
+        for button in row
+    }
+    assert "adm_flash_start:4" in callbacks
+
+    offer["flash_sale_active"] = True
+    callbacks = {
+        button.callback_data
+        for row in admin.offer_admin_keyboard(4).inline_keyboard
+        for button in row
+    }
+    assert "adm_flash_stop:4" in callbacks
+
+
 def test_admin_panel_has_custom_announcement_button():
     callbacks = [
         button.callback_data

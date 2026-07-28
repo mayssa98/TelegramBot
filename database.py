@@ -239,11 +239,80 @@ def list_offers(service_id, active_only=True):
     query = {"service_id": service_id}
     if active_only:
         query["active"] = 1
-    return [_public(x) for x in get_conn().offers.find(query).sort("id", ASCENDING)]
+    return [_resolve_flash_sale(_public(x)) for x in get_conn().offers.find(query).sort("id", ASCENDING)]
 
 
 def get_offer(offer_id):
-    return _public(get_conn().offers.find_one({"id": offer_id}))
+    return _resolve_flash_sale(_public(get_conn().offers.find_one({"id": offer_id})))
+
+
+def _resolve_flash_sale(offer):
+    """Restore the regular price when a flash sale has expired."""
+    if not offer or not offer.get("flash_sale_active"):
+        return offer
+    if int(offer.get("flash_sale_ends_at") or 0) > int(time.time()):
+        return offer
+    original_price = offer.get("flash_sale_original_price")
+    get_conn().offers.update_one(
+        {"id": offer["id"], "flash_sale_active": True},
+        {
+            "$set": {"price": original_price, "flash_sale_active": False},
+            "$unset": {
+                "flash_sale_price": "",
+                "flash_sale_original_price": "",
+                "flash_sale_ends_at": "",
+            },
+        },
+    )
+    offer["price"] = original_price
+    offer["flash_sale_active"] = False
+    offer.pop("flash_sale_price", None)
+    offer.pop("flash_sale_original_price", None)
+    offer.pop("flash_sale_ends_at", None)
+    return offer
+
+
+def start_flash_sale(offer_id, sale_price, duration_minutes):
+    offer = get_offer(int(offer_id))
+    sale_price = round(float(sale_price), 2)
+    duration_minutes = int(duration_minutes)
+    if not offer or offer.get("price") is None:
+        raise ValueError("Offre introuvable ou sans prix.")
+    if sale_price < 0 or sale_price >= float(offer["price"]):
+        raise ValueError("Le prix flash doit être inférieur au prix actuel.")
+    if duration_minutes < 1 or duration_minutes > 10080:
+        raise ValueError("La durée doit être comprise entre 1 minute et 7 jours.")
+    ends_at = int(time.time()) + duration_minutes * 60
+    get_conn().offers.update_one(
+        {"id": int(offer_id)},
+        {"$set": {
+            "flash_sale_active": True,
+            "flash_sale_original_price": float(offer["price"]),
+            "flash_sale_price": sale_price,
+            "flash_sale_ends_at": ends_at,
+            "price": sale_price,
+        }},
+    )
+    return get_offer(int(offer_id))
+
+
+def stop_flash_sale(offer_id):
+    offer = get_offer(int(offer_id))
+    if not offer or not offer.get("flash_sale_active"):
+        return offer
+    original_price = offer.get("flash_sale_original_price")
+    get_conn().offers.update_one(
+        {"id": int(offer_id)},
+        {
+            "$set": {"price": original_price, "flash_sale_active": False},
+            "$unset": {
+                "flash_sale_price": "",
+                "flash_sale_original_price": "",
+                "flash_sale_ends_at": "",
+            },
+        },
+    )
+    return get_offer(int(offer_id))
 
 
 def offer_has_stock(offer, qty=1):

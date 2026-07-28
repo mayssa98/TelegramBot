@@ -28,6 +28,24 @@ def test_create_order_success(mock_mongodb):
     assert order["expires_at"] > order["created_at"]
 
 
+def test_flash_sale_price_is_used_then_regular_price_is_restored(mock_mongodb, monkeypatch):
+    service_id = db.add_service("AI", "⚡")
+    offer_id = db.add_offer(service_id, "Gemini Pro", 8.0, 5)
+    monkeypatch.setattr(db.time, "time", lambda: 1_000)
+
+    flash_offer = db.start_flash_sale(offer_id, 3.0, 60)
+    order = order_service.create_order(42, flash_offer)
+
+    assert order["unit_price"] == 3.0
+    assert flash_offer["flash_sale_original_price"] == 8.0
+
+    monkeypatch.setattr(db.time, "time", lambda: 5_000)
+    restored = db.get_offer(offer_id)
+
+    assert restored["price"] == 8.0
+    assert restored["flash_sale_active"] is False
+
+
 def test_catalog_persists_admin_selected_custom_emoji(mock_mongodb):
     service_id = db.add_service("Streaming", custom_emoji_id="service-premium-id")
     offer_id = db.add_offer(

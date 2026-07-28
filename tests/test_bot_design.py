@@ -15,6 +15,7 @@ from bot import (
     AUTO_PAYMENT_MESSAGES,
     AUTO_PAYMENT_TASKS,
     AUTO_TOPUP_TASKS,
+    announce_flash_sale,
     announce_channel_restock,
     announce_channel_purchase,
     broadcast_admin_message,
@@ -65,6 +66,23 @@ def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb)
         call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
         for call in calls
     )
+
+
+def test_flash_sale_is_broadcast_with_buy_button(mock_mongodb):
+    service_id = db.add_service("AI", "⚡")
+    offer_id = db.add_offer(service_id, "Gemini Pro 18M", 8.0, 4)
+    db.start_flash_sale(offer_id, 3.0, 480)
+    mock_mongodb.users.insert_one({"telegram_id": 101, "lang": "en"})
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(announce_flash_sale(SimpleNamespace(bot=bot_client), offer_id))
+
+    assert sent == 1
+    call = bot_client.send_message.await_args
+    assert "FLASH SALE" in call.kwargs["text"]
+    assert "8.00 USDT" in call.kwargs["text"]
+    assert "3.00 USDT" in call.kwargs["text"]
+    assert call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
 
 
 def test_admin_can_reannounce_current_offer_without_adding_stock(mock_mongodb):
@@ -559,6 +577,7 @@ def test_order_payment_values_are_individually_copyable():
     "loyalty_activated", "affiliate_rewarded",
     "topup_message", "topup_ask_txid", "topup_scanner", "topup_auto_timeout",
     "topup_success", "topup_already_confirmed", "topup_failed",
+    "flash_sale_announcement",
     "affiliate_referral_success", "affiliate_ten_success", "channel_affiliate_reward",
 ])
 def test_all_payment_flow_texts_support_exact_premium_emoji(key):

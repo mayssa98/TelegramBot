@@ -205,6 +205,11 @@ TRANSLATIONS = {
         "en": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",
         "ar": "🚨 *NEW STOCK JUST DROPPED*\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Available now: *{stock} account(s)*\n✨ Freshly restocked: *{added} new account(s)*\n\n⚡ Secure your account before the stock runs out!",
     },
+    "flash_sale_announcement": {
+        "fr": "⚡ *VENTE FLASH — DURÉE LIMITÉE*\n\n{emoji} *{offer}*\nAncien prix : *{old_price} {cur}*\n🔥 Prix flash : *{price} {cur}*\n\n⌛ Fin dans *{remaining}*\n\nAppuyez ci-dessous pour acheter immédiatement. Livraison automatique.",
+        "en": "⚡ *FLASH SALE — LIMITED TIME*\n\n{emoji} *{offer}*\nOld price: *{old_price} {cur}*\n🔥 Flash price: *{price} {cur}*\n\n⌛ Ends in *{remaining}*\n\nTap below to buy instantly. Delivery is automatic.",
+        "ar": "⚡ *تخفيض سريع — لفترة محدودة*\n\n{emoji} *{offer}*\nالسعر السابق: *{old_price} {cur}*\n🔥 سعر العرض: *{price} {cur}*\n\n⌛ ينتهي خلال *{remaining}*\n\nاضغط أدناه للشراء فوراً. التسليم تلقائي.",
+    },
     "offer_stock_announcement": {
         "fr": "📣 *OFFRE DISPONIBLE*\n\n{emoji} *{service} — {offer}*\n💎 Prix actuel : *{price} {cur}*\n📦 Stock disponible : *{stock} compte(s)*\n\n⚡ Commandez directement avant la rupture de stock !",
         "en": "📣 *AVAILABLE OFFER*\n\n{emoji} *{service} — {offer}*\n💎 Current price: *{price} {cur}*\n📦 Available stock: *{stock} account(s)*\n\n⚡ Order directly before it sells out!",

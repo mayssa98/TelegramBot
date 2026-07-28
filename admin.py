@@ -220,6 +220,15 @@ def offer_admin_keyboard(offer_id):
         [InlineKeyboardButton("🖼 Modifier l’image", callback_data=f"adm_offimage:{offer_id}")],
         [InlineKeyboardButton("💵 Modifier le prix", callback_data=f"adm_setprice:{offer_id}")],
         [InlineKeyboardButton(
+            "⏹ Arrêter la vente flash" if off.get("flash_sale_active")
+            else "⚡ Lancer une vente flash",
+            callback_data=(
+                f"adm_flash_stop:{offer_id}"
+                if off.get("flash_sale_active")
+                else f"adm_flash_start:{offer_id}"
+            ),
+        )],
+        [InlineKeyboardButton(
             "📣 Envoyer une annonce (prix + stock)",
             callback_data=f"adm_broadcast_offer:{offer_id}",
         )],

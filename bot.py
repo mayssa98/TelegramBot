@@ -9,6 +9,7 @@ import io
 import logging
 import os
 import re
+import time
 from datetime import UTC, datetime
 
 from telegram import ForceReply, InputFile, LinkPreviewOptions, Update
@@ -548,6 +549,49 @@ async def send_new_stock_broadcast(context, offer_id, added, stock):
     return await announce_channel_restock(context, offer_id, added, stock)
 
 
+async def announce_flash_sale(context, offer_id):
+    """Broadcast an active flash sale privately to every active bot user."""
+    offer = db.get_offer(int(offer_id))
+    if not offer or not offer.get("active", 1) or not offer.get("flash_sale_active"):
+        return 0
+    service = db.get_service(offer["service_id"]) or {}
+    remaining_seconds = max(0, int(offer["flash_sale_ends_at"]) - int(time.time()))
+    hours, remainder = divmod(remaining_seconds, 3600)
+    minutes = max(1, remainder // 60)
+    remaining = f"{hours}h {minutes}m" if hours else f"{minutes}m"
+    sent = 0
+    for user in db.list_broadcast_users():
+        user_id = user.get("telegram_id")
+        if not user_id:
+            continue
+        lang = user.get("lang") or DEFAULT_LANG
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=premium_customer_text(
+                    lang,
+                    "flash_sale_announcement",
+                    emoji=service.get("emoji") or "🎁",
+                    offer=offer.get("name") or f"Offer #{offer_id}",
+                    old_price=f"{float(offer['flash_sale_original_price']):.2f}",
+                    price=f"{float(offer['price']):.2f}",
+                    cur=CURRENCY,
+                    remaining=remaining,
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.offer_detail_keyboard(lang, offer),
+            )
+            sent += 1
+        except Exception as exc:
+            message = str(exc).lower()
+            if "blocked" in message or "chat not found" in message or "deactivated" in message:
+                db.mark_broadcast_blocked(user_id)
+            else:
+                log.warning("Flash-sale broadcast failed for user %s: %s", user_id, exc)
+        await asyncio.sleep(0.04)
+    return sent
+
+
 async def broadcast_admin_message(context, source_chat_id, message_id):
     """Copy an admin-authored Telegram message to every active bot user."""
     sent = 0
@@ -824,6 +868,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_quantity",
         "catalog_request",
         "adm_setprice",
+        "adm_flash_start",
         "adm_svcname",
         "adm_svcemoji",
         "adm_offname",
@@ -1393,6 +1438,32 @@ async def handle_pending_input(update, context, lang):
             reply_markup=kb.home_keyboard(lang, uid),
         )
         log.info("Catalog request ticket %s created by user %s", ticket["id"], uid)
+        return
+
+    if kind == "adm_flash_start" and uid == ADMIN_ID:
+        try:
+            parts = text.replace(",", ".").split()
+            if len(parts) != 2:
+                raise ValueError("Format attendu : prix puis durée.")
+            sale_price = float(parts[0])
+            duration_minutes = int(parts[1])
+            offer = db.start_flash_sale(ref, sale_price, duration_minutes)
+        except (TypeError, ValueError) as exc:
+            await update.message.reply_text(
+                f"⚠️ Valeurs invalides. Envoyez : `prix durée_en_minutes`\n"
+                f"Exemple : `3 480`\n\n{exc}",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+        PENDING.pop(uid, None)
+        sent = await announce_flash_sale(context, ref)
+        await update.message.reply_text(
+            f"⚡ Vente flash lancée pour *{offer['name']}*.\n"
+            f"Prix : *{offer['flash_sale_original_price']:.2f} → {offer['price']:.2f} {CURRENCY}*\n"
+            f"Annonce envoyée à *{sent} utilisateur(s)*.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin.offer_admin_keyboard(ref),
+        )
         return
 
     if kind == "adm_broadcast_message" and uid == ADMIN_ID:
@@ -2344,6 +2415,31 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.update_offer(oid, unlimited_stock=enabled, manual_stock=False)
         await q.edit_message_text(
             "✅ Stock illimité activé." if enabled else "✅ Stock illimité désactivé.",
+            reply_markup=admin.offer_admin_keyboard(oid),
+        )
+        return
+    if data.startswith("adm_flash_start:"):
+        oid = int(data.split(":")[1])
+        off = db.get_offer(oid)
+        if not off or not off.get("active", 1) or off.get("price") is None:
+            await q.answer("Offre indisponible.", show_alert=True)
+            return
+        PENDING[uid] = ("adm_flash_start", oid)
+        await q.message.reply_text(
+            f"⚡ *Lancer une vente flash — {off['name']}*\n\n"
+            f"Prix actuel : *{float(off['price']):.2f} {CURRENCY}*\n"
+            "Envoyez le nouveau prix et la durée en minutes.\n\n"
+            "Exemple : `3 480` = 3 USDT pendant 8 heures.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+    if data.startswith("adm_flash_stop:"):
+        oid = int(data.split(":")[1])
+        off = db.stop_flash_sale(oid)
+        await q.message.reply_text(
+            f"⏹ Vente flash arrêtée.\n"
+            f"Prix restauré : *{float(off.get('price') or 0):.2f} {CURRENCY}*",
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid),
         )
         return
