@@ -259,7 +259,10 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
                 return
             try:
-                self._reply(200, reseller_service.catalog())
+                provider = parse_qs(url.query).get(
+                    "provider", [reseller_service.PROVIDER]
+                )[0]
+                self._reply(200, reseller_service.catalog(provider))
             except reseller_service.ResellerApiError as exc:
                 self._reply(503, {
                     "ok": False,
@@ -699,12 +702,14 @@ class handler(BaseHTTPRequestHandler):
                 db.audit_event("settings.updated")
 
             elif action == "save_reseller_product":
+                provider = form.get("provider", reseller_service.PROVIDER).strip().lower()
                 product_id = form.get("product_id", "").strip()
                 retail_price = float(form.get("retail_price", "0"))
                 enabled = form.get("enabled", "") == "1"
                 raw_service_id = form.get("service_id", "").strip()
                 saved = reseller_service.save_catalog_product(
                     product_id,
+                    provider=provider,
                     retail_price=retail_price,
                     enabled=enabled,
                     service_id=int(raw_service_id) if raw_service_id else None,
@@ -724,7 +729,7 @@ class handler(BaseHTTPRequestHandler):
                 db.audit_event(
                     "reseller_product.updated",
                     details={
-                        "provider": reseller_service.PROVIDER,
+                        "provider": provider,
                         "product_id": product_id,
                         "enabled": enabled,
                         "retail_price": retail_price,

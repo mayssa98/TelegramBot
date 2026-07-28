@@ -162,3 +162,76 @@ def test_paid_supplier_order_is_delivered_idempotently(monkeypatch, mock_mongodb
     assert db.get_order(91)["status"] == "delivered"
     assert mock_mongodb.inventory.count_documents({"delivered_order_id": 91}) == 2
     assert "user:a" not in str(mock_mongodb.reseller_fulfillments.find_one({"order_id": 91}))
+
+
+def test_shamekh_catalog_maps_products_balance_and_stock(monkeypatch, mock_mongodb):
+    def fake_request(path, **_kwargs):
+        if path == "/api/me":
+            return {"ok": True, "user": {"balance": 18.75}}
+        return {
+            "ok": True,
+            "products": [{
+                "id": 7,
+                "name_en": "Premium Account",
+                "price": 0.71,
+                "stock_count": 97,
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_shamekh_request_json", fake_request)
+
+    result = reseller_service.catalog("shamekh")
+
+    assert result["provider"] == "shamekh"
+    assert result["supplier_name"] == "Shamekh’s bot"
+    assert result["balance"] == 18.75
+    assert result["products"][0]["id"] == "7"
+    assert result["products"][0]["wholesale_price"] == 0.71
+    assert result["products"][0]["stock"] == 97
+
+
+def test_shamekh_product_publishes_and_delivers(monkeypatch, mock_mongodb):
+    def fake_request(path, **_kwargs):
+        if path == "/api/me":
+            return {"ok": True, "user": {"balance": 18.75}}
+        if path == "/api/buy":
+            return {
+                "ok": True,
+                "transaction_id": "tx_supplier_1",
+                "items": ["delivered-account"],
+            }
+        return {
+            "ok": True,
+            "products": [{
+                "id": 7,
+                "name_en": "Premium Account",
+                "price": 0.71,
+                "stock_count": 97,
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_shamekh_request_json", fake_request)
+    service_id = db.add_service("Premium", "⭐")
+    saved = reseller_service.save_catalog_product(
+        "7",
+        provider="shamekh",
+        retail_price=1.5,
+        enabled=True,
+        service_id=service_id,
+        warranty="24 hours",
+    )
+    offer = db.get_offer(saved["local_offer_id"])
+    mock_mongodb.orders.insert_one({
+        "id": 92,
+        "user_id": 123,
+        "offer_id": offer["id"],
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+
+    assert offer["supplier_provider"] == "shamekh"
+    assert reseller_service.fulfill_paid_order(92) == ["delivered-account"]
+    fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 92})
+    assert fulfillment["supplier_order_id"] == "tx_supplier_1"
+    assert fulfillment["status"] == "completed"
+    assert db.get_order(92)["status"] == "delivered"

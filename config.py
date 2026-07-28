@@ -38,6 +38,14 @@ MAILREADER_API_KEY: str = os.environ.get("HP_MAILREADER_API_KEY", "").strip()
 MAILREADER_API_BASE: str = os.environ.get(
     "HP_MAILREADER_API_BASE", "https://api.mailreader.tech"
 ).rstrip("/")
+
+# ---------------------------------------------------------------------------
+# Fournisseur revendeur Shamekh's bot
+# ---------------------------------------------------------------------------
+SHAMEKH_API_KEY: str = os.environ.get("HP_SHAMEKH_API_KEY", "").strip()
+SHAMEKH_API_BASE: str = os.environ.get(
+    "HP_SHAMEKH_API_BASE", "https://worker-production-53ca.up.railway.app"
+).rstrip("/")
 _BINANCE_OFFICIAL_BASES = (
     "https://api.binance.com",
     "https://api-gcp.binance.com",

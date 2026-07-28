@@ -10,9 +10,17 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import database as db
-from config import MAILREADER_API_BASE, MAILREADER_API_KEY
+from pymongo.errors import DuplicateKeyError
+from config import (
+    MAILREADER_API_BASE,
+    MAILREADER_API_KEY,
+    SHAMEKH_API_BASE,
+    SHAMEKH_API_KEY,
+)
 
 PROVIDER = "mailreader"
+SHAMEKH_PROVIDER = "shamekh"
+SUPPORTED_PROVIDERS = {PROVIDER, SHAMEKH_PROVIDER}
 
 
 class ResellerApiError(RuntimeError):
@@ -58,17 +66,88 @@ def _request_json(
     return payload
 
 
-def catalog() -> dict[str, Any]:
+def _shamekh_request_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not SHAMEKH_API_KEY:
+        raise ResellerApiError(
+            "Shamekh’s bot n’est pas configuré. Ajoutez HP_SHAMEKH_API_KEY "
+            "dans les variables d’environnement."
+        )
+    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    request = Request(
+        f"{SHAMEKH_API_BASE}{path}",
+        headers={
+            "X-API-Key": SHAMEKH_API_KEY,
+            "Accept": "application/json",
+            **({"Content-Type": "application/json"} if body is not None else {}),
+            "User-Agent": "BlackMarket-Reseller/1.0",
+        },
+        data=payload_bytes,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        if exc.code in {401, 403}:
+            raise ResellerApiError(
+                "Clé API Shamekh refusée. Remplacez-la par une clé active."
+            ) from exc
+        raise ResellerApiError(
+            f"Shamekh’s bot a répondu avec l’erreur HTTP {exc.code}."
+        ) from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ResellerApiError("Shamekh’s bot est temporairement indisponible.") from exc
+    if not isinstance(payload, dict):
+        raise ResellerApiError("Réponse Shamekh invalide.")
+    if payload.get("ok") is False:
+        raise ResellerApiError(str(payload.get("error") or "Requête Shamekh refusée.")[:300])
+    return payload
+
+
+def provider_summaries() -> list[dict[str, Any]]:
+    """Return safe provider metadata without exposing credentials."""
+    return [
+        {
+            "id": PROVIDER,
+            "name": "MailReader",
+            "configured": bool(MAILREADER_API_KEY),
+            "documentation_url": "https://api.mailreader.tech/docs",
+        },
+        {
+            "id": SHAMEKH_PROVIDER,
+            "name": "Shamekh’s bot",
+            "configured": bool(SHAMEKH_API_KEY),
+            "documentation_url": "",
+        },
+    ]
+
+
+def catalog(provider: str = PROVIDER) -> dict[str, Any]:
     """Fetch the live supplier catalog and overlay local retail selections."""
-    payload = _request_json("/api/reseller/products")
-    reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
+    provider = str(provider or PROVIDER).lower()
+    if provider not in SUPPORTED_PROVIDERS:
+        raise ValueError("Fournisseur API inconnu.")
+    if provider == SHAMEKH_PROVIDER:
+        payload = _shamekh_request_json("/api/products")
+        account = _shamekh_request_json("/api/me")
+        reseller = account.get("user") if isinstance(account.get("user"), dict) else {}
+        supplier_name = "Shamekh’s bot"
+    else:
+        payload = _request_json("/api/reseller/products")
+        reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
+        supplier_name = str(reseller.get("name") or "MailReader")
     raw_products = payload.get("products")
     if not isinstance(raw_products, list):
-        raise ResellerApiError("Le catalogue MailReader ne contient aucune liste de produits.")
+        raise ResellerApiError("Le fournisseur ne contient aucune liste de produits.")
 
     saved = {
         row["product_id"]: row
-        for row in db.list_reseller_product_configs(PROVIDER)
+        for row in db.list_reseller_product_configs(provider)
     }
     products = []
     for raw in raw_products:
@@ -76,10 +155,16 @@ def catalog() -> dict[str, Any]:
             continue
         product_id = str(raw["id"])
         try:
-            wholesale = float(Decimal(str(raw.get("wholesale_price", "0"))))
+            wholesale = float(Decimal(str(
+                raw.get("price") if provider == SHAMEKH_PROVIDER
+                else raw.get("wholesale_price", "0")
+            )))
         except (InvalidOperation, ValueError):
             wholesale = 0.0
-        stock = max(0, int(raw.get("stock") or 0))
+        stock = max(0, int(
+            (raw.get("stock_count") or 0) if provider == SHAMEKH_PROVIDER
+            else raw.get("stock") or 0
+        ))
         config = saved.get(product_id, {})
         retail_price = config.get("retail_price")
         local_offer_id = config.get("local_offer_id")
@@ -93,12 +178,16 @@ def catalog() -> dict[str, Any]:
             db.update_offer(
                 int(local_offer_id),
                 stock=stock,
-                supplier_provider=PROVIDER,
+                supplier_provider=provider,
                 supplier_product_id=product_id,
             )
         products.append({
             "id": product_id,
-            "name": str(raw.get("name") or product_id)[:200],
+            "name": str(
+                raw.get("name_en")
+                or raw.get("name")
+                or product_id
+            )[:200],
             "description": str(raw.get("description") or "")[:2000],
             "delivery_instruction": str(raw.get("delivery_instruction") or "")[:2000],
             "wholesale_price": wholesale,
@@ -127,7 +216,7 @@ def catalog() -> dict[str, Any]:
             "warranty": (
                 config.get("warranty")
                 or (native_offer or {}).get("note")
-                or "Produit API MailReader"
+                or f"Produit API {supplier_name}"
             ),
             "delivery_delay": config.get("delivery_delay") or "Instantané après confirmation",
             "sort_order": int(config.get("sort_order") or 0),
@@ -137,10 +226,11 @@ def catalog() -> dict[str, Any]:
     return {
         "ok": True,
         "configured": True,
-        "provider": PROVIDER,
-        "supplier_name": str(reseller.get("name") or "MailReader"),
+        "provider": provider,
+        "supplier_name": supplier_name,
         "balance": float(Decimal(str(reseller.get("balance", "0")))),
         "currency": "USDT",
+        "providers": provider_summaries(),
         "products": products,
         "selected_count": sum(1 for product in products if product["enabled"]),
     }
@@ -178,6 +268,7 @@ def save_product(
 def save_catalog_product(
     product_id: str,
     *,
+    provider: str = PROVIDER,
     retail_price: float,
     enabled: bool,
     service_id: int | None = None,
@@ -191,16 +282,24 @@ def save_catalog_product(
     low_stock_threshold: int = 5,
 ) -> dict[str, Any]:
     """Publish one live supplier product into the bot's native catalog."""
+    provider = str(provider or PROVIDER).lower()
+    if provider not in SUPPORTED_PROVIDERS:
+        raise ValueError("Fournisseur API inconnu.")
     product = next(
-        (item for item in catalog()["products"] if item["id"] == str(product_id)),
+        (item for item in catalog(provider)["products"] if item["id"] == str(product_id)),
         None,
     )
     if not product:
-        raise ValueError("Ce produit n’est plus disponible chez MailReader.")
+        raise ValueError("Ce produit n’est plus disponible chez le fournisseur.")
 
     display_name = str(display_name or product["name"]).strip()[:120]
     description = str(description or product.get("description") or "").strip()[:1000]
-    warranty = str(warranty or "").strip()[:250]
+    default_warranty = (
+        "Produit API Shamekh’s bot"
+        if provider == SHAMEKH_PROVIDER
+        else "Produit API MailReader"
+    )
+    warranty = str(warranty or default_warranty).strip()[:250]
     delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]
     service_emoji = str(service_emoji or "📦").strip()[:12]
     low_stock_threshold = max(0, int(low_stock_threshold or 0))
@@ -211,7 +310,7 @@ def save_catalog_product(
 
     existing = next(
         (
-            row for row in db.list_reseller_product_configs(PROVIDER)
+            row for row in db.list_reseller_product_configs(provider)
             if row["product_id"] == product["id"]
         ),
         {},
@@ -254,7 +353,7 @@ def save_catalog_product(
             delivery_delay=delivery_delay,
             unlimited_stock=False,
             manual_stock=False,
-            supplier_provider=PROVIDER,
+            supplier_provider=provider,
             supplier_product_id=product["id"],
         )
         if int(local_offer.get("service_id")) != int(service_id):
@@ -277,13 +376,13 @@ def save_catalog_product(
             delivery_delay=delivery_delay,
             unlimited_stock=False,
             manual_stock=False,
-            supplier_provider=PROVIDER,
+            supplier_provider=provider,
             supplier_product_id=product["id"],
         )
         db.update_offer(local_offer_id, sort_order=sort_order)
 
     return db.save_reseller_product_config(
-        PROVIDER,
+        provider,
         product["id"],
         name=product["name"],
         wholesale_price=product["wholesale_price"],
@@ -349,35 +448,80 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
     if not order:
         return None
     offer = conn.offers.find_one({"id": order.get("offer_id")})
-    if not offer or offer.get("supplier_provider") != PROVIDER:
+    provider = str((offer or {}).get("supplier_provider") or "")
+    if not offer or provider not in SUPPORTED_PROVIDERS:
         return None
 
     external_order_id = f"BM-{int(order_id)}"
     existing = conn.reseller_fulfillments.find_one({
-        "provider": PROVIDER,
+        "provider": provider,
         "external_order_id": external_order_id,
-        "status": "completed",
     })
     cipher = db._fernet()
-    if existing:
+    if existing and existing.get("status") == "completed":
         return [
             cipher.decrypt(value.encode()).decode()
             for value in existing.get("encrypted_items", [])
         ]
+    if existing and provider == SHAMEKH_PROVIDER:
+        raise ResellerApiError(
+            "Cette commande Shamekh nécessite une vérification manuelle avant toute nouvelle tentative."
+        )
     if order.get("status") not in {"paid", "payment_confirmed"}:
         return None
 
-    response = _request_json(
-        "/api/reseller?action=order",
-        method="POST",
-        body={
-            "product_id": str(offer["supplier_product_id"]),
-            "quantity": int(order.get("qty") or 1),
-            "external_order_id": external_order_id,
-        },
-    )
+    if provider == SHAMEKH_PROVIDER:
+        try:
+            conn.reseller_fulfillments.insert_one({
+                "provider": provider,
+                "external_order_id": external_order_id,
+                "order_id": int(order_id),
+                "supplier_product_id": str(offer["supplier_product_id"]),
+                "status": "purchasing",
+                "created_at": int(time.time()),
+                "updated_at": int(time.time()),
+            })
+        except DuplicateKeyError as exc:
+            raise ResellerApiError(
+                "Une livraison Shamekh est déjà en cours pour cette commande."
+            ) from exc
+        try:
+            raw_product_id = str(offer["supplier_product_id"])
+            response = _shamekh_request_json(
+                "/api/buy",
+                method="POST",
+                body={
+                    "product_id": (
+                        int(raw_product_id)
+                        if raw_product_id.isdigit()
+                        else raw_product_id
+                    ),
+                    "quantity": int(order.get("qty") or 1),
+                },
+            )
+        except ResellerApiError:
+            conn.reseller_fulfillments.update_one(
+                {"provider": provider, "external_order_id": external_order_id},
+                {"$set": {"status": "review_required", "updated_at": int(time.time())}},
+            )
+            raise
+    else:
+        response = _request_json(
+            "/api/reseller?action=order",
+            method="POST",
+            body={
+                "product_id": str(offer["supplier_product_id"]),
+                "quantity": int(order.get("qty") or 1),
+                "external_order_id": external_order_id,
+            },
+        )
     items = _delivery_items(response)
     if len(items) < int(order.get("qty") or 1):
+        if provider == SHAMEKH_PROVIDER:
+            conn.reseller_fulfillments.update_one(
+                {"provider": provider, "external_order_id": external_order_id},
+                {"$set": {"status": "review_required", "updated_at": int(time.time())}},
+            )
         raise ResellerApiError(
             "La commande fournisseur a été créée mais la livraison n’est pas encore disponible."
         )
@@ -386,12 +530,13 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
     now = int(time.time())
     order_payload = response.get("order")
     supplier_order_id = (
-        response.get("id")
+        response.get("transaction_id")
+        or response.get("id")
         or (order_payload.get("id") if isinstance(order_payload, dict) else "")
         or ""
     )
     conn.reseller_fulfillments.update_one(
-        {"provider": PROVIDER, "external_order_id": external_order_id},
+        {"provider": provider, "external_order_id": external_order_id},
         {
             "$set": {
                 "order_id": int(order_id),
@@ -409,7 +554,7 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
     for index, encrypted in enumerate(encrypted_items):
         conn.inventory.update_one(
             {
-                "source_provider": PROVIDER,
+                "source_provider": provider,
                 "source_external_order_id": external_order_id,
                 "source_item_index": index,
             },
@@ -443,7 +588,7 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
         "order.reseller_delivered",
         details={
             "order_id": int(order_id),
-            "provider": PROVIDER,
+            "provider": provider,
             "items_count": len(items),
         },
     )

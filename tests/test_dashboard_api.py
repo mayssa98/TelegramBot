@@ -190,6 +190,8 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "save_reseller_product" in page
     assert "Centre des API" in page
     assert "Dashboard des API" in page
+    assert "Shamekh’s bot" in page
+    assert "selectApiProvider('shamekh')" in page
     assert "Produits & services" in page
     assert "Description, prix & garantie" in page
     assert "openApiProductEditor" in page

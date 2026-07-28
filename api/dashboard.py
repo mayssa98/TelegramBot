@@ -2136,13 +2136,19 @@ def render_dashboard(
                         <span class="badge badge-paid">API active</span>
                         <h3>MailReader</h3>
                         <p>Fournisseur connecté au catalogue et à la livraison automatique.</p>
-                        <button class="btn btn-primary" onclick="showApiWorkspaceStep('catalog')">Voir ses produits</button>
+                        <button class="btn btn-primary" onclick="selectApiProvider('mailreader')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
+                        <span class="badge badge-pending">Nouvelle API</span>
+                        <h3>Shamekh’s bot</h3>
+                        <p>Catalogue, solde et achat automatique via Railway.</p>
+                        <button class="btn btn-primary" onclick="selectApiProvider('shamekh')">Voir ses produits</button>
                     </div>
                     <div class="api-action-card">
                         <span>↻</span>
                         <h3>Synchronisation</h3>
                         <p>Actualisez le solde, les prix grossistes et les stocks.</p>
-                        <button class="btn btn-secondary" id="api-products-refresh" onclick="loadApiProducts(true)">Actualiser l’API</button>
+                        <button class="btn btn-secondary" id="api-products-refresh" onclick="loadApiProducts(true, activeApiProvider)">Actualiser l’API</button>
                     </div>
                     <div class="api-action-card">
                         <span>＋</span>
@@ -2162,7 +2168,7 @@ def render_dashboard(
             <div id="api-workspace-catalog" class="api-workspace-page">
                 <div class="section-header">
                     <div>
-                        <h2>Produits & services MailReader</h2>
+                        <h2 id="api-catalog-title">Produits & services MailReader</h2>
                         <p class="last-update">Choisissez un produit pour ouvrir sa configuration complète.</p>
                     </div>
                     <button class="btn btn-secondary" onclick="openModal('add-service-modal')">+ Nouveau service</button>
@@ -2548,6 +2554,7 @@ def render_dashboard(
         let resellerCatalogLoading = false;
         let apiWorkspaceStep = "overview";
         let selectedApiProductId = null;
+        let activeApiProvider = "mailreader";
         const ORDER_STATUSES = [
             "pending_payment",
             "awaiting_verification",
@@ -2930,7 +2937,20 @@ def render_dashboard(
             });
         }
 
-        async function loadApiProducts(force = false) {
+        async function selectApiProvider(provider) {
+            activeApiProvider = provider;
+            selectedApiProductId = null;
+            resellerCatalog = null;
+            await loadApiProducts(true, provider);
+            if (resellerCatalog) showApiWorkspaceStep("catalog");
+        }
+
+        async function loadApiProducts(force = false, provider = activeApiProvider) {
+            if (provider !== activeApiProvider) {
+                activeApiProvider = provider;
+                resellerCatalog = null;
+                selectedApiProductId = null;
+            }
             if (resellerCatalogLoading || (resellerCatalog && !force)) {
                 if (resellerCatalog) renderApiProducts();
                 return;
@@ -2939,7 +2959,7 @@ def render_dashboard(
             const refreshButton = document.getElementById("api-products-refresh");
             if (refreshButton) refreshButton.disabled = true;
             try {
-                const response = await fetch("/admin/api/reseller-products", {
+                const response = await fetch(`/admin/api/reseller-products?provider=${encodeURIComponent(activeApiProvider)}`, {
                     headers: { "Accept": "application/json" }
                 });
                 const result = await response.json();
@@ -2949,7 +2969,7 @@ def render_dashboard(
                 resellerCatalog = result;
                 renderApiProducts();
                 updateOverviewSupplier();
-                if (force) showToast("Catalogue MailReader actualisé");
+                if (force) showToast(`Catalogue ${result.supplier_name || "API"} actualisé`);
             } catch (error) {
                 resellerCatalog = null;
                 updateOverviewSupplier();
@@ -2960,7 +2980,7 @@ def render_dashboard(
                     </div>`;
                 document.getElementById("api-product-list").innerHTML = `
                     <div class="empty-state">
-                        Le catalogue reste indisponible tant que la nouvelle clé API n’est pas configurée sur le serveur.
+                        Cette API reste indisponible tant que sa clé n’est pas configurée sur le serveur.
                     </div>`;
             } finally {
                 resellerCatalogLoading = false;
@@ -2988,6 +3008,9 @@ def render_dashboard(
         function renderApiProducts() {
             if (!resellerCatalog) return;
             const products = resellerCatalog.products || [];
+            activeApiProvider = resellerCatalog.provider || activeApiProvider;
+            document.getElementById("api-catalog-title").textContent =
+                `Produits & services ${resellerCatalog.supplier_name || "API"}`;
             document.getElementById("api-supplier-state").innerHTML = `
                 <div class="supplier-summary">
                     <div class="supplier-stat">
@@ -3018,7 +3041,7 @@ def render_dashboard(
 
             const list = document.getElementById("api-product-list");
             if (!products.length) {
-                list.innerHTML = '<div class="empty-state">Aucun produit automatique disponible chez MailReader.</div>';
+                list.innerHTML = `<div class="empty-state">Aucun produit automatique disponible chez ${escapeHtml(resellerCatalog.supplier_name || "ce fournisseur")}.</div>`;
                 return;
             }
             list.innerHTML = products.map(product => {
@@ -3239,6 +3262,7 @@ def render_dashboard(
             }
             const params = new URLSearchParams({
                 action: "save_reseller_product",
+                provider: activeApiProvider,
                 product_id: card.dataset.productId,
                 retail_price: retailInput.value,
                 enabled: enabled ? "1" : "0",
@@ -3268,7 +3292,7 @@ def render_dashboard(
                 resellerCatalog = null;
                 await refreshDashboardData(true);
                 showToast(enabled ? "Produit publié dans le catalogue du bot" : "Produit enregistré en brouillon");
-                await loadApiProducts(true);
+                await loadApiProducts(true, activeApiProvider);
             } catch (error) {
                 showToast(error.message, "error");
             } finally {
