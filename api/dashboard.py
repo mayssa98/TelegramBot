@@ -2145,6 +2145,12 @@ def render_dashboard(
                         <button class="btn btn-primary" onclick="selectApiProvider('shamekh')">Voir ses produits</button>
                     </div>
                     <div class="api-action-card">
+                        <span class="badge badge-pending">Nouvelle API</span>
+                        <h3>Kakao Shop</h3>
+                        <p>Produits numériques avec solde et commandes idempotentes.</p>
+                        <button class="btn btn-primary" onclick="selectApiProvider('kakao')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
                         <span>↻</span>
                         <h3>Synchronisation</h3>
                         <p>Actualisez le solde, les prix grossistes et les stocks.</p>

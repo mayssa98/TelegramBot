@@ -46,6 +46,14 @@ SHAMEKH_API_KEY: str = os.environ.get("HP_SHAMEKH_API_KEY", "").strip()
 SHAMEKH_API_BASE: str = os.environ.get(
     "HP_SHAMEKH_API_BASE", "https://worker-production-53ca.up.railway.app"
 ).rstrip("/")
+
+# ---------------------------------------------------------------------------
+# Fournisseur revendeur Kakao Shop
+# ---------------------------------------------------------------------------
+KAKAO_API_KEY: str = os.environ.get("HP_KAKAO_API_KEY", "").strip()
+KAKAO_API_BASE: str = os.environ.get(
+    "HP_KAKAO_API_BASE", "https://api.shopdigital.app"
+).rstrip("/")
 _BINANCE_OFFICIAL_BASES = (
     "https://api.binance.com",
     "https://api-gcp.binance.com",

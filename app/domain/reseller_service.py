@@ -12,6 +12,8 @@ from urllib.request import Request, urlopen
 import database as db
 from pymongo.errors import DuplicateKeyError
 from config import (
+    KAKAO_API_BASE,
+    KAKAO_API_KEY,
     MAILREADER_API_BASE,
     MAILREADER_API_KEY,
     SHAMEKH_API_BASE,
@@ -20,7 +22,8 @@ from config import (
 
 PROVIDER = "mailreader"
 SHAMEKH_PROVIDER = "shamekh"
-SUPPORTED_PROVIDERS = {PROVIDER, SHAMEKH_PROVIDER}
+KAKAO_PROVIDER = "kakao"
+SUPPORTED_PROVIDERS = {PROVIDER, SHAMEKH_PROVIDER, KAKAO_PROVIDER}
 
 
 class ResellerApiError(RuntimeError):
@@ -109,6 +112,53 @@ def _shamekh_request_json(
     return payload
 
 
+def _kakao_request_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not KAKAO_API_KEY:
+        raise ResellerApiError(
+            "Kakao Shop n’est pas configuré. Ajoutez HP_KAKAO_API_KEY "
+            "dans les variables d’environnement."
+        )
+    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    request = Request(
+        f"{KAKAO_API_BASE}{path}",
+        headers={
+            "Authorization": f"Bearer {KAKAO_API_KEY}",
+            "Accept": "application/json",
+            **({"Content-Type": "application/json"} if body is not None else {}),
+            "User-Agent": "BlackMarket-Reseller/1.0",
+        },
+        data=payload_bytes,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        messages = {
+            401: "Clé API Kakao refusée. Remplacez-la par une clé active.",
+            402: "Solde Kakao insuffisant pour cette commande.",
+            404: "Produit Kakao introuvable.",
+            409: "Produit Kakao en rupture de stock.",
+        }
+        raise ResellerApiError(
+            messages.get(exc.code, f"Kakao Shop a répondu avec l’erreur HTTP {exc.code}.")
+        ) from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ResellerApiError("Kakao Shop est temporairement indisponible.") from exc
+    if isinstance(payload, list):
+        payload = {"success": True, "products": payload}
+    if not isinstance(payload, dict):
+        raise ResellerApiError("Réponse Kakao invalide.")
+    if payload.get("success") is False or payload.get("ok") is False:
+        raise ResellerApiError(str(payload.get("error") or "Requête Kakao refusée.")[:300])
+    return payload
+
+
 def provider_summaries() -> list[dict[str, Any]]:
     """Return safe provider metadata without exposing credentials."""
     return [
@@ -124,6 +174,12 @@ def provider_summaries() -> list[dict[str, Any]]:
             "configured": bool(SHAMEKH_API_KEY),
             "documentation_url": "",
         },
+        {
+            "id": KAKAO_PROVIDER,
+            "name": "Kakao Shop",
+            "configured": bool(KAKAO_API_KEY),
+            "documentation_url": "",
+        },
     ]
 
 
@@ -137,11 +193,23 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         account = _shamekh_request_json("/api/me")
         reseller = account.get("user") if isinstance(account.get("user"), dict) else {}
         supplier_name = "Shamekh’s bot"
+    elif provider == KAKAO_PROVIDER:
+        payload = _kakao_request_json("/api/products")
+        balance_payload = _kakao_request_json("/api/balance")
+        balance_data = (
+            balance_payload.get("data")
+            if isinstance(balance_payload.get("data"), dict)
+            else balance_payload
+        )
+        reseller = {"balance": balance_data.get("balance", 0)}
+        supplier_name = "Kakao Shop"
     else:
         payload = _request_json("/api/reseller/products")
         reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
         supplier_name = str(reseller.get("name") or "MailReader")
     raw_products = payload.get("products")
+    if provider == KAKAO_PROVIDER and not isinstance(raw_products, list):
+        raw_products = payload.get("data")
     if not isinstance(raw_products, list):
         raise ResellerApiError("Le fournisseur ne contient aucune liste de produits.")
 
@@ -156,13 +224,14 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         product_id = str(raw["id"])
         try:
             wholesale = float(Decimal(str(
-                raw.get("price") if provider == SHAMEKH_PROVIDER
+                raw.get("price") if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER}
                 else raw.get("wholesale_price", "0")
             )))
         except (InvalidOperation, ValueError):
             wholesale = 0.0
         stock = max(0, int(
-            (raw.get("stock_count") or 0) if provider == SHAMEKH_PROVIDER
+            (raw.get("stock_count") or 0)
+            if provider == SHAMEKH_PROVIDER
             else raw.get("stock") or 0
         ))
         config = saved.get(product_id, {})
@@ -188,7 +257,10 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 or raw.get("name")
                 or product_id
             )[:200],
-            "description": str(raw.get("description") or "")[:2000],
+            "description": str(
+                raw.get("description")
+                or (f"Source : {raw.get('source')}" if raw.get("source") else "")
+            )[:2000],
             "delivery_instruction": str(raw.get("delivery_instruction") or "")[:2000],
             "wholesale_price": wholesale,
             "currency": str(raw.get("currency") or "USDT")[:12],
@@ -294,11 +366,10 @@ def save_catalog_product(
 
     display_name = str(display_name or product["name"]).strip()[:120]
     description = str(description or product.get("description") or "").strip()[:1000]
-    default_warranty = (
-        "Produit API Shamekh’s bot"
-        if provider == SHAMEKH_PROVIDER
-        else "Produit API MailReader"
-    )
+    default_warranty = {
+        SHAMEKH_PROVIDER: "Produit API Shamekh’s bot",
+        KAKAO_PROVIDER: "Produit API Kakao Shop",
+    }.get(provider, "Produit API MailReader")
     warranty = str(warranty or default_warranty).strip()[:250]
     delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]
     service_emoji = str(service_emoji or "📦").strip()[:12]
@@ -416,6 +487,9 @@ def _delivery_items(payload: dict[str, Any]) -> list[str]:
             if isinstance(value, list):
                 raw_items = value
                 break
+            if isinstance(value, str) and value.strip():
+                raw_items = [value]
+                break
         if raw_items is not None:
             break
     if raw_items is None:
@@ -505,6 +579,16 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                 {"$set": {"status": "review_required", "updated_at": int(time.time())}},
             )
             raise
+    elif provider == KAKAO_PROVIDER:
+        response = _kakao_request_json(
+            "/api/purchase",
+            method="POST",
+            body={
+                "product_id": str(offer["supplier_product_id"]),
+                "quantity": int(order.get("qty") or 1),
+                "external_order_id": external_order_id,
+            },
+        )
     else:
         response = _request_json(
             "/api/reseller?action=order",
@@ -531,6 +615,7 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
     order_payload = response.get("order")
     supplier_order_id = (
         response.get("transaction_id")
+        or response.get("order_id")
         or response.get("id")
         or (order_payload.get("id") if isinstance(order_payload, dict) else "")
         or ""

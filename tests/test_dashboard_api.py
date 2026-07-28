@@ -192,6 +192,8 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "Dashboard des API" in page
     assert "Shamekh’s bot" in page
     assert "selectApiProvider('shamekh')" in page
+    assert "Kakao Shop" in page
+    assert "selectApiProvider('kakao')" in page
     assert "Produits & services" in page
     assert "Description, prix & garantie" in page
     assert "openApiProductEditor" in page

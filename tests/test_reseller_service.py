@@ -235,3 +235,84 @@ def test_shamekh_product_publishes_and_delivers(monkeypatch, mock_mongodb):
     assert fulfillment["supplier_order_id"] == "tx_supplier_1"
     assert fulfillment["status"] == "completed"
     assert db.get_order(92)["status"] == "delivered"
+
+
+def test_kakao_catalog_maps_balance_source_and_products(monkeypatch, mock_mongodb):
+    def fake_request(path, **_kwargs):
+        if path == "/api/balance":
+            return {"success": True, "balance": 62.77}
+        return {
+            "success": True,
+            "products": [{
+                "id": "kakao-1",
+                "name": "Digital Account",
+                "price": 1.23,
+                "stock": 14,
+                "source": "Kakao inventory",
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_kakao_request_json", fake_request)
+
+    result = reseller_service.catalog("kakao")
+
+    assert result["provider"] == "kakao"
+    assert result["supplier_name"] == "Kakao Shop"
+    assert result["balance"] == 62.77
+    assert result["products"][0]["id"] == "kakao-1"
+    assert result["products"][0]["wholesale_price"] == 1.23
+    assert result["products"][0]["stock"] == 14
+    assert result["products"][0]["description"] == "Source : Kakao inventory"
+
+
+def test_kakao_purchase_uses_external_id_and_is_idempotent(monkeypatch, mock_mongodb):
+    calls = []
+
+    def fake_request(path, **kwargs):
+        if path == "/api/balance":
+            return {"success": True, "balance": 62.77}
+        if path == "/api/purchase":
+            calls.append(kwargs["body"])
+            return {
+                "success": True,
+                "order_id": 555,
+                "credentials": "user:pass",
+                "external_order_id": kwargs["body"]["external_order_id"],
+            }
+        return {
+            "success": True,
+            "products": [{
+                "id": "kakao-1",
+                "name": "Digital Account",
+                "price": 1.23,
+                "stock": 14,
+                "source": "Kakao inventory",
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_kakao_request_json", fake_request)
+    service_id = db.add_service("Kakao", "🛍️")
+    saved = reseller_service.save_catalog_product(
+        "kakao-1",
+        provider="kakao",
+        retail_price=2.5,
+        enabled=True,
+        service_id=service_id,
+    )
+    offer = db.get_offer(saved["local_offer_id"])
+    mock_mongodb.orders.insert_one({
+        "id": 93,
+        "user_id": 123,
+        "offer_id": offer["id"],
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+
+    assert reseller_service.fulfill_paid_order(93) == ["user:pass"]
+    assert reseller_service.fulfill_paid_order(93) == ["user:pass"]
+    assert calls == [{
+        "product_id": "kakao-1",
+        "quantity": 1,
+        "external_order_id": "BM-93",
+    }]
+    assert db.get_order(93)["status"] == "delivered"
