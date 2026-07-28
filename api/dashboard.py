@@ -2908,6 +2908,12 @@ def render_dashboard(
                                 <label>Description client</label>
                                 <textarea class="api-description" maxlength="1000" placeholder="Ce que le client reçoit…">${escapeHtml(product.custom_description || "")}</textarea>
                             </div>
+                            <div class="form-group wide">
+                                <label>Garantie affichée dans le bot</label>
+                                <input class="api-warranty" maxlength="250"
+                                       value="${escapeHtml(product.warranty || "")}"
+                                       placeholder="Ex. Remplacement sous 24 heures">
+                            </div>
                             <div class="form-group">
                                 <label>Délai de livraison</label>
                                 <input class="api-delivery-delay" maxlength="120" value="${escapeHtml(product.delivery_delay || "Instantané après confirmation")}">
@@ -3016,6 +3022,7 @@ def render_dashboard(
                 service_emoji: card.querySelector(".api-service-emoji").value,
                 display_name: card.querySelector(".api-display-name").value,
                 description: card.querySelector(".api-description").value,
+                warranty: card.querySelector(".api-warranty").value,
                 delivery_delay: card.querySelector(".api-delivery-delay").value,
                 low_stock_threshold: card.querySelector(".api-low-stock").value,
                 sort_order: card.querySelector(".api-sort-order").value

@@ -193,6 +193,7 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "Service affiché dans le bot" in page
     assert "Créer un nouveau service" in page
     assert "Nom visible du produit" in page
+    assert "Garantie affichée dans le bot" in page
     assert "Aperçu dans le bot" in page
     assert "Publier et revendre dans le bot" in page
     assert "low_stock_threshold" in page

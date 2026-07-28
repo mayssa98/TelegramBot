@@ -712,6 +712,7 @@ class handler(BaseHTTPRequestHandler):
                     service_emoji=form.get("service_emoji", "📦").strip(),
                     display_name=form.get("display_name", "").strip(),
                     description=form.get("description", "").strip(),
+                    warranty=form.get("warranty", "").strip(),
                     delivery_delay=form.get(
                         "delivery_delay", "Instantané après confirmation"
                     ).strip(),

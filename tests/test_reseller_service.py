@@ -86,6 +86,7 @@ def test_publish_product_creates_native_bot_service_and_offer(monkeypatch, mock_
         service_emoji="📧",
         display_name="Mailbox Premium",
         description="Livraison automatique",
+        warranty="Remplacement sous 24 heures",
         delivery_delay="Instantané",
         sort_order=7,
         low_stock_threshold=3,
@@ -96,6 +97,7 @@ def test_publish_product_creates_native_bot_service_and_offer(monkeypatch, mock_
     assert service["name"] == "Boîtes mail"
     assert service["emoji"] == "📧"
     assert offer["name"] == "Mailbox Premium"
+    assert offer["note"] == "Remplacement sous 24 heures"
     assert offer["service_id"] == service["id"]
     assert offer["supplier_provider"] == "mailreader"
     assert offer["supplier_product_id"] == "mail_100"
@@ -103,6 +105,7 @@ def test_publish_product_creates_native_bot_service_and_offer(monkeypatch, mock_
     assert offer["price"] == 4.5
     assert offer["active"] == 1
     assert offer["sort_order"] == 7
+    assert saved["warranty"] == "Remplacement sous 24 heures"
 
 
 def test_republishing_updates_same_native_offer(monkeypatch, mock_mongodb):

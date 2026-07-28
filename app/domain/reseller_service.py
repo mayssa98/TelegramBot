@@ -83,6 +83,7 @@ def catalog() -> dict[str, Any]:
         config = saved.get(product_id, {})
         retail_price = config.get("retail_price")
         local_offer_id = config.get("local_offer_id")
+        native_offer = db.get_offer(int(local_offer_id)) if local_offer_id else None
         native_service = (
             db.get_service(int(config["service_id"]))
             if config.get("service_id") is not None
@@ -123,6 +124,11 @@ def catalog() -> dict[str, Any]:
                 or "📦"
             ),
             "custom_description": config.get("description") or str(raw.get("description") or "")[:2000],
+            "warranty": (
+                config.get("warranty")
+                or (native_offer or {}).get("note")
+                or "Produit API MailReader"
+            ),
             "delivery_delay": config.get("delivery_delay") or "Instantané après confirmation",
             "sort_order": int(config.get("sort_order") or 0),
             "low_stock_threshold": int(config.get("low_stock_threshold") or 5),
@@ -179,6 +185,7 @@ def save_catalog_product(
     service_emoji: str = "📦",
     display_name: str = "",
     description: str = "",
+    warranty: str = "Produit API MailReader",
     delivery_delay: str = "Instantané après confirmation",
     sort_order: int = 0,
     low_stock_threshold: int = 5,
@@ -193,6 +200,7 @@ def save_catalog_product(
 
     display_name = str(display_name or product["name"]).strip()[:120]
     description = str(description or product.get("description") or "").strip()[:1000]
+    warranty = str(warranty or "").strip()[:250]
     delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]
     service_emoji = str(service_emoji or "📦").strip()[:12]
     low_stock_threshold = max(0, int(low_stock_threshold or 0))
@@ -238,6 +246,7 @@ def save_catalog_product(
             stock=int(product["stock"]),
             active=1 if enabled else 0,
             description=description,
+            note=warranty,
             currency=product["currency"],
             sort_order=sort_order,
             auto_delivery=True,
@@ -260,7 +269,7 @@ def save_catalog_product(
             display_name,
             retail_price,
             int(product["stock"]),
-            note="Produit API MailReader",
+            note=warranty,
             description=description,
             currency=product["currency"],
             auto_delivery=True,
@@ -287,6 +296,7 @@ def save_catalog_product(
         service_name=service.get("name") or "",
         service_emoji=service.get("emoji") or service_emoji,
         description=description,
+        warranty=warranty,
         delivery_delay=delivery_delay,
         sort_order=sort_order,
         low_stock_threshold=low_stock_threshold,
