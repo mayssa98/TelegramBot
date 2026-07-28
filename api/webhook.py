@@ -18,7 +18,9 @@ from datetime import UTC, datetime
 from enum import Enum
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
+from urllib.request import Request, urlopen
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -29,7 +31,7 @@ from app import __version__
 from app.domain import inventory_service, order_service, reseller_service, support_service
 from app.web import dashboard_api
 from bot import build_app
-from config import CURRENCY, DASHBOARD_PASSWORD
+from config import BOT_TOKEN, CURRENCY, DASHBOARD_PASSWORD
 from payment_verifier import binance_healthcheck
 
 _loop = asyncio.new_event_loop()
@@ -47,6 +49,90 @@ def health_payload() -> dict:
         "version": __version__,
         "timestamp": datetime.now(UTC).isoformat(),
     }
+
+
+def _telegram_api(method: str, payload: dict | None = None) -> dict:
+    """Call Telegram without ever including the bot token in returned errors."""
+    if not BOT_TOKEN:
+        return {"ok": False, "message": "HP_BOT_TOKEN n’est pas configuré."}
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = Request(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/{method}",
+        data=body,
+        headers={"Content-Type": "application/json"} if body else {},
+        method="POST" if body else "GET",
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        return {
+            "ok": False,
+            "http_status": exc.code,
+            "message": f"Telegram répond HTTP {exc.code}.",
+        }
+    except (URLError, TimeoutError, json.JSONDecodeError):
+        return {"ok": False, "message": "Telegram est temporairement indisponible."}
+    return result if isinstance(result, dict) else {
+        "ok": False,
+        "message": "Réponse Telegram invalide.",
+    }
+
+
+def telegram_webhook_health() -> dict:
+    """Return a safe, admin-facing view of Telegram webhook state."""
+    response = _telegram_api("getWebhookInfo")
+    if not response.get("ok"):
+        return {
+            "ok": False,
+            "message": response.get("message") or response.get("description") or "Telegram indisponible.",
+            "http_status": response.get("http_status"),
+        }
+    result = response.get("result") if isinstance(response.get("result"), dict) else {}
+    expected_url = (
+        os.environ.get(
+            "HP_PUBLIC_BASE_URL",
+            "https://telegram-bot-mayssa98s-projects.vercel.app",
+        ).rstrip("/")
+        + "/api/webhook"
+    )
+    return {
+        "ok": True,
+        "healthy": result.get("url") == expected_url and not result.get("last_error_message"),
+        "url": result.get("url") or "",
+        "expected_url": expected_url,
+        "pending_update_count": int(result.get("pending_update_count") or 0),
+        "last_error_message": str(result.get("last_error_message") or "")[:500],
+    }
+
+
+def repair_telegram_webhook() -> dict:
+    """Register the stable production webhook with Telegram's secret header."""
+    secret = os.environ.get("HP_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        return {"ok": False, "message": "HP_WEBHOOK_SECRET n’est pas configuré sur Vercel."}
+    expected_url = (
+        os.environ.get(
+            "HP_PUBLIC_BASE_URL",
+            "https://telegram-bot-mayssa98s-projects.vercel.app",
+        ).rstrip("/")
+        + "/api/webhook"
+    )
+    response = _telegram_api(
+        "setWebhook",
+        {
+            "url": expected_url,
+            "secret_token": secret,
+            "drop_pending_updates": False,
+        },
+    )
+    if not response.get("ok"):
+        return {
+            "ok": False,
+            "message": response.get("message") or response.get("description") or "Réparation refusée par Telegram.",
+            "http_status": response.get("http_status"),
+        }
+    return {"ok": True, "url": expected_url, "message": "Webhook Telegram réparé."}
 
 
 def dashboard_write_token() -> str:
@@ -252,6 +338,14 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
                 return
             self._reply(200, binance_healthcheck())
+            return
+
+        elif path == "/admin/api/telegram-health":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            result = telegram_webhook_health()
+            self._reply(200 if result.get("ok") else 503, result)
             return
 
         elif path == "/admin/api/reseller-products":
@@ -738,6 +832,15 @@ class handler(BaseHTTPRequestHandler):
                     },
                 )
                 self._reply(200, {"ok": True, "product": saved})
+                return
+
+            elif action == "repair_telegram_webhook":
+                result = repair_telegram_webhook()
+                db.audit_event(
+                    "webhook.repair_requested",
+                    details={"ok": bool(result.get("ok"))},
+                )
+                self._reply(200 if result.get("ok") else 503, result)
                 return
 
             else:

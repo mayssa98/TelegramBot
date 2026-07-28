@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import database as db
+from api import webhook
 from api.webhook import handler, health_payload, public_site_html
 from bot import build_app
 
@@ -20,6 +21,46 @@ def test_public_health_payload():
 
 def test_webhook_handler_is_importable():
     assert handler.__name__ == "handler"
+
+
+def test_telegram_webhook_health_detects_stable_url(monkeypatch):
+    expected = "https://telegram-bot-mayssa98s-projects.vercel.app/api/webhook"
+    monkeypatch.setattr(
+        webhook,
+        "_telegram_api",
+        lambda _method, _payload=None: {
+            "ok": True,
+            "result": {
+                "url": expected,
+                "pending_update_count": 2,
+                "last_error_message": "",
+            },
+        },
+    )
+
+    result = webhook.telegram_webhook_health()
+
+    assert result["ok"] is True
+    assert result["healthy"] is True
+    assert result["pending_update_count"] == 2
+
+
+def test_repair_telegram_webhook_registers_secret(monkeypatch):
+    captured = {}
+    monkeypatch.setenv("HP_WEBHOOK_SECRET", "safe-secret")
+
+    def fake_api(method, payload=None):
+        captured.update({"method": method, "payload": payload})
+        return {"ok": True, "result": True}
+
+    monkeypatch.setattr(webhook, "_telegram_api", fake_api)
+
+    result = webhook.repair_telegram_webhook()
+
+    assert result["ok"] is True
+    assert captured["method"] == "setWebhook"
+    assert captured["payload"]["url"].endswith("/api/webhook")
+    assert captured["payload"]["secret_token"] == "safe-secret"
 
 
 def test_public_site_links_to_bot():

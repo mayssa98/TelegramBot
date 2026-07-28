@@ -237,6 +237,14 @@ def test_dashboard_contains_binance_health_test():
     assert "testBinanceConnection" in page
 
 
+def test_dashboard_contains_telegram_webhook_repair():
+    page = render_dashboard({"summary": {}, "alerts": []}, active_tab="overview")
+
+    assert "Réparer Telegram" in page
+    assert "/admin/api/telegram-health" in page
+    assert "repair_telegram_webhook" in page
+
+
 def test_dashboard_javascript_syntax_is_valid(tmp_path):
     if not shutil.which("node"):
         pytest.skip("node is not installed")

@@ -1966,6 +1966,7 @@ def render_dashboard(
             </label>
             <div class="merchant-account">
                 <div class="header-actions">
+                    <button class="btn btn-secondary" id="telegram-repair-button" onclick="checkAndRepairTelegram()"><span>Réparer Telegram</span></button>
                     <button class="btn btn-secondary" id="binance-test-button" onclick="testBinanceConnection()"><span>Tester Binance</span></button>
                     <button class="btn btn-secondary" onclick="refreshDashboardData()"><span>Actualiser</span></button>
                 </div>
@@ -3574,6 +3575,53 @@ def render_dashboard(
         }
 
         // Actions Ajax
+        async function checkAndRepairTelegram() {
+            const button = document.getElementById("telegram-repair-button");
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = "Vérification...";
+            try {
+                const healthResponse = await fetch("/admin/api/telegram-health", {
+                    headers: { "Accept": "application/json" }
+                });
+                const health = await healthResponse.json();
+                if (!healthResponse.ok || !health.ok) {
+                    showToast(health.message || "Telegram est temporairement indisponible", "error");
+                    return;
+                }
+                if (health.healthy) {
+                    showToast(`Webhook Telegram actif · ${health.pending_update_count || 0} mise(s) à jour en attente`);
+                    return;
+                }
+                const reason = health.last_error_message
+                    ? `Dernière erreur : ${health.last_error_message}`
+                    : "L’URL Telegram ne correspond pas à l’URL stable.";
+                if (!confirm(`${reason}\n\nRéparer le webhook maintenant ?`)) return;
+                button.textContent = "Réparation...";
+                const params = new URLSearchParams({ action: "repair_telegram_webhook" });
+                const repairResponse = await fetch("/admin", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-Dashboard-Write-Token": dashboardWriteToken
+                    },
+                    body: params
+                });
+                const repair = await repairResponse.json();
+                if (!repairResponse.ok || !repair.ok) {
+                    showToast(repair.message || "Réparation Telegram impossible", "error");
+                    return;
+                }
+                showToast("Webhook Telegram réparé sur l’URL stable");
+            } catch (err) {
+                showToast("Impossible de contacter Telegram depuis Vercel", "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
         async function testBinanceConnection() {
             const button = document.getElementById("binance-test-button");
             const originalText = button.textContent;
