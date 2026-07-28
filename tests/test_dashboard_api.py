@@ -188,7 +188,11 @@ def test_dashboard_has_mailreader_api_products_management():
     assert 'id="api-products" class="panel active"' in page
     assert "/admin/api/reseller-products" in page
     assert "save_reseller_product" in page
-    assert "Produits API MailReader" in page
+    assert "Centre des API" in page
+    assert "Dashboard des API" in page
+    assert "Produits & services" in page
+    assert "Description, prix & garantie" in page
+    assert "openApiProductEditor" in page
     assert "Votre prix client" in page
     assert "Service affiché dans le bot" in page
     assert "Créer un nouveau service" in page

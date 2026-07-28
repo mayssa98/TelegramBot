@@ -675,10 +675,104 @@ def render_dashboard(
         }
 
         .api-product-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+            display: flex;
+            flex-direction: column;
             gap: 16px;
         }
+
+        .api-step-nav {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0 24px;
+        }
+
+        .api-step-button {
+            appearance: none;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 11px;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 14px 16px;
+            text-align: left;
+        }
+
+        .api-step-button strong {
+            color: var(--text-main);
+            display: block;
+            margin-top: 3px;
+        }
+
+        .api-step-button.active {
+            border-color: #9d72ff;
+            background: rgba(157, 114, 255, .13);
+            color: #b596ff;
+        }
+
+        .api-workspace-page { display: none; }
+        .api-workspace-page.active { display: block; }
+
+        .api-action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 14px;
+            margin-top: 20px;
+        }
+
+        .api-action-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .api-action-card h3 { margin: 8px 0 6px; }
+        .api-action-card p {
+            color: var(--text-muted);
+            font-size: 13px;
+            min-height: 38px;
+        }
+        .api-action-card .btn { margin-top: 14px; width: 100%; }
+
+        .api-services-strip {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            flex-wrap: wrap;
+            margin: 16px 0 20px;
+        }
+
+        .api-service-chip {
+            background: rgba(255,255,255,.035);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
+        .api-product-row {
+            align-items: center;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            display: grid;
+            gap: 14px;
+            grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(105px, .55fr)) auto;
+            padding: 16px 18px;
+        }
+
+        .api-product-row.enabled { border-color: rgba(34, 197, 94, .45); }
+
+        .api-row-stat span {
+            color: var(--text-muted);
+            display: block;
+            font-size: 11px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .api-editor-shell { max-width: 900px; margin: 0 auto; }
 
         .api-product-card {
             background: var(--bg-card);
@@ -870,6 +964,9 @@ def render_dashboard(
                 width: 100%;
                 padding: 24px;
             }
+            .api-product-row {
+                grid-template-columns: 1fr 1fr;
+            }
         }
 
         @media (max-width: 640px) {
@@ -889,6 +986,12 @@ def render_dashboard(
             }
             .api-config-grid .wide {
                 grid-column: auto;
+            }
+            .api-step-nav {
+                grid-template-columns: 1fr;
+            }
+            .api-product-row {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -2007,31 +2110,87 @@ def render_dashboard(
         <section id="api-products" class="panel __PANEL_API-PRODUCTS__">
             <div class="section-header">
                 <div>
-                    <h2>Produits API MailReader</h2>
-                    <p class="last-update">Publiez chaque produit dans le catalogue natif du bot, avec votre service, présentation, prix et règles de stock.</p>
+                    <h2>Centre des API</h2>
+                    <p class="last-update">Gérez les fournisseurs, choisissez les produits, puis configurez chaque offre séparément.</p>
                 </div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            </div>
+
+            <div class="api-step-nav">
+                <button class="api-step-button active" data-api-step="overview" onclick="showApiWorkspaceStep('overview')">
+                    Étape 1<strong>Dashboard des API</strong>
+                </button>
+                <button class="api-step-button" data-api-step="catalog" onclick="showApiWorkspaceStep('catalog')">
+                    Étape 2<strong>Produits & services</strong>
+                </button>
+                <button class="api-step-button" data-api-step="editor" onclick="showApiWorkspaceStep('editor')">
+                    Étape 3<strong>Description, prix & garantie</strong>
+                </button>
+            </div>
+
+            <div id="api-workspace-overview" class="api-workspace-page active">
+                <div id="api-supplier-state">
+                    <div class="empty-state">Connexion sécurisée au fournisseur…</div>
+                </div>
+                <div class="api-action-grid">
+                    <div class="api-action-card">
+                        <span class="badge badge-paid">API active</span>
+                        <h3>MailReader</h3>
+                        <p>Fournisseur connecté au catalogue et à la livraison automatique.</p>
+                        <button class="btn btn-primary" onclick="showApiWorkspaceStep('catalog')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
+                        <span>↻</span>
+                        <h3>Synchronisation</h3>
+                        <p>Actualisez le solde, les prix grossistes et les stocks.</p>
+                        <button class="btn btn-secondary" id="api-products-refresh" onclick="loadApiProducts(true)">Actualiser l’API</button>
+                    </div>
+                    <div class="api-action-card">
+                        <span>＋</span>
+                        <h3>Services du bot</h3>
+                        <p>Créez une catégorie avant d’y publier des produits.</p>
+                        <button class="btn btn-secondary" onclick="openModal('add-service-modal')">Nouveau service</button>
+                    </div>
+                    <div class="api-action-card">
+                        <span>↗</span>
+                        <h3>Documentation</h3>
+                        <p>Consultez les endpoints et les règles de MailReader.</p>
+                        <a class="btn btn-secondary" href="https://api.mailreader.tech/docs" target="_blank" rel="noopener">Ouvrir la documentation</a>
+                    </div>
+                </div>
+            </div>
+
+            <div id="api-workspace-catalog" class="api-workspace-page">
+                <div class="section-header">
+                    <div>
+                        <h2>Produits & services MailReader</h2>
+                        <p class="last-update">Choisissez un produit pour ouvrir sa configuration complète.</p>
+                    </div>
                     <button class="btn btn-secondary" onclick="openModal('add-service-modal')">+ Nouveau service</button>
-                    <a class="btn btn-secondary" href="https://api.mailreader.tech/docs" target="_blank" rel="noopener">Documentation API</a>
-                    <button class="btn btn-primary" id="api-products-refresh" onclick="loadApiProducts(true)">Actualiser le fournisseur</button>
+                </div>
+                <div class="api-services-strip" id="api-services-strip"></div>
+                <div class="filters">
+                    <div class="search-box">
+                        <input id="api-product-search" placeholder="Rechercher un produit API…" oninput="filterApiProducts()">
+                    </div>
+                    <select id="api-product-visibility" onchange="filterApiProducts()">
+                        <option value="">Tous les produits</option>
+                        <option value="enabled">Publiés</option>
+                        <option value="disabled">Brouillons</option>
+                        <option value="stock">En stock</option>
+                    </select>
+                </div>
+                <div class="api-product-list" id="api-product-list">
+                    <div class="empty-state">Chargement du catalogue…</div>
                 </div>
             </div>
-            <div id="api-supplier-state">
-                <div class="empty-state">Connexion sécurisée au fournisseur…</div>
-            </div>
-            <div class="filters">
-                <div class="search-box">
-                    <input id="api-product-search" placeholder="Rechercher un produit API…" oninput="filterApiProducts()">
+
+            <div id="api-workspace-editor" class="api-workspace-page">
+                <div class="api-editor-shell">
+                    <button class="btn btn-secondary" style="margin-bottom:16px;" onclick="showApiWorkspaceStep('catalog')">← Retour aux produits</button>
+                    <div id="api-product-editor">
+                        <div class="empty-state">Choisissez un produit dans l’étape 2 pour modifier sa description, son prix et sa garantie.</div>
+                    </div>
                 </div>
-                <select id="api-product-visibility" onchange="filterApiProducts()">
-                    <option value="">Tous les produits</option>
-                    <option value="enabled">Sélectionnés</option>
-                    <option value="disabled">Non sélectionnés</option>
-                    <option value="stock">En stock</option>
-                </select>
-            </div>
-            <div class="api-product-list" id="api-product-list">
-                <div class="empty-state">Chargement du catalogue…</div>
             </div>
         </section>
 
@@ -2387,6 +2546,8 @@ def render_dashboard(
         let inventoryFilterTimer;
         let resellerCatalog = null;
         let resellerCatalogLoading = false;
+        let apiWorkspaceStep = "overview";
+        let selectedApiProductId = null;
         const ORDER_STATUSES = [
             "pending_payment",
             "awaiting_verification",
@@ -2807,6 +2968,23 @@ def render_dashboard(
             }
         }
 
+        function showApiWorkspaceStep(step, productId = null) {
+            if (productId) selectedApiProductId = String(productId);
+            apiWorkspaceStep = step;
+            document.querySelectorAll(".api-step-button").forEach(button => {
+                button.classList.toggle("active", button.dataset.apiStep === step);
+            });
+            document.querySelectorAll(".api-workspace-page").forEach(page => {
+                page.classList.toggle("active", page.id === `api-workspace-${step}`);
+            });
+            if (step === "editor") renderApiProductEditor();
+        }
+
+        function openApiProductEditor(productId) {
+            selectedApiProductId = String(productId);
+            showApiWorkspaceStep("editor");
+        }
+
         function renderApiProducts() {
             if (!resellerCatalog) return;
             const products = resellerCatalog.products || [];
@@ -2825,10 +3003,18 @@ def render_dashboard(
                         <strong>${products.length}</strong>
                     </div>
                     <div class="supplier-stat">
-                        <span>Produits sélectionnés</span>
+                        <span>Produits publiés</span>
                         <strong>${resellerCatalog.selected_count || 0}</strong>
                     </div>
                 </div>`;
+
+            const servicesStrip = document.getElementById("api-services-strip");
+            const services = dashboardData.services || [];
+            servicesStrip.innerHTML = services.length
+                ? services.map(service => `
+                    <span class="api-service-chip">${escapeHtml((service.emoji || "📦") + " " + service.name)}</span>
+                `).join("")
+                : '<span class="last-update">Aucun service créé.</span>';
 
             const list = document.getElementById("api-product-list");
             if (!products.length) {
@@ -2840,115 +3026,154 @@ def render_dashboard(
                 const retail = product.retail_price == null
                     ? Math.ceil((wholesale * 1.30) * 100) / 100
                     : Number(product.retail_price);
-                const profit = retail - wholesale;
-                const margin = retail > 0 ? (profit / retail) * 100 : 0;
-                const services = (dashboardData.services || []).map(service => `
-                    <option value="${Number(service.id)}" ${Number(product.service_id) === Number(service.id) ? "selected" : ""}>
-                        ${escapeHtml((service.emoji || "📦") + " " + service.name)}
-                    </option>`).join("");
-                const previewService = product.service_name
-                    ? `${product.service_emoji || "📦"} ${product.service_name}`
-                    : "📦 Choisissez un service";
                 return `
-                    <article class="api-product-card ${product.enabled ? "enabled" : ""} ${product.published ? "published" : ""}"
-                             data-product-id="${escapeHtml(product.id)}"
+                    <article class="api-product-row ${product.enabled ? "enabled" : ""}"
                              data-enabled="${product.enabled ? "1" : "0"}"
                              data-stock="${Number(product.stock || 0)}"
-                             data-search="${escapeHtml((product.name + " " + product.id + " " + (product.description || "")).toLowerCase())}">
-                        <div class="api-product-heading">
-                            <div>
-                                <h3>${escapeHtml(product.name)}</h3>
-                                <div class="api-product-id">${escapeHtml(product.id)}</div>
-                            </div>
-                            <div class="api-statuses">
-                                ${product.published ? '<span class="badge badge-pending">Publié dans le bot</span>' : '<span class="badge">Brouillon</span>'}
-                                <span class="badge badge-${product.stock > 0 ? "paid" : "cancelled"}">${Number(product.stock || 0)} en stock</span>
+                             data-search="${escapeHtml((product.name + " " + product.id + " " + (product.service_name || "")).toLowerCase())}">
+                        <div>
+                            <h3>${escapeHtml(product.name)}</h3>
+                            <div class="api-product-id">${escapeHtml(product.id)}</div>
+                            <div class="api-statuses" style="margin-top:8px;">
+                                ${product.enabled ? '<span class="badge badge-paid">Publié</span>' : '<span class="badge">Brouillon</span>'}
+                                <span class="badge badge-${product.stock > 0 ? "paid" : "cancelled"}">${Number(product.stock || 0)} stock</span>
                             </div>
                         </div>
-                        ${product.description ? `<p class="last-update">${escapeHtml(product.description)}</p>` : ""}
-                        <div class="api-price-grid">
-                            <div class="api-price-box">
-                                <span>Prix grossiste</span>
-                                <strong>${wholesale.toFixed(2)} ${escapeHtml(product.currency || "USDT")}</strong>
-                            </div>
-                            <div class="api-price-box">
-                                <span>Bénéfice par vente</span>
-                                <strong class="api-profit ${profit <= 0 ? "loss" : ""}">${profit.toFixed(2)} ${escapeHtml(product.currency || "USDT")} · ${margin.toFixed(1)}%</strong>
-                            </div>
+                        <div class="api-row-stat">
+                            <span>Service</span>
+                            <strong>${escapeHtml(product.service_name ? (product.service_emoji || "📦") + " " + product.service_name : "Non assigné")}</strong>
                         </div>
-                        <div class="api-config-grid">
-                            <div class="form-group wide">
-                                <label>Service affiché dans le bot</label>
-                                <select class="api-service" onchange="toggleApiNewService(this); updateApiPreview(this)">
-                                    <option value="">Choisir un service…</option>
-                                    ${services}
-                                    <option value="__new__">＋ Créer un nouveau service</option>
-                                </select>
-                            </div>
-                            <div class="api-new-service-fields wide">
-                                <div class="form-group">
-                                    <label>Emoji</label>
-                                    <input class="api-service-emoji" maxlength="12" value="${escapeHtml(product.service_emoji || "📦")}" oninput="updateApiPreview(this)">
-                                </div>
-                                <div class="form-group">
-                                    <label>Nom du nouveau service</label>
-                                    <input class="api-new-service-name" maxlength="80" placeholder="Ex. Comptes Premium" oninput="updateApiPreview(this)">
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Nom visible du produit</label>
-                                <input class="api-display-name" maxlength="120" value="${escapeHtml(product.display_name || product.name)}" oninput="updateApiPreview(this)">
-                            </div>
-                            <div class="form-group">
-                                <label>Votre prix client (${escapeHtml(product.currency || "USDT")})</label>
-                                <input class="api-retail-price" type="number" min="${(wholesale + 0.01).toFixed(2)}"
-                                       step="0.01" value="${retail.toFixed(2)}" oninput="updateApiProfit(this); updateApiPreview(this)">
-                            </div>
-                            <div class="form-group wide">
-                                <label>Description client</label>
-                                <textarea class="api-description" maxlength="1000" placeholder="Ce que le client reçoit…">${escapeHtml(product.custom_description || "")}</textarea>
-                            </div>
-                            <div class="form-group wide">
-                                <label>Garantie affichée dans le bot</label>
-                                <input class="api-warranty" maxlength="250"
-                                       value="${escapeHtml(product.warranty || "")}"
-                                       placeholder="Ex. Remplacement sous 24 heures">
-                            </div>
-                            <div class="form-group">
-                                <label>Délai de livraison</label>
-                                <input class="api-delivery-delay" maxlength="120" value="${escapeHtml(product.delivery_delay || "Instantané après confirmation")}">
-                            </div>
-                            <div class="form-group">
-                                <label>Alerte stock bas</label>
-                                <input class="api-low-stock" type="number" min="0" value="${Number(product.low_stock_threshold || 0)}">
-                            </div>
-                            <div class="form-group">
-                                <label>Ordre d’affichage</label>
-                                <input class="api-sort-order" type="number" min="0" value="${Number(product.sort_order || 0)}">
-                            </div>
-                            <div class="form-group">
-                                <label>Référence fournisseur</label>
-                                <input value="${escapeHtml(product.id)}" disabled>
-                            </div>
+                        <div class="api-row-stat">
+                            <span>Grossiste</span>
+                            <strong>${wholesale.toFixed(2)} ${escapeHtml(product.currency || "USDT")}</strong>
                         </div>
-                        <div class="api-product-preview">
-                            <small>Aperçu dans le bot</small>
-                            <div class="api-preview-service">${escapeHtml(previewService)}</div>
-                            <div class="api-preview-line">
-                                <span class="api-preview-product">${escapeHtml(product.display_name || product.name)}</span>
-                                <span><span class="api-preview-price">${retail.toFixed(2)}</span> ${escapeHtml(product.currency || "USDT")}</span>
-                            </div>
+                        <div class="api-row-stat">
+                            <span>Prix client</span>
+                            <strong>${retail.toFixed(2)} ${escapeHtml(product.currency || "USDT")}</strong>
                         </div>
-                        <div class="api-card-actions">
-                            <label class="api-enabled-control">
-                                <input class="api-enabled" type="checkbox" ${product.enabled ? "checked" : ""}>
-                                Publier et revendre dans le bot
-                            </label>
-                            <button class="btn btn-primary" onclick="saveApiProduct(this)">Enregistrer & synchroniser</button>
-                        </div>
+                        <button class="btn btn-primary" data-product-id="${escapeHtml(product.id)}"
+                                onclick="openApiProductEditor(this.dataset.productId)">Configurer →</button>
                     </article>`;
             }).join("");
             filterApiProducts();
+            if (apiWorkspaceStep === "editor") renderApiProductEditor();
+        }
+
+        function renderApiProductEditor() {
+            const editor = document.getElementById("api-product-editor");
+            const product = (resellerCatalog?.products || []).find(
+                item => String(item.id) === String(selectedApiProductId)
+            );
+            if (!product) {
+                editor.innerHTML = '<div class="empty-state">Choisissez d’abord un produit dans l’étape 2.</div>';
+                return;
+            }
+            const wholesale = Number(product.wholesale_price || 0);
+            const retail = product.retail_price == null
+                ? Math.ceil((wholesale * 1.30) * 100) / 100
+                : Number(product.retail_price);
+            const profit = retail - wholesale;
+            const margin = retail > 0 ? (profit / retail) * 100 : 0;
+            const services = (dashboardData.services || []).map(service => `
+                <option value="${Number(service.id)}" ${Number(product.service_id) === Number(service.id) ? "selected" : ""}>
+                    ${escapeHtml((service.emoji || "📦") + " " + service.name)}
+                </option>`).join("");
+            const previewService = product.service_name
+                ? `${product.service_emoji || "📦"} ${product.service_name}`
+                : "📦 Choisissez un service";
+            editor.innerHTML = `
+                <article class="api-product-card ${product.enabled ? "enabled" : ""} ${product.published ? "published" : ""}"
+                         data-product-id="${escapeHtml(product.id)}">
+                    <div class="api-product-heading">
+                        <div>
+                            <div class="api-product-id">Configuration du produit</div>
+                            <h3>${escapeHtml(product.name)}</h3>
+                            <div class="api-product-id">${escapeHtml(product.id)}</div>
+                        </div>
+                        <div class="api-statuses">
+                            ${product.enabled ? '<span class="badge badge-paid">Publié dans le bot</span>' : '<span class="badge">Brouillon</span>'}
+                            <span class="badge badge-${product.stock > 0 ? "paid" : "cancelled"}">${Number(product.stock || 0)} en stock</span>
+                        </div>
+                    </div>
+                    <div class="api-price-grid">
+                        <div class="api-price-box">
+                            <span>Prix grossiste</span>
+                            <strong>${wholesale.toFixed(2)} ${escapeHtml(product.currency || "USDT")}</strong>
+                        </div>
+                        <div class="api-price-box">
+                            <span>Bénéfice par vente</span>
+                            <strong class="api-profit ${profit <= 0 ? "loss" : ""}">${profit.toFixed(2)} ${escapeHtml(product.currency || "USDT")} · ${margin.toFixed(1)}%</strong>
+                        </div>
+                    </div>
+                    <div class="api-config-grid">
+                        <div class="form-group wide">
+                            <label>Service affiché dans le bot</label>
+                            <select class="api-service" onchange="toggleApiNewService(this); updateApiPreview(this)">
+                                <option value="">Choisir un service…</option>
+                                ${services}
+                                <option value="__new__">＋ Créer un nouveau service</option>
+                            </select>
+                        </div>
+                        <div class="api-new-service-fields wide">
+                            <div class="form-group">
+                                <label>Emoji</label>
+                                <input class="api-service-emoji" maxlength="12" value="${escapeHtml(product.service_emoji || "📦")}" oninput="updateApiPreview(this)">
+                            </div>
+                            <div class="form-group">
+                                <label>Nom du nouveau service</label>
+                                <input class="api-new-service-name" maxlength="80" placeholder="Ex. Comptes Premium" oninput="updateApiPreview(this)">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Nom visible du produit</label>
+                            <input class="api-display-name" maxlength="120" value="${escapeHtml(product.display_name || product.name)}" oninput="updateApiPreview(this)">
+                        </div>
+                        <div class="form-group">
+                            <label>Votre prix client (${escapeHtml(product.currency || "USDT")})</label>
+                            <input class="api-retail-price" type="number" min="${(wholesale + 0.01).toFixed(2)}"
+                                   step="0.01" value="${retail.toFixed(2)}" oninput="updateApiProfit(this); updateApiPreview(this)">
+                        </div>
+                        <div class="form-group wide">
+                            <label>Description client</label>
+                            <textarea class="api-description" maxlength="1000" placeholder="Ce que le client reçoit…">${escapeHtml(product.custom_description || "")}</textarea>
+                        </div>
+                        <div class="form-group wide">
+                            <label>Garantie affichée dans le bot</label>
+                            <input class="api-warranty" maxlength="250" value="${escapeHtml(product.warranty || "")}" placeholder="Ex. Remplacement sous 24 heures">
+                        </div>
+                        <div class="form-group">
+                            <label>Délai de livraison</label>
+                            <input class="api-delivery-delay" maxlength="120" value="${escapeHtml(product.delivery_delay || "Instantané après confirmation")}">
+                        </div>
+                        <div class="form-group">
+                            <label>Alerte stock bas</label>
+                            <input class="api-low-stock" type="number" min="0" value="${Number(product.low_stock_threshold || 0)}">
+                        </div>
+                        <div class="form-group">
+                            <label>Ordre d’affichage</label>
+                            <input class="api-sort-order" type="number" min="0" value="${Number(product.sort_order || 0)}">
+                        </div>
+                        <div class="form-group">
+                            <label>Référence fournisseur</label>
+                            <input value="${escapeHtml(product.id)}" disabled>
+                        </div>
+                    </div>
+                    <div class="api-product-preview">
+                        <small>Aperçu dans le bot</small>
+                        <div class="api-preview-service">${escapeHtml(previewService)}</div>
+                        <div class="api-preview-line">
+                            <span class="api-preview-product">${escapeHtml(product.display_name || product.name)}</span>
+                            <span><span class="api-preview-price">${retail.toFixed(2)}</span> ${escapeHtml(product.currency || "USDT")}</span>
+                        </div>
+                    </div>
+                    <div class="api-card-actions">
+                        <label class="api-enabled-control">
+                            <input class="api-enabled" type="checkbox" ${product.enabled ? "checked" : ""}>
+                            Publier et revendre dans le bot
+                        </label>
+                        <button class="btn btn-primary" onclick="saveApiProduct(this)">Enregistrer & synchroniser</button>
+                    </div>
+                </article>`;
         }
 
         function toggleApiNewService(select) {
@@ -2988,7 +3213,7 @@ def render_dashboard(
         function filterApiProducts() {
             const search = (document.getElementById("api-product-search")?.value || "").toLowerCase();
             const visibility = document.getElementById("api-product-visibility")?.value || "";
-            document.querySelectorAll(".api-product-card").forEach(card => {
+            document.querySelectorAll(".api-product-row").forEach(card => {
                 const matchesSearch = (card.dataset.search || "").includes(search);
                 const matchesVisibility =
                     !visibility ||
