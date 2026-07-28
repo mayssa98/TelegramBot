@@ -702,10 +702,23 @@ class handler(BaseHTTPRequestHandler):
                 product_id = form.get("product_id", "").strip()
                 retail_price = float(form.get("retail_price", "0"))
                 enabled = form.get("enabled", "") == "1"
+                raw_service_id = form.get("service_id", "").strip()
                 saved = reseller_service.save_catalog_product(
                     product_id,
                     retail_price=retail_price,
                     enabled=enabled,
+                    service_id=int(raw_service_id) if raw_service_id else None,
+                    new_service_name=form.get("new_service_name", "").strip(),
+                    service_emoji=form.get("service_emoji", "📦").strip(),
+                    display_name=form.get("display_name", "").strip(),
+                    description=form.get("description", "").strip(),
+                    delivery_delay=form.get(
+                        "delivery_delay", "Instantané après confirmation"
+                    ).strip(),
+                    sort_order=int(form.get("sort_order", "0") or 0),
+                    low_stock_threshold=int(
+                        form.get("low_stock_threshold", "5") or 5
+                    ),
                 )
                 db.audit_event(
                     "reseller_product.updated",
@@ -714,6 +727,8 @@ class handler(BaseHTTPRequestHandler):
                         "product_id": product_id,
                         "enabled": enabled,
                         "retail_price": retail_price,
+                        "service_id": saved.get("service_id"),
+                        "local_offer_id": saved.get("local_offer_id"),
                     },
                 )
                 self._reply(200, {"ok": True, "product": saved})

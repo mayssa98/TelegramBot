@@ -14,7 +14,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def get_conn():
@@ -59,6 +59,7 @@ def init_db():
     db.services.create_index("id", unique=True)
     db.offers.create_index("id", unique=True)
     db.offers.create_index([("service_id", ASCENDING), ("id", ASCENDING)])
+    db.offers.create_index([("supplier_provider", ASCENDING), ("supplier_product_id", ASCENDING)])
     db.orders.create_index("id", unique=True)
     db.orders.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
     db.orders.create_index("status")
@@ -70,6 +71,9 @@ def init_db():
     db.reseller_products.create_index(
         [("provider", ASCENDING), ("product_id", ASCENDING)], unique=True,
     )
+    db.reseller_fulfillments.create_index(
+        [("provider", ASCENDING), ("external_order_id", ASCENDING)], unique=True,
+    )
     db.referrals.create_index("referred_id", unique=True)
     db.referrals.create_index("referrer_id")
     db.wallets.create_index("user_id", unique=True)
@@ -78,6 +82,15 @@ def init_db():
     db.loyalty.create_index("user_id", unique=True)
     db.pending_states.create_index("user_id", unique=True)
     db.inventory.create_index([("offer_id", ASCENDING), ("status", ASCENDING)])
+    db.inventory.create_index(
+        [
+            ("source_provider", ASCENDING),
+            ("source_external_order_id", ASCENDING),
+            ("source_item_index", ASCENDING),
+        ],
+        unique=True,
+        sparse=True,
+    )
     _backfill_inventory_ids(db)
     db.inventory.create_index("id", unique=True, sparse=True)
     fingerprint_index = db.inventory.index_information().get("fingerprint_1")
@@ -348,6 +361,8 @@ def update_offer(
     instructions=None,
     unlimited_stock=None,
     manual_stock=None,
+    supplier_provider=None,
+    supplier_product_id=None,
 ):
     values = {
         key: value
@@ -368,6 +383,8 @@ def update_offer(
             "instructions": instructions,
             "unlimited_stock": unlimited_stock,
             "manual_stock": manual_stock,
+            "supplier_provider": supplier_provider,
+            "supplier_product_id": supplier_product_id,
         }.items()
         if value is not None
     }
@@ -430,6 +447,8 @@ def add_offer(
     instructions="",
     unlimited_stock=False,
     manual_stock=False,
+    supplier_provider="",
+    supplier_product_id="",
 ):
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
@@ -450,6 +469,8 @@ def add_offer(
         "instructions": instructions,
         "unlimited_stock": bool(unlimited_stock),
         "manual_stock": bool(manual_stock),
+        "supplier_provider": str(supplier_provider or ""),
+        "supplier_product_id": str(supplier_product_id or ""),
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
     })
@@ -662,6 +683,15 @@ def save_reseller_product_config(
     currency,
     retail_price,
     enabled,
+    service_id=None,
+    local_offer_id=None,
+    display_name="",
+    service_name="",
+    service_emoji="",
+    description="",
+    delivery_delay="Instantané après confirmation",
+    sort_order=0,
+    low_stock_threshold=5,
 ):
     """Persist retail pricing and visibility without storing supplier secrets."""
     now = int(time.time())
@@ -674,6 +704,15 @@ def save_reseller_product_config(
                 "currency": str(currency or "USDT")[:12],
                 "retail_price": float(retail_price),
                 "enabled": bool(enabled),
+                "service_id": int(service_id) if service_id is not None else None,
+                "local_offer_id": int(local_offer_id) if local_offer_id is not None else None,
+                "display_name": str(display_name or name)[:200],
+                "service_name": str(service_name or "")[:100],
+                "service_emoji": str(service_emoji or "")[:16],
+                "description": str(description or "")[:2000],
+                "delivery_delay": str(delivery_delay or "")[:120],
+                "sort_order": max(0, int(sort_order or 0)),
+                "low_stock_threshold": max(0, int(low_stock_threshold or 0)),
                 "updated_at": now,
             },
             "$setOnInsert": {"created_at": now},

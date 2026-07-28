@@ -12,7 +12,7 @@ from typing import Any
 
 import database as db
 from app.constants import OrderStatus
-from app.domain import affiliate_service, inventory_service, loyalty_service
+from app.domain import affiliate_service, inventory_service, loyalty_service, reseller_service
 from config import ADMIN_ID, CURRENCY, TEST_PAYMENT_ENABLED
 from payment_verifier import verify_payment, verify_payment_by_amount
 
@@ -84,10 +84,27 @@ def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: 
         result["status"] = "confirmed"
         result["affiliate"] = affiliate_service.on_confirmed_payment(user_id, order_id)
         result["loyalty"] = loyalty_service.record_purchase(user_id)
-        delivered = inventory_service.deliver_for_order(order_id)
+        order = db.get_order(order_id) or {}
+        offer = db.get_offer(order.get("offer_id")) if order.get("offer_id") else None
+        try:
+            if offer and offer.get("supplier_provider"):
+                delivered = reseller_service.fulfill_paid_order(order_id)
+            else:
+                delivered = inventory_service.deliver_for_order(order_id)
+        except reseller_service.ResellerApiError as exc:
+            delivered = None
+            result["error_code"] = "supplier_delivery_pending"
+            result["error_message"] = str(exc)
+            log.warning("Supplier delivery pending for order #%s: %s", order_id, exc)
+            db.audit_event(
+                "order.reseller_delivery_pending",
+                actor_id=user_id,
+                details={"order_id": order_id, "reason": str(exc)},
+            )
         if delivered:
             result["delivered_content"] = delivered
             result["status"] = "delivered"
+            result["order"] = db.get_order(order_id)
         else:
             result["status"] = "confirmed_no_delivery"
         db.audit_event(

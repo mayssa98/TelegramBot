@@ -190,6 +190,12 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "save_reseller_product" in page
     assert "Produits API MailReader" in page
     assert "Votre prix client" in page
+    assert "Service affiché dans le bot" in page
+    assert "Créer un nouveau service" in page
+    assert "Nom visible du produit" in page
+    assert "Aperçu dans le bot" in page
+    assert "Publier et revendre dans le bot" in page
+    assert "low_stock_threshold" in page
     assert 'const dashboardWriteToken = "safe-write-token"' in page
     assert '"X-Dashboard-Write-Token": dashboardWriteToken' in page
     assert "__ACTIVE_" not in page

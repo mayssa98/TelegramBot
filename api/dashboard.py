@@ -690,6 +690,10 @@ def render_dashboard(
             gap: 14px;
         }
 
+        .api-product-card.published {
+            border-color: rgba(245, 158, 11, .55);
+        }
+
         .api-product-card.enabled {
             border-color: rgba(34, 197, 94, .6);
             box-shadow: inset 0 0 0 1px rgba(34, 197, 94, .12);
@@ -747,6 +751,72 @@ def render_dashboard(
             align-items: flex-end;
             gap: 10px;
             margin-top: auto;
+        }
+
+        .api-config-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            padding-top: 4px;
+        }
+
+        .api-config-grid .form-group {
+            margin: 0;
+        }
+
+        .api-config-grid .wide {
+            grid-column: 1 / -1;
+        }
+
+        .api-config-grid textarea {
+            min-height: 82px;
+            resize: vertical;
+        }
+
+        .api-new-service-fields {
+            display: none;
+            grid-template-columns: 90px 1fr;
+            gap: 10px;
+        }
+
+        .api-new-service-fields.visible {
+            display: grid;
+        }
+
+        .api-product-preview {
+            border: 1px solid rgba(245, 158, 11, .28);
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(245, 158, 11, .08), rgba(255,255,255,.02));
+            padding: 13px;
+        }
+
+        .api-product-preview small {
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 7px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .api-preview-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-weight: 650;
+        }
+
+        .api-card-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .api-statuses {
+            display: flex;
+            gap: 7px;
+            flex-wrap: wrap;
         }
 
         .api-product-footer .form-group {
@@ -813,6 +883,12 @@ def render_dashboard(
             }
             .kpi-grid {
                 grid-template-columns: 1fr;
+            }
+            .api-config-grid {
+                grid-template-columns: 1fr;
+            }
+            .api-config-grid .wide {
+                grid-column: auto;
             }
         }
 
@@ -1932,9 +2008,10 @@ def render_dashboard(
             <div class="section-header">
                 <div>
                     <h2>Produits API MailReader</h2>
-                    <p class="last-update">Choisissez les produits à revendre et définissez votre prix client.</p>
+                    <p class="last-update">Publiez chaque produit dans le catalogue natif du bot, avec votre service, présentation, prix et règles de stock.</p>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button class="btn btn-secondary" onclick="openModal('add-service-modal')">+ Nouveau service</button>
                     <a class="btn btn-secondary" href="https://api.mailreader.tech/docs" target="_blank" rel="noopener">Documentation API</a>
                     <button class="btn btn-primary" id="api-products-refresh" onclick="loadApiProducts(true)">Actualiser le fournisseur</button>
                 </div>
@@ -2764,8 +2841,16 @@ def render_dashboard(
                     ? Math.ceil((wholesale * 1.30) * 100) / 100
                     : Number(product.retail_price);
                 const profit = retail - wholesale;
+                const margin = retail > 0 ? (profit / retail) * 100 : 0;
+                const services = (dashboardData.services || []).map(service => `
+                    <option value="${Number(service.id)}" ${Number(product.service_id) === Number(service.id) ? "selected" : ""}>
+                        ${escapeHtml((service.emoji || "📦") + " " + service.name)}
+                    </option>`).join("");
+                const previewService = product.service_name
+                    ? `${product.service_emoji || "📦"} ${product.service_name}`
+                    : "📦 Choisissez un service";
                 return `
-                    <article class="api-product-card ${product.enabled ? "enabled" : ""}"
+                    <article class="api-product-card ${product.enabled ? "enabled" : ""} ${product.published ? "published" : ""}"
                              data-product-id="${escapeHtml(product.id)}"
                              data-enabled="${product.enabled ? "1" : "0"}"
                              data-stock="${Number(product.stock || 0)}"
@@ -2775,7 +2860,10 @@ def render_dashboard(
                                 <h3>${escapeHtml(product.name)}</h3>
                                 <div class="api-product-id">${escapeHtml(product.id)}</div>
                             </div>
-                            <span class="badge badge-${product.stock > 0 ? "paid" : "cancelled"}">${Number(product.stock || 0)} en stock</span>
+                            <div class="api-statuses">
+                                ${product.published ? '<span class="badge badge-pending">Publié dans le bot</span>' : '<span class="badge">Brouillon</span>'}
+                                <span class="badge badge-${product.stock > 0 ? "paid" : "cancelled"}">${Number(product.stock || 0)} en stock</span>
+                            </div>
                         </div>
                         ${product.description ? `<p class="last-update">${escapeHtml(product.description)}</p>` : ""}
                         <div class="api-price-grid">
@@ -2785,24 +2873,96 @@ def render_dashboard(
                             </div>
                             <div class="api-price-box">
                                 <span>Bénéfice par vente</span>
-                                <strong class="api-profit ${profit <= 0 ? "loss" : ""}">${profit.toFixed(2)} ${escapeHtml(product.currency || "USDT")}</strong>
+                                <strong class="api-profit ${profit <= 0 ? "loss" : ""}">${profit.toFixed(2)} ${escapeHtml(product.currency || "USDT")} · ${margin.toFixed(1)}%</strong>
                             </div>
                         </div>
-                        <div class="api-product-footer">
+                        <div class="api-config-grid">
+                            <div class="form-group wide">
+                                <label>Service affiché dans le bot</label>
+                                <select class="api-service" onchange="toggleApiNewService(this); updateApiPreview(this)">
+                                    <option value="">Choisir un service…</option>
+                                    ${services}
+                                    <option value="__new__">＋ Créer un nouveau service</option>
+                                </select>
+                            </div>
+                            <div class="api-new-service-fields wide">
+                                <div class="form-group">
+                                    <label>Emoji</label>
+                                    <input class="api-service-emoji" maxlength="12" value="${escapeHtml(product.service_emoji || "📦")}" oninput="updateApiPreview(this)">
+                                </div>
+                                <div class="form-group">
+                                    <label>Nom du nouveau service</label>
+                                    <input class="api-new-service-name" maxlength="80" placeholder="Ex. Comptes Premium" oninput="updateApiPreview(this)">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Nom visible du produit</label>
+                                <input class="api-display-name" maxlength="120" value="${escapeHtml(product.display_name || product.name)}" oninput="updateApiPreview(this)">
+                            </div>
                             <div class="form-group">
                                 <label>Votre prix client (${escapeHtml(product.currency || "USDT")})</label>
                                 <input class="api-retail-price" type="number" min="${(wholesale + 0.01).toFixed(2)}"
-                                       step="0.01" value="${retail.toFixed(2)}" oninput="updateApiProfit(this)">
+                                       step="0.01" value="${retail.toFixed(2)}" oninput="updateApiProfit(this); updateApiPreview(this)">
                             </div>
+                            <div class="form-group wide">
+                                <label>Description client</label>
+                                <textarea class="api-description" maxlength="1000" placeholder="Ce que le client reçoit…">${escapeHtml(product.custom_description || "")}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Délai de livraison</label>
+                                <input class="api-delivery-delay" maxlength="120" value="${escapeHtml(product.delivery_delay || "Instantané après confirmation")}">
+                            </div>
+                            <div class="form-group">
+                                <label>Alerte stock bas</label>
+                                <input class="api-low-stock" type="number" min="0" value="${Number(product.low_stock_threshold || 0)}">
+                            </div>
+                            <div class="form-group">
+                                <label>Ordre d’affichage</label>
+                                <input class="api-sort-order" type="number" min="0" value="${Number(product.sort_order || 0)}">
+                            </div>
+                            <div class="form-group">
+                                <label>Référence fournisseur</label>
+                                <input value="${escapeHtml(product.id)}" disabled>
+                            </div>
+                        </div>
+                        <div class="api-product-preview">
+                            <small>Aperçu dans le bot</small>
+                            <div class="api-preview-service">${escapeHtml(previewService)}</div>
+                            <div class="api-preview-line">
+                                <span class="api-preview-product">${escapeHtml(product.display_name || product.name)}</span>
+                                <span><span class="api-preview-price">${retail.toFixed(2)}</span> ${escapeHtml(product.currency || "USDT")}</span>
+                            </div>
+                        </div>
+                        <div class="api-card-actions">
                             <label class="api-enabled-control">
                                 <input class="api-enabled" type="checkbox" ${product.enabled ? "checked" : ""}>
-                                Revendre
+                                Publier et revendre dans le bot
                             </label>
-                            <button class="btn btn-primary" onclick="saveApiProduct(this)">Enregistrer</button>
+                            <button class="btn btn-primary" onclick="saveApiProduct(this)">Enregistrer & synchroniser</button>
                         </div>
                     </article>`;
             }).join("");
             filterApiProducts();
+        }
+
+        function toggleApiNewService(select) {
+            select.closest(".api-product-card")
+                .querySelector(".api-new-service-fields")
+                .classList.toggle("visible", select.value === "__new__");
+        }
+
+        function updateApiPreview(input) {
+            const card = input.closest(".api-product-card");
+            const serviceSelect = card.querySelector(".api-service");
+            const newService = serviceSelect.value === "__new__";
+            const serviceText = newService
+                ? `${card.querySelector(".api-service-emoji").value || "📦"} ${card.querySelector(".api-new-service-name").value || "Nouveau service"}`
+                : (serviceSelect.selectedOptions[0]?.textContent.trim() || "📦 Choisissez un service");
+            card.querySelector(".api-preview-service").textContent = serviceText;
+            card.querySelector(".api-preview-product").textContent =
+                card.querySelector(".api-display-name").value || "Produit";
+            card.querySelector(".api-preview-price").textContent =
+                Number(card.querySelector(".api-retail-price").value || 0).toFixed(2);
         }
 
         function updateApiProfit(input) {
@@ -2813,7 +2973,9 @@ def render_dashboard(
             if (!product) return;
             const profit = Number(input.value || 0) - Number(product.wholesale_price || 0);
             const output = card.querySelector(".api-profit");
-            output.textContent = `${profit.toFixed(2)} ${product.currency || "USDT"}`;
+            const retail = Number(input.value || 0);
+            const margin = retail > 0 ? (profit / retail) * 100 : 0;
+            output.textContent = `${profit.toFixed(2)} ${product.currency || "USDT"} · ${margin.toFixed(1)}%`;
             output.classList.toggle("loss", profit <= 0);
         }
 
@@ -2835,11 +2997,28 @@ def render_dashboard(
             const card = button.closest(".api-product-card");
             const retailInput = card.querySelector(".api-retail-price");
             const enabled = card.querySelector(".api-enabled").checked;
+            const serviceSelect = card.querySelector(".api-service");
+            if (!serviceSelect.value) {
+                showToast("Choisissez un service pour publier ce produit.", "error");
+                return;
+            }
+            if (serviceSelect.value === "__new__" && !card.querySelector(".api-new-service-name").value.trim()) {
+                showToast("Donnez un nom au nouveau service.", "error");
+                return;
+            }
             const params = new URLSearchParams({
                 action: "save_reseller_product",
                 product_id: card.dataset.productId,
                 retail_price: retailInput.value,
-                enabled: enabled ? "1" : "0"
+                enabled: enabled ? "1" : "0",
+                service_id: serviceSelect.value === "__new__" ? "" : serviceSelect.value,
+                new_service_name: serviceSelect.value === "__new__" ? card.querySelector(".api-new-service-name").value : "",
+                service_emoji: card.querySelector(".api-service-emoji").value,
+                display_name: card.querySelector(".api-display-name").value,
+                description: card.querySelector(".api-description").value,
+                delivery_delay: card.querySelector(".api-delivery-delay").value,
+                low_stock_threshold: card.querySelector(".api-low-stock").value,
+                sort_order: card.querySelector(".api-sort-order").value
             });
             button.disabled = true;
             try {
@@ -2855,7 +3034,8 @@ def render_dashboard(
                 const result = await response.json();
                 if (!response.ok || !result.ok) throw new Error(result.error || "Enregistrement impossible.");
                 resellerCatalog = null;
-                showToast(enabled ? "Produit API activé pour la revente" : "Produit API désactivé");
+                await refreshDashboardData(true);
+                showToast(enabled ? "Produit publié dans le catalogue du bot" : "Produit enregistré en brouillon");
                 await loadApiProducts(true);
             } catch (error) {
                 showToast(error.message, "error");

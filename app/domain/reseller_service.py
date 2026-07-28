@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -18,20 +19,28 @@ class ResellerApiError(RuntimeError):
     """A safe, administrator-facing supplier error."""
 
 
-def _request_json(path: str) -> dict[str, Any]:
+def _request_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if not MAILREADER_API_KEY:
         raise ResellerApiError(
             "MailReader n’est pas configuré. Ajoutez HP_MAILREADER_API_KEY "
             "dans les variables d’environnement."
         )
+    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
     request = Request(
         f"{MAILREADER_API_BASE}{path}",
         headers={
             "Authorization": f"Bearer {MAILREADER_API_KEY}",
             "Accept": "application/json",
+            **({"Content-Type": "application/json"} if body is not None else {}),
             "User-Agent": "BlackMarket-Reseller/1.0",
         },
-        method="GET",
+        data=payload_bytes,
+        method=method,
     )
     try:
         with urlopen(request, timeout=20) as response:
@@ -73,6 +82,19 @@ def catalog() -> dict[str, Any]:
         stock = max(0, int(raw.get("stock") or 0))
         config = saved.get(product_id, {})
         retail_price = config.get("retail_price")
+        local_offer_id = config.get("local_offer_id")
+        native_service = (
+            db.get_service(int(config["service_id"]))
+            if config.get("service_id") is not None
+            else None
+        )
+        if local_offer_id:
+            db.update_offer(
+                int(local_offer_id),
+                stock=stock,
+                supplier_provider=PROVIDER,
+                supplier_product_id=product_id,
+            )
         products.append({
             "id": product_id,
             "name": str(raw.get("name") or product_id)[:200],
@@ -87,6 +109,24 @@ def catalog() -> dict[str, Any]:
                 round(float(retail_price) - wholesale, 2)
                 if retail_price is not None else None
             ),
+            "service_id": config.get("service_id"),
+            "local_offer_id": local_offer_id,
+            "display_name": config.get("display_name") or str(raw.get("name") or product_id)[:200],
+            "service_name": (
+                (native_service or {}).get("name")
+                or config.get("service_name")
+                or ""
+            ),
+            "service_emoji": (
+                (native_service or {}).get("emoji")
+                or config.get("service_emoji")
+                or "📦"
+            ),
+            "custom_description": config.get("description") or str(raw.get("description") or "")[:2000],
+            "delivery_delay": config.get("delivery_delay") or "Instantané après confirmation",
+            "sort_order": int(config.get("sort_order") or 0),
+            "low_stock_threshold": int(config.get("low_stock_threshold") or 5),
+            "published": bool(config.get("local_offer_id")),
         })
     return {
         "ok": True,
@@ -130,20 +170,271 @@ def save_product(
 
 
 def save_catalog_product(
-    product_id: str, *, retail_price: float, enabled: bool,
+    product_id: str,
+    *,
+    retail_price: float,
+    enabled: bool,
+    service_id: int | None = None,
+    new_service_name: str = "",
+    service_emoji: str = "📦",
+    display_name: str = "",
+    description: str = "",
+    delivery_delay: str = "Instantané après confirmation",
+    sort_order: int = 0,
+    low_stock_threshold: int = 5,
 ) -> dict[str, Any]:
-    """Save one live catalog item without trusting supplier fields from the browser."""
+    """Publish one live supplier product into the bot's native catalog."""
     product = next(
         (item for item in catalog()["products"] if item["id"] == str(product_id)),
         None,
     )
     if not product:
         raise ValueError("Ce produit n’est plus disponible chez MailReader.")
-    return save_product(
+
+    display_name = str(display_name or product["name"]).strip()[:120]
+    description = str(description or product.get("description") or "").strip()[:1000]
+    delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]
+    service_emoji = str(service_emoji or "📦").strip()[:12]
+    low_stock_threshold = max(0, int(low_stock_threshold or 0))
+    sort_order = max(0, int(sort_order or 0))
+    retail_price = float(retail_price)
+    if enabled and retail_price <= float(product["wholesale_price"]):
+        raise ValueError("Le prix client doit être supérieur au prix grossiste.")
+
+    existing = next(
+        (
+            row for row in db.list_reseller_product_configs(PROVIDER)
+            if row["product_id"] == product["id"]
+        ),
+        {},
+    )
+    if new_service_name.strip():
+        normalized_name = new_service_name.strip()[:80]
+        matching_service = next(
+            (
+                row for row in db.list_services(active_only=True)
+                if str(row.get("name") or "").casefold() == normalized_name.casefold()
+            ),
+            None,
+        )
+        service_id = (
+            matching_service["id"]
+            if matching_service
+            else db.add_service(normalized_name, service_emoji)
+        )
+    elif service_id is None:
+        service_id = existing.get("service_id")
+    service = db.get_service(int(service_id)) if service_id is not None else None
+    if not service:
+        raise ValueError("Choisissez un service existant ou créez-en un nouveau.")
+
+    local_offer_id = existing.get("local_offer_id")
+    local_offer = db.get_offer(int(local_offer_id)) if local_offer_id else None
+    if local_offer:
+        db.update_offer(
+            local_offer["id"],
+            name=display_name,
+            price=retail_price,
+            stock=int(product["stock"]),
+            active=1 if enabled else 0,
+            description=description,
+            currency=product["currency"],
+            sort_order=sort_order,
+            auto_delivery=True,
+            low_stock_threshold=low_stock_threshold,
+            delivery_delay=delivery_delay,
+            unlimited_stock=False,
+            manual_stock=False,
+            supplier_provider=PROVIDER,
+            supplier_product_id=product["id"],
+        )
+        if int(local_offer.get("service_id")) != int(service_id):
+            db.get_conn().offers.update_one(
+                {"id": local_offer["id"]},
+                {"$set": {"service_id": int(service_id)}},
+            )
+        local_offer_id = local_offer["id"]
+    else:
+        local_offer_id = db.add_offer(
+            int(service_id),
+            display_name,
+            retail_price,
+            int(product["stock"]),
+            note="Produit API MailReader",
+            description=description,
+            currency=product["currency"],
+            auto_delivery=True,
+            low_stock_threshold=low_stock_threshold,
+            delivery_delay=delivery_delay,
+            unlimited_stock=False,
+            manual_stock=False,
+            supplier_provider=PROVIDER,
+            supplier_product_id=product["id"],
+        )
+        db.update_offer(local_offer_id, sort_order=sort_order)
+
+    return db.save_reseller_product_config(
+        PROVIDER,
         product["id"],
         name=product["name"],
         wholesale_price=product["wholesale_price"],
         currency=product["currency"],
         retail_price=retail_price,
         enabled=enabled,
+        service_id=int(service_id),
+        local_offer_id=int(local_offer_id),
+        display_name=display_name,
+        service_name=service.get("name") or "",
+        service_emoji=service.get("emoji") or service_emoji,
+        description=description,
+        delivery_delay=delivery_delay,
+        sort_order=sort_order,
+        low_stock_threshold=low_stock_threshold,
     )
+
+
+def _delivery_items(payload: dict[str, Any]) -> list[str]:
+    """Extract delivery strings from documented and common wrapped responses."""
+    candidates: list[Any] = [payload]
+    for key in ("order", "data", "result"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            candidates.append(value)
+    raw_items: Any = None
+    for candidate in candidates:
+        for key in ("delivery_items", "items", "credentials", "products"):
+            value = candidate.get(key)
+            if isinstance(value, list):
+                raw_items = value
+                break
+        if raw_items is not None:
+            break
+    if raw_items is None:
+        return []
+    items: list[str] = []
+    for item in raw_items:
+        if isinstance(item, str):
+            value = item.strip()
+        elif isinstance(item, dict):
+            value = str(
+                item.get("content")
+                or item.get("value")
+                or item.get("credentials")
+                or item.get("account")
+                or ""
+            ).strip()
+            if not value:
+                value = json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+        else:
+            value = str(item).strip()
+        if value:
+            items.append(value)
+    return items
+
+
+def fulfill_paid_order(order_id: int) -> list[str] | None:
+    """Purchase and persist a paid reseller order with idempotent supplier billing."""
+    conn = db.get_conn()
+    order = conn.orders.find_one({"id": int(order_id)})
+    if not order:
+        return None
+    offer = conn.offers.find_one({"id": order.get("offer_id")})
+    if not offer or offer.get("supplier_provider") != PROVIDER:
+        return None
+
+    external_order_id = f"BM-{int(order_id)}"
+    existing = conn.reseller_fulfillments.find_one({
+        "provider": PROVIDER,
+        "external_order_id": external_order_id,
+        "status": "completed",
+    })
+    cipher = db._fernet()
+    if existing:
+        return [
+            cipher.decrypt(value.encode()).decode()
+            for value in existing.get("encrypted_items", [])
+        ]
+    if order.get("status") not in {"paid", "payment_confirmed"}:
+        return None
+
+    response = _request_json(
+        "/api/reseller?action=order",
+        method="POST",
+        body={
+            "product_id": str(offer["supplier_product_id"]),
+            "quantity": int(order.get("qty") or 1),
+            "external_order_id": external_order_id,
+        },
+    )
+    items = _delivery_items(response)
+    if len(items) < int(order.get("qty") or 1):
+        raise ResellerApiError(
+            "La commande fournisseur a été créée mais la livraison n’est pas encore disponible."
+        )
+
+    encrypted_items = [cipher.encrypt(item.encode()).decode() for item in items]
+    now = int(time.time())
+    order_payload = response.get("order")
+    supplier_order_id = (
+        response.get("id")
+        or (order_payload.get("id") if isinstance(order_payload, dict) else "")
+        or ""
+    )
+    conn.reseller_fulfillments.update_one(
+        {"provider": PROVIDER, "external_order_id": external_order_id},
+        {
+            "$set": {
+                "order_id": int(order_id),
+                "supplier_product_id": str(offer["supplier_product_id"]),
+                "status": "completed",
+                "encrypted_items": encrypted_items,
+                "supplier_order_id": str(supplier_order_id),
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+    for index, encrypted in enumerate(encrypted_items):
+        conn.inventory.update_one(
+            {
+                "source_provider": PROVIDER,
+                "source_external_order_id": external_order_id,
+                "source_item_index": index,
+            },
+            {
+                "$setOnInsert": {
+                    "id": db._next_id("inventory"),
+                    "offer_id": offer["id"],
+                    "payload": encrypted,
+                    "masked_preview": "Produit API livré",
+                    "status": "delivered",
+                    "delivered_order_id": int(order_id),
+                    "delivered_at": now,
+                    "created_at": now,
+                }
+            },
+            upsert=True,
+        )
+    conn.orders.update_one(
+        {"id": int(order_id), "status": {"$in": ["paid", "payment_confirmed"]}},
+        {
+            "$set": {
+                "status": "delivered",
+                "delivery_text": "[encrypted reseller delivery]",
+                "supplier_external_order_id": external_order_id,
+                "delivered_at": now,
+                "updated_at": now,
+            }
+        },
+    )
+    db.audit_event(
+        "order.reseller_delivered",
+        details={
+            "order_id": int(order_id),
+            "provider": PROVIDER,
+            "items_count": len(items),
+        },
+    )
+    return items
