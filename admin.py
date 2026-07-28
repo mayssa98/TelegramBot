@@ -78,8 +78,16 @@ def admin_panel_keyboard():
         [InlineKeyboardButton("📦 Catalogue", callback_data="adm_catalog")],
         [InlineKeyboardButton("📢 Créer une annonce", callback_data="adm_broadcast_message")],
         [InlineKeyboardButton("🎫 Tickets support", callback_data="adm_tickets")],
+        [InlineKeyboardButton("👥 Activité utilisateurs", callback_data="adm_user_activity")],
         [InlineKeyboardButton(maintenance_label, callback_data="adm_maintenance_toggle")],
         [InlineKeyboardButton("🎛 Personnaliser le bot", callback_data="adm_customize")],
+    ])
+
+
+def user_activity_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="adm_user_activity")],
+        [InlineKeyboardButton("⬅️ Retour", callback_data="adm_panel")],
     ])
 
 

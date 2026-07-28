@@ -33,3 +33,19 @@ def test_interaction_analytics_tracks_daily_users_types_and_details(mock_mongodb
     assert sum(point["count"] for point in result["daily"]) == 2
     assert len(result["events"]) == 2
     assert result["events"][0]["full_name"] == "Test Buyer"
+
+
+def test_user_activity_summary_includes_recent_today_and_total(mock_mongodb):
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 42},
+        {"telegram_id": 43},
+    ])
+    db.log_interaction(42, interaction_type="button", action="home")
+
+    result = db.user_activity_summary()
+
+    assert result == {
+        "online_now": 1,
+        "active_today": 1,
+        "total_users": 2,
+    }

@@ -862,6 +862,16 @@ def interaction_analytics(days=30, limit=1000):
     }
 
 
+def user_activity_summary():
+    """Return bot activity counts; 'online' means active within five minutes."""
+    analytics = interaction_analytics(days=30, limit=1)["summary"]
+    return {
+        "online_now": analytics["live_users"],
+        "active_today": analytics["active_today"],
+        "total_users": get_conn().users.count_documents({}),
+    }
+
+
 def dashboard_summary():
     """Legacy wrapper — kept for backward compatibility."""
     data = dashboard_data()

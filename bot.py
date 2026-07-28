@@ -616,6 +616,29 @@ async def broadcast_admin_message(context, source_chat_id, message_id):
     return sent
 
 
+async def broadcast_maintenance_notice(context, message):
+    """Notify every active bot user when maintenance mode is enabled."""
+    sent = 0
+    for user in db.list_broadcast_users():
+        user_id = user.get("telegram_id")
+        if not user_id:
+            continue
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"🛠️ Maintenance\n\n{message}",
+            )
+            sent += 1
+        except Exception as exc:
+            error = str(exc).lower()
+            if "blocked" in error or "chat not found" in error or "deactivated" in error:
+                db.mark_broadcast_blocked(user_id)
+            else:
+                log.warning("Maintenance notice failed for user %s: %s", user_id, exc)
+        await asyncio.sleep(0.04)
+    return sent
+
+
 async def announce_channel_purchase(context, order_id):
     """Compatibility no-op: purchase results stay in the private bot chat."""
     return False
@@ -2175,19 +2198,39 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    if data == "adm_user_activity":
+        activity = db.user_activity_summary()
+        await show_callback_screen(
+            q,
+            "👥 *Activité utilisateurs*\n\n"
+            f"🟢 En ligne récemment : *{activity['online_now']}*\n"
+            f"📅 Actifs aujourd’hui : *{activity['active_today']}*\n"
+            f"👤 Total utilisateurs : *{activity['total_users']}*\n\n"
+            "_« En ligne récemment » signifie actif sur le bot durant les 5 dernières minutes._",
+            reply_markup=admin.user_activity_keyboard(),
+        )
+        return
+
     if data == "adm_maintenance_toggle":
         enabled = not db.shop_settings()["maintenance_enabled"]
         db.set_setting("maintenance_enabled", enabled)
         status = "ACTIVÉE 🔴" if enabled else "DÉSACTIVÉE 🟢"
+        if enabled:
+            settings = db.shop_settings()
+            sent = await broadcast_maintenance_notice(
+                context, settings["maintenance_message"],
+            )
+            detail = (
+                "Les nouveaux achats sont bloqués pendant la maintenance.\n"
+                f"📢 Notification envoyée à {sent} utilisateur(s)."
+            )
+        else:
+            detail = "Les achats sont de nouveau disponibles."
         await show_callback_screen(
             q,
             "🛠️ *Panneau Admin*\n\n"
             f"Maintenance : *{status}*\n"
-            "Les nouveaux achats sont bloqués pendant la maintenance."
-            if enabled
-            else "🛠️ *Panneau Admin*\n\n"
-            f"Maintenance : *{status}*\n"
-            "Les achats sont de nouveau disponibles.",
+            f"{detail}",
             reply_markup=admin.admin_panel_keyboard(),
         )
         return

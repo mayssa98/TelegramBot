@@ -315,6 +315,20 @@ def test_admin_panel_has_persistent_maintenance_toggle(mock_mongodb):
     assert "ACTIVÉE" in button.text
 
 
+def test_admin_panel_has_user_activity_option(mock_mongodb):
+    callbacks = {
+        button.callback_data
+        for row in admin.admin_panel_keyboard().inline_keyboard
+        for button in row
+    }
+
+    assert "adm_user_activity" in callbacks
+    assert [
+        row[0].callback_data
+        for row in admin.user_activity_keyboard().inline_keyboard
+    ] == ["adm_user_activity", "adm_panel"]
+
+
 def test_catalog_never_builds_an_empty_button(monkeypatch):
     monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: [{
         "id": 12,

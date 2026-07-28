@@ -19,6 +19,7 @@ from bot import (
     announce_channel_restock,
     announce_channel_purchase,
     broadcast_admin_message,
+    broadcast_maintenance_notice,
     PENDING,
     cb_admin,
     cb_navigation,
@@ -127,6 +128,32 @@ def test_admin_custom_announcement_is_copied_to_all_active_users(mock_mongodb):
     assert all(
         call.kwargs["from_chat_id"] == 999 and call.kwargs["message_id"] == 55
         for call in bot_client.copy_message.await_args_list
+    )
+
+
+def test_maintenance_notice_is_sent_to_every_active_user(mock_mongodb):
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101, "lang": "en"},
+        {"telegram_id": 202, "lang": "en"},
+        {"telegram_id": 303, "lang": "en", "banned": True},
+    ])
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(
+        broadcast_maintenance_notice(
+            SimpleNamespace(bot=bot_client),
+            "The shop is temporarily unavailable.",
+        )
+    )
+
+    assert sent == 2
+    assert {
+        call.kwargs["chat_id"]
+        for call in bot_client.send_message.await_args_list
+    } == {101, 202}
+    assert all(
+        "The shop is temporarily unavailable." in call.kwargs["text"]
+        for call in bot_client.send_message.await_args_list
     )
 
 
