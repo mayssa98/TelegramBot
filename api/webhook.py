@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import threading
+import time
 import traceback
 from datetime import UTC, datetime
 from enum import Enum
@@ -56,23 +57,32 @@ def _telegram_api(method: str, payload: dict | None = None) -> dict:
     if not BOT_TOKEN:
         return {"ok": False, "message": "HP_BOT_TOKEN n’est pas configuré."}
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
-    request = Request(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/{method}",
-        data=body,
-        headers={"Content-Type": "application/json"} if body else {},
-        method="POST" if body else "GET",
-    )
-    try:
-        with urlopen(request, timeout=20) as response:
-            result = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        return {
-            "ok": False,
-            "http_status": exc.code,
-            "message": f"Telegram répond HTTP {exc.code}.",
-        }
-    except (URLError, TimeoutError, json.JSONDecodeError):
-        return {"ok": False, "message": "Telegram est temporairement indisponible."}
+    result = None
+    for attempt in range(3):
+        request = Request(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/{method}",
+            data=body,
+            headers={"Content-Type": "application/json"} if body else {},
+            method="POST" if body else "GET",
+        )
+        try:
+            with urlopen(request, timeout=10) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            break
+        except HTTPError as exc:
+            if exc.code >= 500 and attempt < 2:
+                time.sleep(attempt + 1)
+                continue
+            return {
+                "ok": False,
+                "http_status": exc.code,
+                "message": f"Telegram répond HTTP {exc.code}.",
+            }
+        except (URLError, TimeoutError, json.JSONDecodeError):
+            if attempt < 2:
+                time.sleep(attempt + 1)
+                continue
+            return {"ok": False, "message": "Telegram est temporairement indisponible."}
     return result if isinstance(result, dict) else {
         "ok": False,
         "message": "Réponse Telegram invalide.",
