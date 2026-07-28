@@ -76,7 +76,7 @@ def render_dashboard(
     <title>__SHOP_NAME__ Control Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-main: #07101d;
@@ -893,53 +893,976 @@ def render_dashboard(
         .type-fill { height:100%; background:#22d3ee; border-radius:99px; }
         .interaction-content { max-width:420px; white-space:normal; word-break:break-word; }
         @media (max-width: 900px) { .analytics-grid { grid-template-columns:1fr; } }
+
+        /* Midnight Merchant visual system */
+        :root {
+            color-scheme: dark;
+            --bg-main: #0b0b0e;
+            --bg-card: #111116;
+            --bg-nav: #0e0e12;
+            --border-color: #2b2b36;
+            --text-main: #f5f3f8;
+            --text-muted: #92909f;
+            --cyan: #9d72ff;
+            --cyan-hover: #b596ff;
+            --btn-primary: #9d72ff;
+            --btn-secondary: #1d1d25;
+            --danger: #ff6868;
+            --success: #55d992;
+            --warning: #ffb547;
+            --info: #9d72ff;
+            --violet: #9d72ff;
+            --purple: #9d72ff;
+            --pink: #ff7eb6;
+            --panel-raised: #17171e;
+            --panel-soft: #1d1d25;
+            --line-strong: #3a3948;
+            --violet-soft: #241b38;
+            --amber-soft: #302313;
+            --merchant-shadow: 0 16px 44px rgba(0, 0, 0, .34);
+        }
+
+        html {
+            background: var(--bg-main);
+        }
+
+        body {
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg-main);
+            letter-spacing: -.01em;
+        }
+
+        aside {
+            width: 270px;
+            flex-basis: 270px;
+            padding: 28px 20px 22px;
+            background: var(--bg-nav);
+            border-color: var(--border-color);
+        }
+
+        .brand {
+            gap: 12px;
+            margin: 0;
+            padding: 0 10px 26px;
+        }
+
+        .brand-mark {
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            flex: 0 0 auto;
+            border-radius: 13px;
+            background: var(--violet);
+            color: #0d0815;
+            font-size: 16px;
+            font-weight: 900;
+            box-shadow: 0 10px 26px rgba(157, 114, 255, .25);
+        }
+
+        .brand-copy strong {
+            display: block;
+            color: var(--text-main);
+            font-size: 17px;
+            letter-spacing: -.03em;
+        }
+
+        .brand-copy span {
+            display: block;
+            margin-top: 3px;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .13em;
+            text-transform: uppercase;
+        }
+
+        .nav-label {
+            margin: 0 11px 9px;
+            color: #6e6c79;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: .15em;
+            text-transform: uppercase;
+        }
+
+        nav {
+            gap: 4px;
+        }
+
+        nav a {
+            min-height: 43px;
+            padding: 0 12px;
+            border: 1px solid transparent;
+            border-radius: 11px;
+            color: #aaa8b3;
+            font-size: 13px;
+            font-weight: 650;
+            gap: 12px;
+        }
+
+        nav a:hover {
+            color: var(--text-main);
+            background: #15151b;
+            border-color: transparent;
+            transform: translateX(2px);
+        }
+
+        nav a.active {
+            color: #fff;
+            background: var(--violet-soft);
+            border-color: rgba(157, 114, 255, .34);
+            box-shadow: none;
+        }
+
+        .nav-icon {
+            width: 21px;
+            color: currentColor;
+            text-align: center;
+            font-size: 15px;
+        }
+
+        .nav-meta {
+            margin-left: auto;
+            min-width: 21px;
+            height: 21px;
+            display: grid;
+            place-items: center;
+            padding: 0 6px;
+            border-radius: 20px;
+            color: #16100a;
+            background: var(--warning);
+            font-size: 10px;
+            font-weight: 900;
+        }
+
+        .sidebar-bottom {
+            margin-top: auto;
+            padding: 18px 11px 0;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .system-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+
+        .system-status-dot {
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            margin-right: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 0 4px rgba(85, 217, 146, .09);
+        }
+
+        .sidebar-version {
+            margin-top: 12px;
+            color: #5e5c68;
+            font-size: 9px;
+        }
+
+        main {
+            max-width: none;
+            padding: 0 34px 38px;
+        }
+
+        header.merchant-topbar {
+            min-height: 84px;
+            display: grid;
+            grid-template-columns: minmax(280px, 1fr) auto;
+            align-items: center;
+            gap: 28px;
+            margin: 0;
+            padding: 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .global-search {
+            position: relative;
+            width: min(510px, 100%);
+        }
+
+        .global-search input {
+            width: 100%;
+            height: 44px;
+            padding: 0 82px 0 42px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: #141419;
+            color: var(--text-main);
+        }
+
+        .global-search input:focus {
+            outline: none;
+            border-color: rgba(157, 114, 255, .75);
+            box-shadow: 0 0 0 3px rgba(157, 114, 255, .12);
+        }
+
+        .search-symbol {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .search-shortcut {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 5px 7px;
+            border: 1px solid var(--border-color);
+            border-radius: 7px;
+            color: #6f6d78;
+            background: #101015;
+            font-size: 9px;
+            font-weight: 800;
+        }
+
+        .merchant-account {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .merchant-account .header-actions {
+            gap: 8px;
+        }
+
+        .admin-chip {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 44px;
+            padding: 5px 10px 5px 6px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-card);
+        }
+
+        .admin-avatar {
+            width: 32px;
+            height: 32px;
+            display: grid;
+            place-items: center;
+            border-radius: 9px;
+            color: #ded2ff;
+            background: var(--violet-soft);
+            font-size: 10px;
+            font-weight: 900;
+        }
+
+        .admin-copy strong,
+        .admin-copy span {
+            display: block;
+        }
+
+        .admin-copy strong {
+            font-size: 11px;
+        }
+
+        .admin-copy span {
+            margin-top: 2px;
+            color: var(--text-muted);
+            font-size: 9px;
+        }
+
+        .merchant-page-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 20px;
+            padding: 32px 0 25px;
+        }
+
+        .merchant-eyebrow {
+            margin-bottom: 8px;
+            color: var(--violet);
+            font-size: 9px;
+            font-weight: 900;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+        }
+
+        .merchant-page-head h1 {
+            margin: 0;
+            font-size: clamp(28px, 3vw, 42px);
+            font-weight: 850;
+            letter-spacing: -.055em;
+        }
+
+        .merchant-page-head .last-update {
+            margin-top: 8px;
+        }
+
+        .live-period {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            font-size: 10px;
+        }
+
+        .live-period::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 0 4px rgba(85, 217, 146, .08);
+        }
+
+        .panel {
+            animation: merchantPanelIn .18s ease;
+        }
+
+        @keyframes merchantPanelIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        .kpi-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .kpi-card {
+            position: relative;
+            min-height: 142px;
+            padding: 20px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            background: var(--bg-card);
+            box-shadow: none;
+        }
+
+        .kpi-card:first-child {
+            border-color: rgba(157, 114, 255, .45);
+            background: #15121c;
+        }
+
+        .kpi-card h3 {
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 750;
+            letter-spacing: .02em;
+        }
+
+        .kpi-value {
+            margin-top: 18px;
+            color: var(--text-main);
+            font-size: clamp(24px, 2.2vw, 34px);
+            font-weight: 850;
+            letter-spacing: -.045em;
+        }
+
+        .kpi-subtext {
+            margin-top: 11px;
+            color: var(--success);
+            font-size: 10px;
+        }
+
+        .merchant-overview-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.8fr) minmax(290px, .8fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .merchant-stack {
+            display: grid;
+            gap: 16px;
+        }
+
+        .merchant-card,
+        .service-card,
+        .chart-card,
+        .table-wrap,
+        .alerts-section,
+        .interaction-kpi {
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            background: var(--bg-card);
+            box-shadow: none;
+        }
+
+        .merchant-card {
+            overflow: hidden;
+        }
+
+        .merchant-card-head {
+            min-height: 62px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 0 18px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .merchant-card-head h2 {
+            font-size: 13px;
+            letter-spacing: -.02em;
+        }
+
+        .merchant-card-head p {
+            margin-top: 3px;
+            color: var(--text-muted);
+            font-size: 9px;
+        }
+
+        .merchant-link {
+            border: 0;
+            background: transparent;
+            color: var(--violet);
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .overview-orders {
+            overflow-x: auto;
+        }
+
+        .overview-orders table {
+            min-width: 700px;
+        }
+
+        table {
+            background: transparent;
+        }
+
+        th {
+            color: #777582;
+            font-size: 9px;
+            font-weight: 850;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        td {
+            border-color: #24242d;
+            color: #d4d2da;
+            font-size: 11px;
+        }
+
+        tbody tr:hover {
+            background: #16161d;
+        }
+
+        .quick-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            padding: 17px;
+        }
+
+        .merchant-action {
+            min-height: 96px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--panel-raised);
+            color: var(--text-main);
+            cursor: pointer;
+            transition: transform .18s ease, border-color .18s ease, background .18s ease;
+        }
+
+        .merchant-action:hover {
+            transform: translateY(-2px);
+            border-color: rgba(157, 114, 255, .5);
+            background: #1b1924;
+        }
+
+        .merchant-action-icon {
+            width: 30px;
+            height: 30px;
+            display: grid;
+            place-items: center;
+            border-radius: 9px;
+            background: var(--violet-soft);
+            color: #c5adff;
+            font-weight: 900;
+        }
+
+        .merchant-action:nth-child(2) .merchant-action-icon,
+        .merchant-action:nth-child(3) .merchant-action-icon {
+            color: var(--warning);
+            background: var(--amber-soft);
+        }
+
+        .merchant-action strong {
+            font-size: 11px;
+        }
+
+        .merchant-alerts {
+            padding: 14px;
+        }
+
+        .merchant-alerts .alert {
+            min-width: 0;
+            margin: 0 0 9px;
+            border-radius: 11px;
+        }
+
+        .merchant-alerts .empty-state {
+            padding: 26px 12px;
+        }
+
+        .supplier-overview {
+            padding: 18px;
+        }
+
+        .supplier-overview-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .supplier-identity {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+        }
+
+        .supplier-mark {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border: 1px solid rgba(157, 114, 255, .3);
+            border-radius: 11px;
+            color: #c5adff;
+            background: var(--violet-soft);
+            font-size: 10px;
+            font-weight: 950;
+        }
+
+        .supplier-identity strong,
+        .supplier-identity span {
+            display: block;
+        }
+
+        .supplier-identity strong {
+            font-size: 11px;
+        }
+
+        .supplier-identity span {
+            margin-top: 4px;
+            color: var(--text-muted);
+            font-size: 9px;
+        }
+
+        .supplier-live {
+            color: var(--success);
+            font-size: 9px;
+            font-weight: 900;
+        }
+
+        .supplier-meter {
+            height: 6px;
+            margin: 17px 0 8px;
+            overflow: hidden;
+            border-radius: 10px;
+            background: #25242d;
+        }
+
+        .supplier-meter span {
+            display: block;
+            width: 0;
+            height: 100%;
+            background: var(--violet);
+            transition: width .3s ease;
+        }
+
+        .supplier-copy {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 9px;
+        }
+
+        .btn {
+            min-height: 40px;
+            padding: 0 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 11px;
+        }
+
+        .btn-primary {
+            border-color: var(--violet);
+            background: var(--violet);
+            color: #100a19;
+        }
+
+        .btn-primary:hover {
+            background: var(--cyan-hover);
+        }
+
+        .btn-secondary {
+            background: var(--panel-soft);
+        }
+
+        input,
+        textarea,
+        select {
+            border-color: var(--border-color);
+            border-radius: 11px;
+            background: #141419;
+            color: var(--text-main);
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: rgba(157, 114, 255, .75);
+            box-shadow: 0 0 0 3px rgba(157, 114, 255, .12);
+        }
+
+        .modal {
+            background: rgba(3, 3, 5, .78);
+            backdrop-filter: blur(8px);
+        }
+
+        .modal-content {
+            border: 1px solid var(--line-strong);
+            border-radius: 18px;
+            background: var(--panel-raised);
+            box-shadow: var(--merchant-shadow);
+        }
+
+        .toast {
+            border-color: rgba(157, 114, 255, .4);
+            border-left-color: var(--violet);
+            border-radius: 12px;
+            background: #191722;
+        }
+
+        .api-product-card,
+        .supplier-stat {
+            border-radius: 18px;
+            background: var(--bg-card);
+        }
+
+        .api-product-card.enabled {
+            border-color: rgba(157, 114, 255, .6);
+            box-shadow: inset 0 0 0 1px rgba(157, 114, 255, .12);
+        }
+
+        .api-price-box {
+            background: var(--panel-raised);
+        }
+
+        @media (max-width: 1200px) {
+            aside {
+                width: 230px;
+                flex-basis: 230px;
+            }
+
+            main {
+                padding-inline: 24px;
+            }
+
+            .kpi-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .merchant-overview-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .merchant-overview-grid > .merchant-stack:last-child {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 820px) {
+            body {
+                display: grid;
+                grid-template-columns: 76px minmax(0, 1fr);
+                align-items: start;
+            }
+
+            aside {
+                position: sticky;
+                width: 76px;
+                height: 100vh;
+                padding-inline: 10px;
+                border-right: 1px solid var(--border-color);
+                border-bottom: 0;
+            }
+
+            .brand-copy,
+            .nav-label,
+            nav a .nav-copy,
+            .sidebar-bottom {
+                display: none;
+            }
+
+            .brand {
+                justify-content: center;
+                padding-inline: 0;
+            }
+
+            nav {
+                flex-direction: column;
+                overflow: visible;
+            }
+
+            nav a {
+                justify-content: center;
+                padding: 0;
+            }
+
+            .nav-meta {
+                position: absolute;
+                margin: 0 0 22px 27px;
+            }
+
+            main {
+                padding-inline: 20px;
+            }
+
+            header.merchant-topbar {
+                grid-template-columns: minmax(0, 1fr) auto;
+            }
+
+            .admin-copy,
+            .header-actions .btn span {
+                display: none;
+            }
+
+            .merchant-page-head {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .quick-actions-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 560px) {
+            body {
+                display: block;
+            }
+
+            aside {
+                position: sticky;
+                top: 0;
+                width: 100%;
+                height: auto;
+                display: block;
+                padding: 10px 12px;
+                border-right: 0;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .brand,
+            .sidebar-bottom,
+            .nav-label {
+                display: none;
+            }
+
+            nav {
+                display: flex;
+                flex-direction: row;
+                overflow-x: auto;
+            }
+
+            nav a {
+                min-width: 46px;
+                flex: 0 0 46px;
+            }
+
+            main {
+                padding-inline: 16px;
+            }
+
+            header.merchant-topbar {
+                min-height: 70px;
+                gap: 10px;
+            }
+
+            .search-shortcut,
+            .admin-chip,
+            .header-actions {
+                display: none;
+            }
+
+            .global-search input {
+                padding-right: 14px;
+            }
+
+            .kpi-grid,
+            .merchant-overview-grid > .merchant-stack:last-child {
+                grid-template-columns: 1fr;
+            }
+
+            .merchant-page-head {
+                padding-top: 24px;
+            }
+
+            .quick-actions-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .api-product-list {
+                grid-template-columns: 1fr;
+            }
+
+            .api-product-footer {
+                align-items: stretch;
+                flex-direction: column;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                animation-iteration-count: 1 !important;
+                scroll-behavior: auto !important;
+                transition-duration: .01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
     <!-- Barre de navigation latérale -->
     <aside>
         <div class="brand">
-            <span>🛡️</span>
-            <h2>__SHOP_NAME__</h2>
+            <span class="brand-mark">BM</span>
+            <div class="brand-copy">
+                <strong>__SHOP_NAME__</strong>
+                <span>Commerce Console</span>
+            </div>
         </div>
+        <div class="nav-label">Workspace</div>
         <nav>
-            <a href="/admin" data-tab="overview" class="__ACTIVE_OVERVIEW__">Overview</a>
-            <a href="/admin/orders" data-tab="orders" class="__ACTIVE_ORDERS__">Commandes</a>
-            <a href="/admin/catalog" data-tab="catalog" class="__ACTIVE_CATALOG__">Catalogue</a>
-            <a href="/admin/api-products" data-tab="api-products" class="__ACTIVE_API-PRODUCTS__">Produits API</a>
-            <a href="/admin/inventory" data-tab="inventory" class="__ACTIVE_INVENTORY__">Inventaire</a>
-            <a href="/admin/customers" data-tab="customers" class="__ACTIVE_CUSTOMERS__">Clients</a>
-            <a href="/admin/support" data-tab="support" class="__ACTIVE_SUPPORT__">Support</a>
-            <a href="/admin/interactions" data-tab="interactions" class="__ACTIVE_INTERACTIONS__">Interactions</a>
-            <a href="/admin/activity" data-tab="activity" class="__ACTIVE_ACTIVITY__">Activite</a>
-            <a href="/admin/settings" data-tab="settings" class="__ACTIVE_SETTINGS__">Parametres</a>
+            <a href="/admin" data-tab="overview" data-title="Vue d’ensemble" class="__ACTIVE_OVERVIEW__"><span class="nav-icon">◫</span><span class="nav-copy">Vue d’ensemble</span></a>
+            <a href="/admin/orders" data-tab="orders" data-title="Commandes" class="__ACTIVE_ORDERS__"><span class="nav-icon">◎</span><span class="nav-copy">Commandes</span><span class="nav-meta" id="nav-order-count">0</span></a>
+            <a href="/admin/catalog" data-tab="catalog" data-title="Catalogue" class="__ACTIVE_CATALOG__"><span class="nav-icon">◆</span><span class="nav-copy">Catalogue</span></a>
+            <a href="/admin/api-products" data-tab="api-products" data-title="Produits API" class="__ACTIVE_API-PRODUCTS__"><span class="nav-icon">⌁</span><span class="nav-copy">Produits API</span></a>
+            <a href="/admin/inventory" data-tab="inventory" data-title="Inventaire" class="__ACTIVE_INVENTORY__"><span class="nav-icon">▦</span><span class="nav-copy">Inventaire</span></a>
+            <a href="/admin/customers" data-tab="customers" data-title="Clients" class="__ACTIVE_CUSTOMERS__"><span class="nav-icon">◉</span><span class="nav-copy">Clients</span></a>
+            <a href="/admin/support" data-tab="support" class="__ACTIVE_SUPPORT__" data-title="Support"><span class="nav-icon">◇</span><span class="nav-copy">Support</span><span class="nav-meta" id="nav-support-count">0</span></a>
+            <a href="/admin/interactions" data-tab="interactions" data-title="Interactions" class="__ACTIVE_INTERACTIONS__"><span class="nav-icon">⌘</span><span class="nav-copy">Interactions</span></a>
+            <a href="/admin/activity" data-tab="activity" data-title="Activité" class="__ACTIVE_ACTIVITY__"><span class="nav-icon">↗</span><span class="nav-copy">Activité</span></a>
+            <a href="/admin/settings" data-tab="settings" data-title="Paramètres" class="__ACTIVE_SETTINGS__"><span class="nav-icon">⚙</span><span class="nav-copy">Paramètres</span></a>
         </nav>
+        <div class="sidebar-bottom">
+            <div class="system-line">
+                <span><i class="system-status-dot"></i>Systèmes actifs</span>
+                <span>Live</span>
+            </div>
+            <div class="sidebar-version">Admin suite · Midnight Merchant</div>
+        </div>
     </aside>
 
     <!-- Zone principale -->
     <main>
-        <header>
-            <div>
-                <h1 id="panel-title">Vue d'ensemble</h1>
-                <p class="last-update">Dernière mise à jour : <span id="last-update-time">-</span></p>
-            </div>
-            <div class="header-actions">
-                <button class="btn btn-secondary" id="binance-test-button" onclick="testBinanceConnection()">🟡 Tester Binance</button>
-                <button class="btn btn-secondary" onclick="refreshDashboardData()">🔄 Actualiser</button>
+        <header class="merchant-topbar">
+            <label class="global-search">
+                <span class="search-symbol">⌕</span>
+                <input id="global-search" type="search" placeholder="Rechercher commandes, produits ou clients…" aria-label="Recherche globale" onkeydown="runGlobalSearch(event)">
+                <span class="search-shortcut">CTRL K</span>
+            </label>
+            <div class="merchant-account">
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="binance-test-button" onclick="testBinanceConnection()"><span>Tester Binance</span></button>
+                    <button class="btn btn-secondary" onclick="refreshDashboardData()"><span>Actualiser</span></button>
+                </div>
+                <div class="admin-chip">
+                    <span class="admin-avatar">AD</span>
+                    <span class="admin-copy"><strong>Admin</strong><span>Accès propriétaire</span></span>
+                </div>
             </div>
         </header>
+        <section class="merchant-page-head">
+            <div>
+                <div class="merchant-eyebrow">Command Center</div>
+                <h1 id="panel-title">Vue d’ensemble</h1>
+                <p class="last-update">Dernière mise à jour : <span id="last-update-time">-</span></p>
+            </div>
+            <span class="live-period">Données en direct</span>
+        </section>
 
         <!-- Toast container -->
         <div class="toast-container" id="toast-container"></div>
 
         <!-- 1. VUE D'ENSEMBLE -->
         <section id="overview" class="panel __PANEL_OVERVIEW__">
-            <div class="alerts-section">
-                <h2>Alertes système</h2>
-                <div style="margin-top:12px;" id="alerts-container">__ALERTS_HTML__</div>
+            <div id="kpi-container">__KPIS_HTML__</div>
+            <div class="merchant-overview-grid">
+                <div class="merchant-stack">
+                    <article class="merchant-card">
+                        <div class="merchant-card-head">
+                            <div><h2>Commandes en direct</h2><p>Dernières transactions et livraisons</p></div>
+                            <button class="merchant-link" onclick="navigateToTab('orders')">Toutes les commandes →</button>
+                        </div>
+                        <div class="overview-orders">
+                            <table id="overview-orders-table">
+                                <thead><tr><th>Commande</th><th>Client</th><th>Produit</th><th>Montant</th><th>Statut</th><th>Date</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </article>
+                    <article class="merchant-card">
+                        <div class="merchant-card-head">
+                            <div><h2>Actions rapides</h2><p>Contrôles essentiels de la boutique</p></div>
+                        </div>
+                        <div class="quick-actions-grid">
+                            <button class="merchant-action" onclick="openAddOfferModal()"><span class="merchant-action-icon">＋</span><strong>Nouveau produit</strong></button>
+                            <button class="merchant-action" onclick="openMaintenanceSettings()"><span class="merchant-action-icon">⚙</span><strong>Maintenance</strong></button>
+                            <button class="merchant-action" onclick="openBotBroadcast()"><span class="merchant-action-icon">◁</span><strong>Annonce clients</strong></button>
+                            <button class="merchant-action" onclick="syncSupplierCatalog()"><span class="merchant-action-icon">↻</span><strong>Synchroniser API</strong></button>
+                        </div>
+                    </article>
+                </div>
+                <div class="merchant-stack">
+                    <article class="merchant-card">
+                        <div class="merchant-card-head">
+                            <div><h2>Alertes système</h2><p>Points nécessitant votre attention</p></div>
+                        </div>
+                        <div class="merchant-alerts" id="alerts-container">__ALERTS_HTML__</div>
+                    </article>
+                    <article class="merchant-card">
+                        <div class="merchant-card-head">
+                            <div><h2>Fournisseur API</h2><p>État de la connexion MailReader</p></div>
+                            <button class="merchant-link" onclick="navigateToTab('api-products')">Gérer</button>
+                        </div>
+                        <div class="supplier-overview" id="overview-supplier">
+                            <div class="supplier-overview-row">
+                                <div class="supplier-identity">
+                                    <span class="supplier-mark">MR</span>
+                                    <span><strong>MailReader API</strong><span id="overview-supplier-copy">Vérification de la connexion…</span></span>
+                                </div>
+                                <span class="supplier-live" id="overview-supplier-status">CONNEXION…</span>
+                            </div>
+                            <div class="supplier-meter"><span id="overview-supplier-meter"></span></div>
+                            <div class="supplier-copy"><span>Solde fournisseur</span><span id="overview-supplier-balance">— USDT</span></div>
+                        </div>
+                    </article>
+                </div>
             </div>
-            <h2>Statistiques globales</h2>
-            <div style="margin-top:12px;" id="kpi-container">__KPIS_HTML__</div>
         </section>
 
         <!-- 2. GESTION DES COMMANDES -->
@@ -1406,6 +2329,9 @@ def render_dashboard(
             setupTabNavigation();
             refreshUI();
             refreshDashboardData();
+            if (document.getElementById("overview")?.classList.contains("active")) {
+                loadOverviewSupplier();
+            }
             if (document.getElementById("api-products")?.classList.contains("active")) {
                 loadApiProducts();
             }
@@ -1433,9 +2359,10 @@ def render_dashboard(
                 btn.classList.add("active");
                 panel.classList.add("active");
                 panel.style.display = "block";
-                title.textContent = btn.textContent.substring(3);
+                title.textContent = btn.dataset.title || btn.textContent.trim();
                 location.hash = tabId;
                 if (tabId === "api-products") loadApiProducts();
+                if (tabId === "overview") loadOverviewSupplier();
                 document.querySelector("main").scrollIntoView({ behavior: "smooth", block: "start" });
             }
 
@@ -1466,6 +2393,48 @@ def render_dashboard(
             }
         }
 
+        function navigateToTab(tabId) {
+            const button = document.querySelector(`nav a[data-tab="${tabId}"]`);
+            if (button) button.click();
+        }
+
+        function runGlobalSearch(event) {
+            if (event.key !== "Enter") return;
+            const value = event.currentTarget.value.trim();
+            if (!value) return;
+            navigateToTab("orders");
+            const orderSearch = document.getElementById("order-search");
+            orderSearch.value = value;
+            filterOrders();
+        }
+
+        document.addEventListener("keydown", event => {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+                event.preventDefault();
+                document.getElementById("global-search")?.focus();
+            }
+        });
+
+        function openMaintenanceSettings() {
+            navigateToTab("settings");
+            setTimeout(() => {
+                const control = document.getElementById("maintenance-enabled-input");
+                control?.focus();
+                control?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 80);
+        }
+
+        function openBotBroadcast() {
+            const username = dashboardData.bot_username || "blackmarketa_bot";
+            window.open(`https://t.me/${encodeURIComponent(username)}`, "_blank", "noopener");
+            showToast("Ouvrez le panneau Admin du bot pour créer l’annonce");
+        }
+
+        async function syncSupplierCatalog() {
+            navigateToTab("api-products");
+            await loadApiProducts(true);
+        }
+
         function showToast(message, type = "success") {
             const container = document.getElementById("toast-container");
             const toast = document.createElement("div");
@@ -1491,10 +2460,14 @@ def render_dashboard(
 
         function refreshUI() {
             document.getElementById("last-update-time").textContent = new Date().toLocaleTimeString();
+            document.getElementById("nav-order-count").textContent = dashboardData.summary?.pending_orders || 0;
+            document.getElementById("nav-support-count").textContent = dashboardData.summary?.open_tickets || 0;
 
             // Vue d'ensemble KPI
             renderAlerts();
             renderKPIs();
+            renderOverviewOrders();
+            updateOverviewSupplier();
 
             // Tables & catalogue
             renderOrdersTable();
@@ -1526,30 +2499,85 @@ def render_dashboard(
             const container = document.getElementById("kpi-container");
             const s = dashboardData.summary || {};
             const currency = dashboardData.currency || "USDT";
+            const interactions = dashboardData.interactions?.summary || {};
+            const apiBalance = resellerCatalog?.balance;
             container.innerHTML = `
                 <div class="kpi-grid">
                     <div class="kpi-card">
-                        <h3>Utilisateurs</h3>
-                        <div class="kpi-value">${s.users || 0}</div>
-                        <div class="kpi-subtext">+${s.new_users_today || 0} aujourd'hui • +${s.new_users_7d || 0} sur 7j</div>
+                        <h3>Chiffre d’affaires · 7 jours</h3>
+                        <div class="kpi-value">${Number(s.revenue_7d || 0).toFixed(2)} <small>${currency}</small></div>
+                        <div class="kpi-subtext">${Number(s.revenue_7d_change_pct || 0) >= 0 ? "↑" : "↓"} ${Math.abs(Number(s.revenue_7d_change_pct || 0)).toFixed(1)}% par rapport aux 7 jours précédents</div>
                     </div>
                     <div class="kpi-card">
-                        <h3>Commandes</h3>
+                        <h3>Commandes totales</h3>
                         <div class="kpi-value">${s.orders || 0}</div>
                         <div class="kpi-subtext">${s.paid_orders || 0} payées • ${s.pending_orders || 0} en attente</div>
                     </div>
                     <div class="kpi-card">
-                        <h3>Chiffre d'Affaires</h3>
-                        <div class="kpi-value">${(s.revenue_7d || 0).toFixed(2)} ${currency}</div>
-                        <div class="kpi-subtext">Aujourd'hui : ${(s.revenue_today || 0).toFixed(2)} ${currency} • 30j : ${(s.revenue_30d || 0).toFixed(2)} ${currency}</div>
+                        <h3>Solde fournisseur API</h3>
+                        <div class="kpi-value">${apiBalance == null ? "—" : Number(apiBalance).toFixed(2)} <small>USDT</small></div>
+                        <div class="kpi-subtext">${dashboardData.reseller?.selected_count || 0} produit(s) sélectionné(s) pour la revente</div>
                     </div>
                     <div class="kpi-card">
-                        <h3>Conversion & Stock</h3>
-                        <div class="kpi-value">${s.conversion_rate || 0}%</div>
-                        <div class="kpi-subtext">${s.available_inventory || 0} codes dispo • ${s.open_tickets || 0} tickets ouverts</div>
+                        <h3>Utilisateurs actifs</h3>
+                        <div class="kpi-value">${interactions.live_users || 0}</div>
+                        <div class="kpi-subtext">${interactions.active_today || 0} actif(s) aujourd’hui • ${s.users || 0} inscrits</div>
                     </div>
                 </div>
             `;
+        }
+
+        function renderOverviewOrders() {
+            const tbody = document.querySelector("#overview-orders-table tbody");
+            if (!tbody) return;
+            const orders = (dashboardData.orders || []).slice(0, 5);
+            if (!orders.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Aucune commande récente.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = orders.map(order => `
+                <tr>
+                    <td><code>#${escapeHtml(order.id)}</code></td>
+                    <td><code>${escapeHtml(order.user_id)}</code></td>
+                    <td>${escapeHtml(`${order.service_name || ""} — ${order.offer_name || ""}`)}</td>
+                    <td>${Number(order.total_price || 0).toFixed(2)} ${escapeHtml(dashboardData.currency || "USDT")}</td>
+                    <td><span class="badge badge-${escapeHtml(order.status || "")}">${escapeHtml(order.status || "—")}</span></td>
+                    <td>${formatDateTime(order.created_at)}</td>
+                </tr>
+            `).join("");
+        }
+
+        async function loadOverviewSupplier() {
+            if (resellerCatalogLoading) return;
+            if (resellerCatalog) {
+                updateOverviewSupplier();
+                return;
+            }
+            await loadApiProducts();
+        }
+
+        function updateOverviewSupplier() {
+            const status = document.getElementById("overview-supplier-status");
+            const copy = document.getElementById("overview-supplier-copy");
+            const balance = document.getElementById("overview-supplier-balance");
+            const meter = document.getElementById("overview-supplier-meter");
+            if (!status || !copy || !balance || !meter) return;
+            if (!resellerCatalog) {
+                const configured = Boolean(dashboardData.reseller?.configured);
+                status.textContent = configured ? "VÉRIFICATION…" : "À CONFIGURER";
+                status.style.color = configured ? "var(--warning)" : "var(--danger)";
+                copy.textContent = configured ? "Connexion au fournisseur…" : "Clé API manquante";
+                balance.textContent = "— USDT";
+                meter.style.width = "0%";
+                return;
+            }
+            const amount = Number(resellerCatalog.balance || 0);
+            status.textContent = "● EN LIGNE";
+            status.style.color = "var(--success)";
+            copy.textContent = `${resellerCatalog.products?.length || 0} produits synchronisés`;
+            balance.textContent = `${amount.toFixed(2)} ${resellerCatalog.currency || "USDT"}`;
+            meter.style.width = `${Math.max(6, Math.min(100, amount))}%`;
+            renderKPIs();
         }
 
         function renderOrdersTable() {
@@ -1682,9 +2710,11 @@ def render_dashboard(
                 }
                 resellerCatalog = result;
                 renderApiProducts();
+                updateOverviewSupplier();
                 if (force) showToast("Catalogue MailReader actualisé");
             } catch (error) {
                 resellerCatalog = null;
+                updateOverviewSupplier();
                 document.getElementById("api-supplier-state").innerHTML = `
                     <div class="alert alert-error">
                         <span class="alert-icon">⚠️</span>

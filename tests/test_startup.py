@@ -30,6 +30,8 @@ def test_public_site_links_to_bot():
     assert "?start=catalog" in page
     assert "?start=orders" in page
     assert "?start=support" in page
+    assert 'property="og:image"' in page
+    assert "/assets/blackmarket-midnight-og.png" in page
 
 
 def test_bot_application_builds_with_mock_database(mock_mongodb, monkeypatch):

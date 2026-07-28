@@ -63,13 +63,23 @@ def dashboard_write_token() -> str:
 def public_site_html() -> str:
     bot_username = os.environ.get("HP_BOT_USERNAME", "blackmarketa_bot").strip().lstrip("@")
     shop_name = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip() or "BlackMarket"
+    public_base_url = os.environ.get(
+        "HP_PUBLIC_BASE_URL", "https://telegram-bot-mayssa98s-projects.vercel.app"
+    ).rstrip("/")
     bot_url = f"https://t.me/{html.escape(bot_username)}"
+    social_image_url = f"{html.escape(public_base_url)}/assets/blackmarket-midnight-og.png"
     return f"""<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(shop_name)} - Bot Telegram</title>
+  <meta property="og:title" content="{html.escape(shop_name)} · Midnight Merchant">
+  <meta property="og:description" content="Catalogue, commandes et support depuis le bot Telegram officiel.">
+  <meta property="og:image" content="{social_image_url}">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="{social_image_url}">
   <style>
     :root {{ color-scheme: dark; --bg:#07101d; --panel:#101d2f; --line:#26364d; --text:#e8eef8; --muted:#9fb0c9; --brand:#0891b2; --brand2:#22d3ee; }}
     * {{ box-sizing:border-box; }}
@@ -160,6 +170,7 @@ class handler(BaseHTTPRequestHandler):
         public_assets = {
             "/assets/chatgpt-plus-benefits.png": "chatgpt-plus-benefits.png",
             "/assets/blackmarket-welcome-v2.png": "blackmarket-welcome-v2.png",
+            "/assets/blackmarket-midnight-og.png": "blackmarket-midnight-og.png",
         }
         if path in public_assets:
             asset_path = Path(__file__).resolve().parent.parent / "assets" / public_assets[path]
@@ -189,6 +200,15 @@ class handler(BaseHTTPRequestHandler):
                 data = db.dashboard_data()
                 data["shop_name"] = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip()
                 data["currency"] = CURRENCY
+                data["bot_username"] = os.environ.get(
+                    "HP_BOT_USERNAME", "blackmarketa_bot"
+                ).strip().lstrip("@")
+                data["reseller"] = {
+                    "configured": bool(reseller_service.MAILREADER_API_KEY),
+                    "selected_count": db.get_conn().reseller_products.count_documents(
+                        {"provider": reseller_service.PROVIDER, "enabled": True}
+                    ),
+                }
                 body = render_dashboard(
                     data,
                     active_tab=active_tab,
@@ -213,6 +233,15 @@ class handler(BaseHTTPRequestHandler):
                 data = db.dashboard_data()
                 data["shop_name"] = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip()
                 data["currency"] = CURRENCY
+                data["bot_username"] = os.environ.get(
+                    "HP_BOT_USERNAME", "blackmarketa_bot"
+                ).strip().lstrip("@")
+                data["reseller"] = {
+                    "configured": bool(reseller_service.MAILREADER_API_KEY),
+                    "selected_count": db.get_conn().reseller_products.count_documents(
+                        {"provider": reseller_service.PROVIDER, "enabled": True}
+                    ),
+                }
                 self._reply(200, data)
             except Exception as exc:
                 self._reply(500, {"ok": False, "error": str(exc)})

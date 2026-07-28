@@ -196,6 +196,24 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "__PANEL_" not in page
 
 
+def test_dashboard_uses_midnight_merchant_command_center():
+    page = render_dashboard({
+        "summary": {"orders": 2, "pending_orders": 1, "open_tickets": 1},
+        "alerts": [],
+        "services": [],
+        "orders": [],
+        "interactions": {"summary": {"live_users": 2, "active_today": 5}},
+    })
+
+    assert "Midnight Merchant" in page
+    assert 'class="merchant-topbar"' in page
+    assert 'id="overview-orders-table"' in page
+    assert "Actions rapides" in page
+    assert "Fournisseur API" in page
+    assert "runGlobalSearch" in page
+    assert "syncSupplierCatalog" in page
+
+
 def test_dashboard_contains_binance_health_test():
     page = render_dashboard({"summary": {}, "alerts": []}, active_tab="overview")
 
