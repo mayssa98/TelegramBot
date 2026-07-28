@@ -181,6 +181,7 @@ def test_dashboard_has_mailreader_api_products_management():
     page = render_dashboard(
         {"summary": {}, "alerts": [], "services": []},
         active_tab="api-products",
+        dashboard_write_token="safe-write-token",
     )
 
     assert 'href="/admin/api-products"' in page
@@ -189,6 +190,8 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "save_reseller_product" in page
     assert "Produits API MailReader" in page
     assert "Votre prix client" in page
+    assert 'const dashboardWriteToken = "safe-write-token"' in page
+    assert '"X-Dashboard-Write-Token": dashboardWriteToken' in page
     assert "__ACTIVE_" not in page
     assert "__PANEL_" not in page
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import csv
+import hashlib
 import hmac
 import html
 import io
@@ -46,6 +47,17 @@ def health_payload() -> dict:
         "version": __version__,
         "timestamp": datetime.now(UTC).isoformat(),
     }
+
+
+def dashboard_write_token() -> str:
+    """Create a scoped write token without exposing the dashboard password."""
+    if not DASHBOARD_PASSWORD:
+        return ""
+    return hmac.new(
+        DASHBOARD_PASSWORD.encode("utf-8"),
+        b"telegram-bot-dashboard-write-v1",
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def public_site_html() -> str:
@@ -177,7 +189,11 @@ class handler(BaseHTTPRequestHandler):
                 data = db.dashboard_data()
                 data["shop_name"] = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip()
                 data["currency"] = CURRENCY
-                body = render_dashboard(data, active_tab=active_tab).encode("utf-8")
+                body = render_dashboard(
+                    data,
+                    active_tab=active_tab,
+                    dashboard_write_token=dashboard_write_token(),
+                ).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store, max-age=0")
@@ -311,6 +327,9 @@ class handler(BaseHTTPRequestHandler):
     def _dashboard_authorized(self) -> bool:
         if not DASHBOARD_PASSWORD:
             return False
+        write_token = self.headers.get("X-Dashboard-Write-Token", "")
+        if write_token and hmac.compare_digest(write_token, dashboard_write_token()):
+            return True
         header = self.headers.get("Authorization", "")
         if not header.startswith("Basic "):
             return False

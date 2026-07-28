@@ -10,7 +10,11 @@ import html
 import json
 
 
-def render_dashboard(data: dict, active_tab: str = "overview") -> str:
+def render_dashboard(
+    data: dict,
+    active_tab: str = "overview",
+    dashboard_write_token: str = "",
+) -> str:
     """Génère la page HTML complète du dashboard administrateur."""
     allowed_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "support", "interactions", "activity", "settings"}
     active_tab = active_tab if active_tab in allowed_tabs else "overview"
@@ -1376,6 +1380,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
     <!-- INJECTION DES DONNEES DANS LE SCRIPT -->
     <script>
         let dashboardData = __JSON_DATA__;
+        const dashboardWriteToken = __DASHBOARD_WRITE_TOKEN__;
         let ordersPagination = { page: 1, pages: 1, total: 0 };
         let inventoryPagination = { page: 1, pages: 1, total: 0 };
         let orderFilterTimer;
@@ -1810,7 +1815,11 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             try {
                 const response = await fetch("/admin", {
                     method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-Dashboard-Write-Token": dashboardWriteToken
+                    },
                     body: params
                 });
                 const result = await response.json();
@@ -2700,6 +2709,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
         .replace("__ALERTS_HTML__", alerts_html)
         .replace("__KPIS_HTML__", kpis_html)
         .replace("__JSON_DATA__", json_data_str)
+        .replace("__DASHBOARD_WRITE_TOKEN__", json.dumps(dashboard_write_token))
     )
     for tab in allowed_tabs:
         page = page.replace(f"__ACTIVE_{tab.upper()}__", "active" if tab == active_tab else "")
