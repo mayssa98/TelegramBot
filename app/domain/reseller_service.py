@@ -18,12 +18,15 @@ from config import (
     MAILREADER_API_KEY,
     SHAMEKH_API_BASE,
     SHAMEKH_API_KEY,
+    VEX_API_BASE,
+    VEX_API_KEY,
 )
 
 PROVIDER = "mailreader"
 SHAMEKH_PROVIDER = "shamekh"
 KAKAO_PROVIDER = "kakao"
-SUPPORTED_PROVIDERS = {PROVIDER, SHAMEKH_PROVIDER, KAKAO_PROVIDER}
+VEX_PROVIDER = "vex"
+SUPPORTED_PROVIDERS = {PROVIDER, SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER}
 
 
 class ResellerApiError(RuntimeError):
@@ -159,6 +162,53 @@ def _kakao_request_json(
     return payload
 
 
+def _vex_request_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not VEX_API_KEY:
+        raise ResellerApiError(
+            "VEX Reseller n’est pas configuré. Ajoutez HP_VEX_API_KEY "
+            "dans les variables d’environnement."
+        )
+    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    request = Request(
+        f"{VEX_API_BASE}{path}",
+        headers={
+            "Authorization": f"Bearer {VEX_API_KEY}",
+            "Accept": "application/json",
+            **({"Content-Type": "application/json"} if body is not None else {}),
+            "User-Agent": "BlackMarket-Reseller/1.0",
+        },
+        data=payload_bytes,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        messages = {
+            401: "Clé API VEX refusée. Remplacez-la par une clé active.",
+            402: "Solde VEX insuffisant pour cette commande.",
+            409: "Produit VEX indisponible ou commande en conflit.",
+            429: "Limite VEX atteinte. Réessayez dans une minute.",
+        }
+        raise ResellerApiError(
+            messages.get(exc.code, f"VEX Reseller a répondu avec l’erreur HTTP {exc.code}.")
+        ) from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ResellerApiError("VEX Reseller est temporairement indisponible.") from exc
+    if isinstance(payload, list):
+        payload = {"ok": True, "products": payload}
+    if not isinstance(payload, dict):
+        raise ResellerApiError("Réponse VEX invalide.")
+    if payload.get("success") is False or payload.get("ok") is False:
+        raise ResellerApiError(str(payload.get("error") or "Requête VEX refusée.")[:300])
+    return payload
+
+
 def provider_summaries() -> list[dict[str, Any]]:
     """Return safe provider metadata without exposing credentials."""
     return [
@@ -178,6 +228,12 @@ def provider_summaries() -> list[dict[str, Any]]:
             "id": KAKAO_PROVIDER,
             "name": "Kakao Shop",
             "configured": bool(KAKAO_API_KEY),
+            "documentation_url": "",
+        },
+        {
+            "id": VEX_PROVIDER,
+            "name": "VEX Reseller",
+            "configured": bool(VEX_API_KEY),
             "documentation_url": "",
         },
     ]
@@ -203,12 +259,22 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         )
         reseller = {"balance": balance_data.get("balance", 0)}
         supplier_name = "Kakao Shop"
+    elif provider == VEX_PROVIDER:
+        payload = _vex_request_json("?action=products")
+        balance_payload = _vex_request_json("?action=balance")
+        balance_data = (
+            balance_payload.get("data")
+            if isinstance(balance_payload.get("data"), dict)
+            else balance_payload
+        )
+        reseller = {"balance": balance_data.get("balance", 0)}
+        supplier_name = "VEX Reseller"
     else:
         payload = _request_json("/api/reseller/products")
         reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
         supplier_name = str(reseller.get("name") or "MailReader")
     raw_products = payload.get("products")
-    if provider == KAKAO_PROVIDER and not isinstance(raw_products, list):
+    if provider in {KAKAO_PROVIDER, VEX_PROVIDER} and not isinstance(raw_products, list):
         raw_products = payload.get("data")
     if not isinstance(raw_products, list):
         raise ResellerApiError("Le fournisseur ne contient aucune liste de produits.")
@@ -224,7 +290,8 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         product_id = str(raw["id"])
         try:
             wholesale = float(Decimal(str(
-                raw.get("price") if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER}
+                raw.get("price")
+                if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER}
                 else raw.get("wholesale_price", "0")
             )))
         except (InvalidOperation, ValueError):
@@ -265,6 +332,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             "wholesale_price": wholesale,
             "currency": str(raw.get("currency") or "USDT")[:12],
             "stock": stock,
+            "manual_delivery": bool(raw.get("manual_delivery", False)),
             "enabled": bool(config.get("enabled", False)),
             "retail_price": float(retail_price) if retail_price is not None else None,
             "profit": (
@@ -369,6 +437,7 @@ def save_catalog_product(
     default_warranty = {
         SHAMEKH_PROVIDER: "Produit API Shamekh’s bot",
         KAKAO_PROVIDER: "Produit API Kakao Shop",
+        VEX_PROVIDER: "Produit API VEX Reseller",
     }.get(provider, "Produit API MailReader")
     warranty = str(warranty or default_warranty).strip()[:250]
     delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]
@@ -419,7 +488,7 @@ def save_catalog_product(
             note=warranty,
             currency=product["currency"],
             sort_order=sort_order,
-            auto_delivery=True,
+            auto_delivery=not bool(product.get("manual_delivery")),
             low_stock_threshold=low_stock_threshold,
             delivery_delay=delivery_delay,
             unlimited_stock=False,
@@ -442,7 +511,7 @@ def save_catalog_product(
             note=warranty,
             description=description,
             currency=product["currency"],
-            auto_delivery=True,
+            auto_delivery=not bool(product.get("manual_delivery")),
             low_stock_threshold=low_stock_threshold,
             delivery_delay=delivery_delay,
             unlimited_stock=False,
@@ -482,7 +551,7 @@ def _delivery_items(payload: dict[str, Any]) -> list[str]:
             candidates.append(value)
     raw_items: Any = None
     for candidate in candidates:
-        for key in ("delivery_items", "items", "credentials", "products"):
+        for key in ("delivery_items", "items", "credentials", "products", "data"):
             value = candidate.get(key)
             if isinstance(value, list):
                 raw_items = value
@@ -582,6 +651,16 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
     elif provider == KAKAO_PROVIDER:
         response = _kakao_request_json(
             "/api/purchase",
+            method="POST",
+            body={
+                "product_id": str(offer["supplier_product_id"]),
+                "quantity": int(order.get("qty") or 1),
+                "external_order_id": external_order_id,
+            },
+        )
+    elif provider == VEX_PROVIDER:
+        response = _vex_request_json(
+            "?action=order",
             method="POST",
             body={
                 "product_id": str(offer["supplier_product_id"]),

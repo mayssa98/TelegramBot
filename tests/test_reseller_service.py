@@ -316,3 +316,86 @@ def test_kakao_purchase_uses_external_id_and_is_idempotent(monkeypatch, mock_mon
         "external_order_id": "BM-93",
     }]
     assert db.get_order(93)["status"] == "delivered"
+
+
+def test_vex_catalog_maps_balance_stock_and_manual_delivery(monkeypatch, mock_mongodb):
+    def fake_request(path, **_kwargs):
+        if path == "?action=balance":
+            return {"ok": True, "balance": 25.4}
+        return {
+            "ok": True,
+            "products": [{
+                "id": "5a7576cb-941f-4fb6-b56d-0a2946574650",
+                "name": "VEX Account",
+                "price": 0.85,
+                "stock": 11,
+                "manual_delivery": True,
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_vex_request_json", fake_request)
+
+    result = reseller_service.catalog("vex")
+
+    assert result["provider"] == "vex"
+    assert result["supplier_name"] == "VEX Reseller"
+    assert result["balance"] == 25.4
+    assert result["products"][0]["wholesale_price"] == 0.85
+    assert result["products"][0]["stock"] == 11
+    assert result["products"][0]["manual_delivery"] is True
+
+
+def test_vex_order_is_delivered_and_replayed_without_double_charge(monkeypatch, mock_mongodb):
+    calls = []
+    product_id = "5a7576cb-941f-4fb6-b56d-0a2946574650"
+
+    def fake_request(path, **kwargs):
+        if path == "?action=balance":
+            return {"ok": True, "balance": 25.4}
+        if path == "?action=order":
+            calls.append(kwargs["body"])
+            return {
+                "status": "delivered",
+                "order_id": "VEX-12345678",
+                "data": "vex-user:vex-pass",
+                "amount": 0.85,
+            }
+        return {
+            "ok": True,
+            "products": [{
+                "id": product_id,
+                "name": "VEX Account",
+                "price": 0.85,
+                "stock": 11,
+                "manual_delivery": False,
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_vex_request_json", fake_request)
+    service_id = db.add_service("VEX", "📦")
+    saved = reseller_service.save_catalog_product(
+        product_id,
+        provider="vex",
+        retail_price=1.75,
+        enabled=True,
+        service_id=service_id,
+    )
+    offer = db.get_offer(saved["local_offer_id"])
+    mock_mongodb.orders.insert_one({
+        "id": 94,
+        "user_id": 123,
+        "offer_id": offer["id"],
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+
+    assert offer["supplier_provider"] == "vex"
+    assert reseller_service.fulfill_paid_order(94) == ["vex-user:vex-pass"]
+    assert reseller_service.fulfill_paid_order(94) == ["vex-user:vex-pass"]
+    assert calls == [{
+        "product_id": product_id,
+        "quantity": 1,
+        "external_order_id": "BM-94",
+    }]
+    fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 94})
+    assert fulfillment["supplier_order_id"] == "VEX-12345678"

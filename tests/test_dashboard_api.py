@@ -194,6 +194,8 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "selectApiProvider('shamekh')" in page
     assert "Kakao Shop" in page
     assert "selectApiProvider('kakao')" in page
+    assert "VEX Reseller" in page
+    assert "selectApiProvider('vex')" in page
     assert "Produits & services" in page
     assert "Description, prix & garantie" in page
     assert "openApiProductEditor" in page

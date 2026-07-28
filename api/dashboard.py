@@ -2152,6 +2152,12 @@ def render_dashboard(
                         <button class="btn btn-primary" onclick="selectApiProvider('kakao')">Voir ses produits</button>
                     </div>
                     <div class="api-action-card">
+                        <span class="badge badge-pending">Nouvelle API</span>
+                        <h3>VEX Reseller</h3>
+                        <p>Catalogue Supabase avec stock, solde et commandes idempotentes.</p>
+                        <button class="btn btn-primary" onclick="selectApiProvider('vex')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
                         <span>↻</span>
                         <h3>Synchronisation</h3>
                         <p>Actualisez le solde, les prix grossistes et les stocks.</p>
@@ -3066,6 +3072,7 @@ def render_dashboard(
                             <div class="api-product-id">${escapeHtml(product.id)}</div>
                             <div class="api-statuses" style="margin-top:8px;">
                                 ${product.enabled ? '<span class="badge badge-paid">Publié</span>' : '<span class="badge">Brouillon</span>'}
+                                ${product.manual_delivery ? '<span class="badge badge-pending">Livraison manuelle</span>' : ''}
                                 <span class="badge badge-${product.stock > 0 ? "paid" : "cancelled"}">${Number(product.stock || 0)} stock</span>
                             </div>
                         </div>
@@ -3122,6 +3129,7 @@ def render_dashboard(
                         </div>
                         <div class="api-statuses">
                             ${product.enabled ? '<span class="badge badge-paid">Publié dans le bot</span>' : '<span class="badge">Brouillon</span>'}
+                            ${product.manual_delivery ? '<span class="badge badge-pending">Livraison fournisseur manuelle</span>' : ''}
                             <span class="badge badge-${product.stock > 0 ? "paid" : "cancelled"}">${Number(product.stock || 0)} en stock</span>
                         </div>
                     </div>

@@ -54,6 +54,15 @@ KAKAO_API_KEY: str = os.environ.get("HP_KAKAO_API_KEY", "").strip()
 KAKAO_API_BASE: str = os.environ.get(
     "HP_KAKAO_API_BASE", "https://api.shopdigital.app"
 ).rstrip("/")
+
+# ---------------------------------------------------------------------------
+# Fournisseur revendeur VEX Reseller
+# ---------------------------------------------------------------------------
+VEX_API_KEY: str = os.environ.get("HP_VEX_API_KEY", "").strip()
+VEX_API_BASE: str = os.environ.get(
+    "HP_VEX_API_BASE",
+    "https://eismrrkygprctnwxmkbw.supabase.co/functions/v1/reseller-api",
+).rstrip("/")
 _BINANCE_OFFICIAL_BASES = (
     "https://api.binance.com",
     "https://api-gcp.binance.com",
