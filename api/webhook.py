@@ -25,7 +25,7 @@ from telegram.constants import ParseMode
 import database as db
 from api.dashboard import render_dashboard
 from app import __version__
-from app.domain import inventory_service, order_service, support_service
+from app.domain import inventory_service, order_service, reseller_service, support_service
 from app.web import dashboard_api
 from bot import build_app
 from config import CURRENCY, DASHBOARD_PASSWORD
@@ -163,7 +163,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
-        admin_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "interactions", "activity", "settings"}
+        admin_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "support", "interactions", "activity", "settings"}
         if path == "/admin" or path.startswith("/admin/") and path.removeprefix("/admin/") in admin_tabs:
             if not self._dashboard_authorized():
                 self.send_response(401)
@@ -207,6 +207,21 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
                 return
             self._reply(200, binance_healthcheck())
+            return
+
+        elif path == "/admin/api/reseller-products":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                self._reply(200, reseller_service.catalog())
+            except reseller_service.ResellerApiError as exc:
+                self._reply(503, {
+                    "ok": False,
+                    "configured": bool(reseller_service.MAILREADER_API_KEY),
+                    "provider": reseller_service.PROVIDER,
+                    "error": str(exc),
+                })
             return
 
         elif path == "/admin/api/ticket-messages":
@@ -634,6 +649,27 @@ class handler(BaseHTTPRequestHandler):
                 db.set_setting("privacy_message", form.get("privacy_message", "").strip()[:4000])
                 db.set_setting("active_languages", active_languages)
                 db.audit_event("settings.updated")
+
+            elif action == "save_reseller_product":
+                product_id = form.get("product_id", "").strip()
+                retail_price = float(form.get("retail_price", "0"))
+                enabled = form.get("enabled", "") == "1"
+                saved = reseller_service.save_catalog_product(
+                    product_id,
+                    retail_price=retail_price,
+                    enabled=enabled,
+                )
+                db.audit_event(
+                    "reseller_product.updated",
+                    details={
+                        "provider": reseller_service.PROVIDER,
+                        "product_id": product_id,
+                        "enabled": enabled,
+                        "retail_price": retail_price,
+                    },
+                )
+                self._reply(200, {"ok": True, "product": saved})
+                return
 
             else:
                 raise ValueError(f"Unknown action: {action}")

@@ -30,6 +30,14 @@ BINANCE_API_SECRET: str = os.environ.get("HP_BINANCE_API_SECRET", "").strip()
 BINANCE_API_BASE: str = os.environ.get(
     "HP_BINANCE_API_BASE", "https://api.binance.com"
 ).rstrip("/")
+
+# ---------------------------------------------------------------------------
+# Fournisseur revendeur MailReader
+# ---------------------------------------------------------------------------
+MAILREADER_API_KEY: str = os.environ.get("HP_MAILREADER_API_KEY", "").strip()
+MAILREADER_API_BASE: str = os.environ.get(
+    "HP_MAILREADER_API_BASE", "https://api.mailreader.tech"
+).rstrip("/")
 _BINANCE_OFFICIAL_BASES = (
     "https://api.binance.com",
     "https://api-gcp.binance.com",

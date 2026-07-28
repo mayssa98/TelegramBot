@@ -177,6 +177,22 @@ def test_dashboard_contains_product_sync_fields():
     assert "Livraison :" in page
 
 
+def test_dashboard_has_mailreader_api_products_management():
+    page = render_dashboard(
+        {"summary": {}, "alerts": [], "services": []},
+        active_tab="api-products",
+    )
+
+    assert 'href="/admin/api-products"' in page
+    assert 'id="api-products" class="panel active"' in page
+    assert "/admin/api/reseller-products" in page
+    assert "save_reseller_product" in page
+    assert "Produits API MailReader" in page
+    assert "Votre prix client" in page
+    assert "__ACTIVE_" not in page
+    assert "__PANEL_" not in page
+
+
 def test_dashboard_contains_binance_health_test():
     page = render_dashboard({"summary": {}, "alerts": []}, active_tab="overview")
 

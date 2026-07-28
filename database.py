@@ -14,7 +14,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def get_conn():
@@ -67,6 +67,9 @@ def init_db():
     db.settings.create_index("key", unique=True)
     db.text_overrides.create_index([("key", ASCENDING), ("lang", ASCENDING)], unique=True)
     db.custom_buttons.create_index("id", unique=True)
+    db.reseller_products.create_index(
+        [("provider", ASCENDING), ("product_id", ASCENDING)], unique=True,
+    )
     db.referrals.create_index("referred_id", unique=True)
     db.referrals.create_index("referrer_id")
     db.wallets.create_index("user_id", unique=True)
@@ -638,6 +641,50 @@ def list_custom_buttons(active_only=True):
 
 def delete_custom_button(button_id):
     return bool(get_conn().custom_buttons.delete_one({"id": int(button_id)}).deleted_count)
+
+
+def list_reseller_product_configs(provider="mailreader"):
+    """Return administrator selections for one external product supplier."""
+    return [
+        _public(row)
+        for row in get_conn().reseller_products.find(
+            {"provider": str(provider)}
+        ).sort("name", ASCENDING)
+    ]
+
+
+def save_reseller_product_config(
+    provider,
+    product_id,
+    *,
+    name,
+    wholesale_price,
+    currency,
+    retail_price,
+    enabled,
+):
+    """Persist retail pricing and visibility without storing supplier secrets."""
+    now = int(time.time())
+    get_conn().reseller_products.update_one(
+        {"provider": str(provider), "product_id": str(product_id)},
+        {
+            "$set": {
+                "name": str(name)[:200],
+                "wholesale_price": float(wholesale_price),
+                "currency": str(currency or "USDT")[:12],
+                "retail_price": float(retail_price),
+                "enabled": bool(enabled),
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+    return _public(
+        get_conn().reseller_products.find_one(
+            {"provider": str(provider), "product_id": str(product_id)}
+        )
+    )
 
 
 def shop_settings():

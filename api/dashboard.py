@@ -12,7 +12,7 @@ import json
 
 def render_dashboard(data: dict, active_tab: str = "overview") -> str:
     """Génère la page HTML complète du dashboard administrateur."""
-    allowed_tabs = {"overview", "orders", "catalog", "inventory", "customers", "support", "interactions", "activity", "settings"}
+    allowed_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "support", "interactions", "activity", "settings"}
     active_tab = active_tab if active_tab in allowed_tabs else "overview"
     summary = data.get("summary", {})
     alerts = data.get("alerts", [])
@@ -644,6 +644,120 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             gap: 8px;
         }
 
+        /* External reseller products */
+        .supplier-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 14px;
+            margin: 20px 0 24px;
+        }
+
+        .supplier-stat {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .supplier-stat span {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .supplier-stat strong {
+            display: block;
+            font-size: 24px;
+            margin-top: 7px;
+        }
+
+        .api-product-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+            gap: 16px;
+        }
+
+        .api-product-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .api-product-card.enabled {
+            border-color: rgba(34, 197, 94, .6);
+            box-shadow: inset 0 0 0 1px rgba(34, 197, 94, .12);
+        }
+
+        .api-product-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .api-product-heading h3 {
+            font-size: 17px;
+            margin-bottom: 4px;
+        }
+
+        .api-product-id {
+            color: var(--text-muted);
+            font-size: 12px;
+            word-break: break-all;
+        }
+
+        .api-price-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .api-price-box {
+            border: 1px solid var(--border-color);
+            border-radius: 9px;
+            padding: 11px;
+            background: rgba(255,255,255,.02);
+        }
+
+        .api-price-box span {
+            color: var(--text-muted);
+            display: block;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .api-profit {
+            color: var(--success);
+            font-weight: 700;
+        }
+
+        .api-profit.loss {
+            color: var(--danger);
+        }
+
+        .api-product-footer {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        .api-product-footer .form-group {
+            flex: 1;
+            margin: 0;
+        }
+
+        .api-enabled-control {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
         /* Empty state */
         .empty-state {
             text-align: center;
@@ -788,6 +902,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             <a href="/admin" data-tab="overview" class="__ACTIVE_OVERVIEW__">Overview</a>
             <a href="/admin/orders" data-tab="orders" class="__ACTIVE_ORDERS__">Commandes</a>
             <a href="/admin/catalog" data-tab="catalog" class="__ACTIVE_CATALOG__">Catalogue</a>
+            <a href="/admin/api-products" data-tab="api-products" class="__ACTIVE_API-PRODUCTS__">Produits API</a>
             <a href="/admin/inventory" data-tab="inventory" class="__ACTIVE_INVENTORY__">Inventaire</a>
             <a href="/admin/customers" data-tab="customers" class="__ACTIVE_CUSTOMERS__">Clients</a>
             <a href="/admin/support" data-tab="support" class="__ACTIVE_SUPPORT__">Support</a>
@@ -882,6 +997,37 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             </div>
             <div class="catalog-grid" id="catalog-list">
                 <!-- Injecté par JS -->
+            </div>
+        </section>
+
+        <!-- PRODUITS FOURNISSEUR API -->
+        <section id="api-products" class="panel __PANEL_API-PRODUCTS__">
+            <div class="section-header">
+                <div>
+                    <h2>Produits API MailReader</h2>
+                    <p class="last-update">Choisissez les produits à revendre et définissez votre prix client.</p>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <a class="btn btn-secondary" href="https://api.mailreader.tech/docs" target="_blank" rel="noopener">Documentation API</a>
+                    <button class="btn btn-primary" id="api-products-refresh" onclick="loadApiProducts(true)">Actualiser le fournisseur</button>
+                </div>
+            </div>
+            <div id="api-supplier-state">
+                <div class="empty-state">Connexion sécurisée au fournisseur…</div>
+            </div>
+            <div class="filters">
+                <div class="search-box">
+                    <input id="api-product-search" placeholder="Rechercher un produit API…" oninput="filterApiProducts()">
+                </div>
+                <select id="api-product-visibility" onchange="filterApiProducts()">
+                    <option value="">Tous les produits</option>
+                    <option value="enabled">Sélectionnés</option>
+                    <option value="disabled">Non sélectionnés</option>
+                    <option value="stock">En stock</option>
+                </select>
+            </div>
+            <div class="api-product-list" id="api-product-list">
+                <div class="empty-state">Chargement du catalogue…</div>
             </div>
         </section>
 
@@ -1234,6 +1380,8 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
         let inventoryPagination = { page: 1, pages: 1, total: 0 };
         let orderFilterTimer;
         let inventoryFilterTimer;
+        let resellerCatalog = null;
+        let resellerCatalogLoading = false;
         const ORDER_STATUSES = [
             "pending_payment",
             "awaiting_verification",
@@ -1253,6 +1401,9 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
             setupTabNavigation();
             refreshUI();
             refreshDashboardData();
+            if (document.getElementById("api-products")?.classList.contains("active")) {
+                loadApiProducts();
+            }
             setInterval(() => {
                 const panel = document.getElementById("interactions");
                 if (panel && panel.classList.contains("active")) refreshDashboardData(true);
@@ -1279,6 +1430,7 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                 panel.style.display = "block";
                 title.textContent = btn.textContent.substring(3);
                 location.hash = tabId;
+                if (tabId === "api-products") loadApiProducts();
                 document.querySelector("main").scrollIntoView({ behavior: "smooth", block: "start" });
             }
 
@@ -1505,6 +1657,172 @@ def render_dashboard(data: dict, active_tab: str = "overview") -> str:
                     offersListContainer.innerHTML = '<div style="color:var(--text-muted); font-size:13px; text-align:center;">Aucune offre pour ce service.</div>';
                 }
             });
+        }
+
+        async function loadApiProducts(force = false) {
+            if (resellerCatalogLoading || (resellerCatalog && !force)) {
+                if (resellerCatalog) renderApiProducts();
+                return;
+            }
+            resellerCatalogLoading = true;
+            const refreshButton = document.getElementById("api-products-refresh");
+            if (refreshButton) refreshButton.disabled = true;
+            try {
+                const response = await fetch("/admin/api/reseller-products", {
+                    headers: { "Accept": "application/json" }
+                });
+                const result = await response.json();
+                if (!response.ok || !result.ok) {
+                    throw new Error(result.error || "Connexion fournisseur impossible.");
+                }
+                resellerCatalog = result;
+                renderApiProducts();
+                if (force) showToast("Catalogue MailReader actualisé");
+            } catch (error) {
+                resellerCatalog = null;
+                document.getElementById("api-supplier-state").innerHTML = `
+                    <div class="alert alert-error">
+                        <span class="alert-icon">⚠️</span>
+                        <span class="alert-message">${escapeHtml(error.message)}</span>
+                    </div>`;
+                document.getElementById("api-product-list").innerHTML = `
+                    <div class="empty-state">
+                        Le catalogue reste indisponible tant que la nouvelle clé API n’est pas configurée sur le serveur.
+                    </div>`;
+            } finally {
+                resellerCatalogLoading = false;
+                if (refreshButton) refreshButton.disabled = false;
+            }
+        }
+
+        function renderApiProducts() {
+            if (!resellerCatalog) return;
+            const products = resellerCatalog.products || [];
+            document.getElementById("api-supplier-state").innerHTML = `
+                <div class="supplier-summary">
+                    <div class="supplier-stat">
+                        <span>Connexion fournisseur</span>
+                        <strong><span class="live-dot"></span>Active</strong>
+                    </div>
+                    <div class="supplier-stat">
+                        <span>Solde API</span>
+                        <strong>${Number(resellerCatalog.balance || 0).toFixed(2)} ${escapeHtml(resellerCatalog.currency || "USDT")}</strong>
+                    </div>
+                    <div class="supplier-stat">
+                        <span>Produits disponibles</span>
+                        <strong>${products.length}</strong>
+                    </div>
+                    <div class="supplier-stat">
+                        <span>Produits sélectionnés</span>
+                        <strong>${resellerCatalog.selected_count || 0}</strong>
+                    </div>
+                </div>`;
+
+            const list = document.getElementById("api-product-list");
+            if (!products.length) {
+                list.innerHTML = '<div class="empty-state">Aucun produit automatique disponible chez MailReader.</div>';
+                return;
+            }
+            list.innerHTML = products.map(product => {
+                const wholesale = Number(product.wholesale_price || 0);
+                const retail = product.retail_price == null
+                    ? Math.ceil((wholesale * 1.30) * 100) / 100
+                    : Number(product.retail_price);
+                const profit = retail - wholesale;
+                return `
+                    <article class="api-product-card ${product.enabled ? "enabled" : ""}"
+                             data-product-id="${escapeHtml(product.id)}"
+                             data-enabled="${product.enabled ? "1" : "0"}"
+                             data-stock="${Number(product.stock || 0)}"
+                             data-search="${escapeHtml((product.name + " " + product.id + " " + (product.description || "")).toLowerCase())}">
+                        <div class="api-product-heading">
+                            <div>
+                                <h3>${escapeHtml(product.name)}</h3>
+                                <div class="api-product-id">${escapeHtml(product.id)}</div>
+                            </div>
+                            <span class="badge badge-${product.stock > 0 ? "paid" : "cancelled"}">${Number(product.stock || 0)} en stock</span>
+                        </div>
+                        ${product.description ? `<p class="last-update">${escapeHtml(product.description)}</p>` : ""}
+                        <div class="api-price-grid">
+                            <div class="api-price-box">
+                                <span>Prix grossiste</span>
+                                <strong>${wholesale.toFixed(2)} ${escapeHtml(product.currency || "USDT")}</strong>
+                            </div>
+                            <div class="api-price-box">
+                                <span>Bénéfice par vente</span>
+                                <strong class="api-profit ${profit <= 0 ? "loss" : ""}">${profit.toFixed(2)} ${escapeHtml(product.currency || "USDT")}</strong>
+                            </div>
+                        </div>
+                        <div class="api-product-footer">
+                            <div class="form-group">
+                                <label>Votre prix client (${escapeHtml(product.currency || "USDT")})</label>
+                                <input class="api-retail-price" type="number" min="${(wholesale + 0.01).toFixed(2)}"
+                                       step="0.01" value="${retail.toFixed(2)}" oninput="updateApiProfit(this)">
+                            </div>
+                            <label class="api-enabled-control">
+                                <input class="api-enabled" type="checkbox" ${product.enabled ? "checked" : ""}>
+                                Revendre
+                            </label>
+                            <button class="btn btn-primary" onclick="saveApiProduct(this)">Enregistrer</button>
+                        </div>
+                    </article>`;
+            }).join("");
+            filterApiProducts();
+        }
+
+        function updateApiProfit(input) {
+            const card = input.closest(".api-product-card");
+            const product = (resellerCatalog?.products || []).find(
+                item => item.id === card.dataset.productId
+            );
+            if (!product) return;
+            const profit = Number(input.value || 0) - Number(product.wholesale_price || 0);
+            const output = card.querySelector(".api-profit");
+            output.textContent = `${profit.toFixed(2)} ${product.currency || "USDT"}`;
+            output.classList.toggle("loss", profit <= 0);
+        }
+
+        function filterApiProducts() {
+            const search = (document.getElementById("api-product-search")?.value || "").toLowerCase();
+            const visibility = document.getElementById("api-product-visibility")?.value || "";
+            document.querySelectorAll(".api-product-card").forEach(card => {
+                const matchesSearch = (card.dataset.search || "").includes(search);
+                const matchesVisibility =
+                    !visibility ||
+                    (visibility === "enabled" && card.dataset.enabled === "1") ||
+                    (visibility === "disabled" && card.dataset.enabled === "0") ||
+                    (visibility === "stock" && Number(card.dataset.stock || 0) > 0);
+                card.style.display = matchesSearch && matchesVisibility ? "" : "none";
+            });
+        }
+
+        async function saveApiProduct(button) {
+            const card = button.closest(".api-product-card");
+            const retailInput = card.querySelector(".api-retail-price");
+            const enabled = card.querySelector(".api-enabled").checked;
+            const params = new URLSearchParams({
+                action: "save_reseller_product",
+                product_id: card.dataset.productId,
+                retail_price: retailInput.value,
+                enabled: enabled ? "1" : "0"
+            });
+            button.disabled = true;
+            try {
+                const response = await fetch("/admin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: params
+                });
+                const result = await response.json();
+                if (!response.ok || !result.ok) throw new Error(result.error || "Enregistrement impossible.");
+                resellerCatalog = null;
+                showToast(enabled ? "Produit API activé pour la revente" : "Produit API désactivé");
+                await loadApiProducts(true);
+            } catch (error) {
+                showToast(error.message, "error");
+            } finally {
+                button.disabled = false;
+            }
         }
 
         function renderInventory() {
