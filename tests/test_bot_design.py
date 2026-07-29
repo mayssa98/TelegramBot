@@ -304,6 +304,24 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     assert "1 USDT" in rendered
     assert "12% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
+    assert bot_client.get_chat_member.await_count == 2
+
+
+def test_group_membership_is_also_required(monkeypatch):
+    from bot import is_required_channel_member
+
+    bot_client = SimpleNamespace(get_chat_member=AsyncMock(side_effect=[
+        SimpleNamespace(status="member"),
+        SimpleNamespace(status="left"),
+    ]))
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
+    monkeypatch.setattr("bot.REQUIRED_GROUP", "@Blackmarketgrp")
+
+    assert asyncio.run(is_required_channel_member(bot_client, 42)) is False
+    assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
+        "@channel", "@Blackmarketgrp",
+    ]
 
 @pytest.mark.parametrize(
     ("key", "incoming_text", "emoji_id"),

@@ -44,6 +44,7 @@ from config import (
     CURRENCY,
     DEFAULT_LANG,
     REQUIRED_CHANNEL,
+    REQUIRED_GROUP,
     SHOP_NAME,
     USDT_EVM_ADDRESS,
     configuration_issues,
@@ -452,18 +453,22 @@ def render_stored_rich_text(value, *, parse_legacy_markdown=True):
 
 # ---------------- /start ----------------
 async def is_required_channel_member(bot, user_id):
-    """Return whether a customer currently belongs to the required channel."""
+    """Return whether a customer belongs to both the required channel and group."""
     if user_id == ADMIN_ID:
         return True
-    try:
-        member = await bot.get_chat_member(REQUIRED_CHANNEL, user_id)
-    except Exception as exc:
-        log.warning("Unable to verify channel membership for %s: %s", user_id, exc)
-        return False
-    status = getattr(getattr(member, "status", None), "value", getattr(member, "status", ""))
-    return str(status) in {"creator", "administrator", "member"} or (
-        str(status) == "restricted" and bool(getattr(member, "is_member", False))
-    )
+    for chat in (REQUIRED_CHANNEL, REQUIRED_GROUP):
+        try:
+            member = await bot.get_chat_member(chat, user_id)
+        except Exception as exc:
+            log.warning("Unable to verify membership in %s for %s: %s", chat, user_id, exc)
+            return False
+        status = getattr(getattr(member, "status", None), "value", getattr(member, "status", ""))
+        is_member = str(status) in {"creator", "administrator", "member"} or (
+            str(status) == "restricted" and bool(getattr(member, "is_member", False))
+        )
+        if not is_member:
+            return False
+    return True
 
 
 async def register_start_referral(context, referred_id, referrer_id):

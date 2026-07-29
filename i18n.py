@@ -45,16 +45,17 @@ TRANSLATIONS = {
         "ar": "✨ *مرحبًا بك في {shop}*\n\nاكتشف مجموعة مختارة من الخدمات الرقمية المميزة، مع عرض واضح وتحديث مستمر.\n\n⚡ وصول سريع إلى العروض المتاحة\n🛡️ معلومات واضحة وخدمة موثوقة\n🎯 مساعدة مخصصة في كل خطوة\n\nاختر القسم الذي تريد البدء منه:",
     },
     "channel_join_required": {
-        "fr": "🔒 *Members-only access*\n\nJoin our official channel to unlock BlackMarket offers, instant delivery, affiliate rewards and exclusive discounts.\n\n👇 Join the channel, then tap *Verify joining*.",
-        "en": "🔒 *MEMBERS-ONLY ACCESS*\n\nJoin our official channel to unlock BlackMarket offers, instant delivery, affiliate rewards and exclusive discounts.\n\n👇 Join the channel, then tap *Verify joining*.",
-        "ar": "🔒 *Members-only access*\n\nJoin our official channel to unlock BlackMarket offers, instant delivery, affiliate rewards and exclusive discounts.\n\n👇 Join the channel, then tap *Verify joining*.",
+        "fr": "🔒 *Accès réservé aux membres*\n\nRejoignez notre chaîne officielle et notre groupe pour accéder aux offres BlackMarket.\n\n👇 Rejoignez les deux, puis appuyez sur *Vérifier*.",
+        "en": "🔒 *MEMBERS-ONLY ACCESS*\n\nJoin our official channel and group to unlock BlackMarket offers.\n\n👇 Join both, then tap *Verify joining*.",
+        "ar": "🔒 *Members-only access*\n\nJoin our official channel and group to unlock BlackMarket offers.\n\n👇 Join both, then tap *Verify joining*.",
     },
     "btn_join_channel": {"fr": "📢 Join our channel", "en": "📢 Join our channel", "ar": "📢 Join our channel"},
+    "btn_join_group": {"fr": "👥 Rejoindre le groupe", "en": "👥 Join our group", "ar": "👥 Join our group"},
     "btn_verify_join": {"fr": "✅ Verify joining", "en": "✅ Verify joining", "ar": "✅ Verify joining"},
     "channel_join_not_verified": {
-        "fr": "❌ *Membership not detected*\n\nJoin @blackmarketBotChannel first, then tap *Verify joining* again.",
-        "en": "❌ *MEMBERSHIP NOT DETECTED*\n\nJoin @blackmarketBotChannel first, then tap *Verify joining* again.",
-        "ar": "❌ *Membership not detected*\n\nJoin @blackmarketBotChannel first, then tap *Verify joining* again.",
+        "fr": "❌ *Adhésion non détectée*\n\nRejoignez @blackmarketBotChannel et @Blackmarketgrp, puis appuyez à nouveau sur *Vérifier*.",
+        "en": "❌ *MEMBERSHIP NOT DETECTED*\n\nJoin @blackmarketBotChannel and @Blackmarketgrp, then tap *Verify joining* again.",
+        "ar": "❌ *Membership not detected*\n\nJoin @blackmarketBotChannel and @Blackmarketgrp, then tap *Verify joining* again.",
     },
     "channel_member_welcome": {
         "fr": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *1 USDT for every 5 valid referrals*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 25 USDT → *3% OFF*\n🥈 *Silver* — spend 70 USDT → *6% OFF*\n💎 *Platinum* — spend 200 USDT → *9% OFF*\n👑 *Diamond* — spend 500 USDT → *12% OFF*\n\nEach unlocked discount applies to every product for *3 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",

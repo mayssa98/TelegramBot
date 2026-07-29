@@ -6,7 +6,7 @@ from urllib.parse import quote
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 import database as db
-from config import ADMIN_ID, ADMIN_USERNAME, REQUIRED_CHANNEL
+from config import ADMIN_ID, ADMIN_USERNAME, REQUIRED_CHANNEL, REQUIRED_GROUP
 from i18n import t
 
 BUTTON_TEXT_KEYS = {
@@ -20,7 +20,8 @@ BUTTON_TEXT_KEYS = {
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
     "btn_cancel", "btn_continue_payment", "btn_new_order",
-    "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_verify_join", "btn_channel_buy_now",
+    "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_join_group",
+    "btn_verify_join", "btn_channel_buy_now",
     "btn_receive_accounts_admin",
 }
 
@@ -121,10 +122,12 @@ def channel_offer_keyboard(lang, bot_username, offer_id):
     ]])
 
 def channel_join_keyboard(lang):
-    """Require channel membership before unlocking the customer menu."""
+    """Offer both required membership links before unlocking the customer menu."""
     channel_url = f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"
+    group_url = f"https://t.me/{REQUIRED_GROUP.lstrip('@')}"
     return InlineKeyboardMarkup([
         [translated_button(lang, "btn_join_channel", url=channel_url, style="primary")],
+        [translated_button(lang, "btn_join_group", url=group_url, style="primary")],
         [translated_button(lang, "btn_verify_join", callback_data="verify_channel_join", style="success")],
     ])
 
