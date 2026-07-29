@@ -247,6 +247,18 @@ def test_dashboard_contains_telegram_webhook_repair():
     assert "repair_telegram_webhook" in page
 
 
+def test_dashboard_contains_bulk_wallet_credit_control():
+    page = render_dashboard(
+        {"summary": {}, "alerts": []},
+        active_tab="customers",
+        dashboard_write_token="safe-write-token",
+    )
+
+    assert 'action: "bulk_credit_wallets"' in page
+    assert "CREDIT ALL" in page
+    assert "bulk-wallet-amount" in page
+
+
 def test_dashboard_javascript_syntax_is_valid(tmp_path):
     if not shutil.which("node"):
         pytest.skip("node is not installed")

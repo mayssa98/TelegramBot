@@ -29,10 +29,10 @@ from telegram.constants import ParseMode
 import database as db
 from api.dashboard import render_dashboard
 from app import __version__
-from app.domain import inventory_service, order_service, reseller_service, support_service
+from app.domain import inventory_service, order_service, reseller_service, support_service, wallet_service
 from app.web import dashboard_api
 from bot import announce_api_flash_sale, announce_channel_restock, build_app
-from config import BOT_TOKEN, CURRENCY, DASHBOARD_PASSWORD
+from config import ADMIN_ID, BOT_TOKEN, CURRENCY, DASHBOARD_PASSWORD
 from payment_verifier import binance_healthcheck
 
 _loop = asyncio.new_event_loop()
@@ -707,6 +707,16 @@ class handler(BaseHTTPRequestHandler):
                 uid = int(form["user_id"])
                 banned = bool(int(form["banned"]))
                 db.set_user_banned(uid, banned)
+
+            elif action == "bulk_credit_wallets":
+                if form.get("confirmation", "").strip() != "CREDIT ALL":
+                    raise ValueError("Saisissez CREDIT ALL pour confirmer.")
+                amount = float(form.get("amount", "0").strip().replace(",", "."))
+                result = wallet_service.credit_all_users(
+                    amount, form.get("operation_id", ""), ADMIN_ID,
+                )
+                self._reply(200, {"ok": True, **result})
+                return
 
             elif action == "close_ticket":
                 tid = int(form["ticket_id"])

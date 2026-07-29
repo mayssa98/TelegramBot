@@ -2247,6 +2247,29 @@ def render_dashboard(
 
         <!-- 5. CLIENTS -->
         <section id="customers" class="panel __PANEL_CUSTOMERS__">
+            <div class="service-card" style="margin-bottom:20px;">
+                <h3 style="margin-bottom:8px;">Créditer le solde de tous les utilisateurs</h3>
+                <p class="muted" style="margin-bottom:16px;">
+                    Le même montant sera ajouté au portefeuille de chaque utilisateur enregistré.
+                    Cette opération ne peut pas être annulée automatiquement.
+                </p>
+                <form id="bulk-wallet-credit-form" onsubmit="bulkCreditWallets(event)"
+                      style="display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1fr) auto;gap:12px;align-items:end;">
+                    <div class="form-group" style="margin:0;">
+                        <label for="bulk-wallet-amount">Montant par utilisateur ($)</label>
+                        <input id="bulk-wallet-amount" name="amount" type="number" min="0.01" max="10000"
+                               step="0.01" required placeholder="Ex. 5.00">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label for="bulk-wallet-confirmation">Confirmation</label>
+                        <input id="bulk-wallet-confirmation" name="confirmation" required
+                               autocomplete="off" placeholder="Saisissez CREDIT ALL">
+                    </div>
+                    <button id="bulk-wallet-credit-button" class="btn btn-danger" type="submit">
+                        Ajouter à tous
+                    </button>
+                </form>
+            </div>
             <div class="filters">
                 <div class="search-box">
                     <input type="text" id="customer-search" placeholder="Rechercher par Telegram ID, nom ou prénom..." oninput="filterCustomers()">
@@ -4203,6 +4226,66 @@ def render_dashboard(
             clearTimeout(orderFilterTimer);
             ordersPagination.page = 1;
             orderFilterTimer = setTimeout(refreshDashboardData, 250);
+        }
+
+        let bulkWalletOperationId = "";
+
+        async function bulkCreditWallets(event) {
+            event.preventDefault();
+            const form = event.target;
+            const amount = Number(document.getElementById("bulk-wallet-amount").value);
+            const confirmation = document.getElementById("bulk-wallet-confirmation").value.trim();
+            if (!Number.isFinite(amount) || amount < 0.01 || amount > 10000) {
+                showToast("Montant invalide (0,01 $ à 10 000 $)", "error");
+                return;
+            }
+            if (confirmation !== "CREDIT ALL") {
+                showToast("Saisissez exactement CREDIT ALL", "error");
+                return;
+            }
+            if (!window.confirm(`Ajouter ${amount.toFixed(2)} $ au solde de TOUS les utilisateurs ?`)) {
+                return;
+            }
+
+            if (!bulkWalletOperationId) {
+                const randomPart = window.crypto && window.crypto.randomUUID
+                    ? window.crypto.randomUUID().replaceAll("-", "_")
+                    : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                bulkWalletOperationId = `bulk_${randomPart}`;
+            }
+            const params = new URLSearchParams({
+                action: "bulk_credit_wallets",
+                amount: amount.toFixed(2),
+                confirmation,
+                operation_id: bulkWalletOperationId,
+            });
+            const button = document.getElementById("bulk-wallet-credit-button");
+            button.disabled = true;
+            button.textContent = "Crédit en cours...";
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-Dashboard-Write-Token": dashboardWriteToken,
+                    },
+                    body: params,
+                });
+                const payload = await res.json();
+                if (!res.ok || !payload.ok) {
+                    throw new Error(payload.error || "Le crédit global a échoué");
+                }
+                showToast(`${payload.credited_count} utilisateur(s) crédité(s) de ${amount.toFixed(2)} $`);
+                bulkWalletOperationId = "";
+                form.reset();
+                await refreshDashboardData();
+            } catch (err) {
+                showToast(err.message || "Erreur réseau", "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = "Ajouter à tous";
+            }
         }
 
         function filterCustomers() {

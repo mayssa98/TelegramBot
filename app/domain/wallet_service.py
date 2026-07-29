@@ -191,6 +191,86 @@ def reject_onchain_topup(topup_id: int, admin_id: int) -> dict[str, Any] | None:
     return topup
 
 
+def credit_all_users(
+    amount: float, operation_id: str, admin_id: int,
+) -> dict[str, Any]:
+    """Idempotently add the same wallet credit to every registered user."""
+    amount_cents = round(float(amount) * 100)
+    operation_id = str(operation_id or "").strip()
+    if amount_cents < 1 or amount_cents > 1_000_000:
+        raise ValueError("Le montant doit être compris entre 0,01 et 10 000 USDT.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{12,128}", operation_id):
+        raise ValueError("Identifiant d’opération invalide.")
+
+    conn = db.get_conn()
+    operation = conn.bulk_wallet_credits.find_one({"operation_id": operation_id})
+    if operation and int(operation.get("amount_cents") or 0) != amount_cents:
+        raise ValueError("Cette opération existe avec un montant différent.")
+    if not operation:
+        try:
+            conn.bulk_wallet_credits.insert_one({
+                "operation_id": operation_id,
+                "amount_cents": amount_cents,
+                "admin_id": int(admin_id),
+                "status": "processing",
+                "created_at": int(time.time()),
+            })
+        except DuplicateKeyError:
+            operation = conn.bulk_wallet_credits.find_one({"operation_id": operation_id})
+            if not operation or int(operation.get("amount_cents") or 0) != amount_cents:
+                raise ValueError("Conflit d’opération de crédit.") from None
+
+    credited = 0
+    already_credited = 0
+    user_ids = conn.users.distinct("telegram_id", {"telegram_id": {"$ne": None}})
+    for user_id in user_ids:
+        try:
+            result = conn.wallets.update_one(
+                {
+                    "user_id": int(user_id),
+                    "bulk_credit_operations": {"$ne": operation_id},
+                },
+                {
+                    "$inc": {"balance_cents": amount_cents},
+                    "$addToSet": {"bulk_credit_operations": operation_id},
+                },
+                upsert=True,
+            )
+            if result.modified_count or result.upserted_id is not None:
+                credited += 1
+            else:
+                already_credited += 1
+        except DuplicateKeyError:
+            already_credited += 1
+
+    conn.bulk_wallet_credits.update_one(
+        {"operation_id": operation_id},
+        {"$set": {
+            "status": "completed",
+            "user_count": len(user_ids),
+            "credited_count": credited,
+            "completed_at": int(time.time()),
+        }},
+    )
+    db.audit_event(
+        "wallet.bulk_credit",
+        actor_id=admin_id,
+        details={
+            "operation_id": operation_id,
+            "amount_cents": amount_cents,
+            "credited_count": credited,
+            "user_count": len(user_ids),
+        },
+    )
+    return {
+        "operation_id": operation_id,
+        "amount": amount_cents / 100,
+        "user_count": len(user_ids),
+        "credited_count": credited,
+        "already_credited_count": already_credited,
+    }
+
+
 def apply_balance(user_id: int, amount: float) -> float:
     requested = max(0, round(amount * 100))
     if not requested:

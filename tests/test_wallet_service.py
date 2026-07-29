@@ -110,3 +110,25 @@ def test_automatic_topup_credits_transfer_matched_by_optional_memo(mock_mongodb,
     assert result["amount"] == 7.5
     assert wallet_service.balance_cents(42) == 750
     assert mock_mongodb.wallet_topups.find_one({"txid": "AUTO_MEMO_TX_123"})["verification_method"] == "memo"
+
+
+def test_bulk_wallet_credit_is_applied_once_per_user(mock_mongodb):
+    for user_id in (10, 20, 30):
+        db.upsert_user(user_id, f"user{user_id}", f"User {user_id}")
+    mock_mongodb.wallets.insert_one({"user_id": 20, "balance_cents": 125})
+
+    first = wallet_service.credit_all_users(2.50, "bulk_credit_test_123", 999)
+    second = wallet_service.credit_all_users(2.50, "bulk_credit_test_123", 999)
+
+    assert first["user_count"] == 3
+    assert first["credited_count"] == 3
+    assert second["credited_count"] == 0
+    assert second["already_credited_count"] == 3
+    assert wallet_service.balance_cents(10) == 250
+    assert wallet_service.balance_cents(20) == 375
+    assert wallet_service.balance_cents(30) == 250
+
+
+def test_bulk_wallet_credit_rejects_invalid_amount(mock_mongodb):
+    with pytest.raises(ValueError, match="compris entre"):
+        wallet_service.credit_all_users(0, "bulk_credit_test_456", 999)
