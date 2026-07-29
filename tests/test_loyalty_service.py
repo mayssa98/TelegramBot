@@ -18,10 +18,10 @@ def _paid_order(conn, order_id, user_id, amount):
 
 def test_levels_match_spend_thresholds(mock_mongodb):
     expected = [
-        (25, "bronze", 8),
-        (70, "silver", 16),
-        (200, "platinum", 24),
-        (500, "diamond", 30),
+        (25, "bronze", 3),
+        (70, "silver", 6),
+        (200, "platinum", 9),
+        (500, "diamond", 12),
     ]
     for index, (amount, level, discount) in enumerate(expected, start=1):
         user_id = 1000 + index
@@ -46,6 +46,7 @@ def test_existing_seven_day_level_is_capped_to_three_days(mock_mongodb):
     benefit = loyalty_service.active_benefit(77)
 
     assert benefit["expires_at"] <= now + 2 * 86400
+    assert benefit["discount_percent"] == 3
 
 def test_active_level_discount_is_applied_to_new_order(mock_mongodb):
     db.add_service("AI", "🤖")
@@ -56,8 +57,8 @@ def test_active_level_discount_is_applied_to_new_order(mock_mongodb):
     order = order_service.create_order(42, db.get_offer(offer_id))
 
     assert order["loyalty_level"] == "silver"
-    assert order["loyalty_discount_percent"] == 16
-    assert order["total_price"] == 84.0
+    assert order["loyalty_discount_percent"] == 6
+    assert order["total_price"] == 94.0
 
 
 def test_expired_level_has_no_discount(mock_mongodb):

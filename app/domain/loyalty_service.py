@@ -8,10 +8,10 @@ import database as db
 from app.constants import PAID_STATUSES
 
 LEVELS = (
-    ("bronze", 25.0, 8),
-    ("silver", 70.0, 16),
-    ("platinum", 200.0, 24),
-    ("diamond", 500.0, 30),
+    ("bronze", 25.0, 3),
+    ("silver", 70.0, 6),
+    ("platinum", 200.0, 9),
+    ("diamond", 500.0, 12),
 )
 LEVEL_DURATION_SECONDS = 3 * 24 * 60 * 60
 
@@ -86,9 +86,13 @@ def active_benefit(user_id: int) -> dict[str, Any]:
         expires_at = min(expires_at, int(row["activated_at"]) + LEVEL_DURATION_SECONDS)
     if expires_at <= int(time.time()):
         return {"level": None, "discount_percent": 0, "expires_at": None}
+    configured_discount = next(
+        (discount for name, _threshold, discount in LEVELS if name == row.get("level")),
+        0,
+    )
     return {
         "level": row.get("level"),
-        "discount_percent": int(row.get("discount_percent", 0)),
+        "discount_percent": configured_discount,
         "expires_at": expires_at,
     }
 

@@ -302,7 +302,7 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     rendered = query.edit_message_text.await_args.args[0]
     assert "WELCOME TO" in rendered
     assert "1 USDT" in rendered
-    assert "30% OFF" in rendered
+    assert "12% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
 
 @pytest.mark.parametrize(
