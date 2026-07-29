@@ -9,7 +9,6 @@ import database as db
 from config import ADMIN_ID, ADMIN_USERNAME, REQUIRED_CHANNEL
 from i18n import t
 
-
 BUTTON_TEXT_KEYS = {
     "menu_catalog", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
     "menu_support", "menu_lang", "menu_admin", "btn_main_menu", "support_no_order",
@@ -83,18 +82,26 @@ def clean_button_name(value):
 
 
 def offer_button_label(lang, offer):
+    price = offer.get("price")
+    if price is None:
+        price_text = t(lang, "price_tbd")
+    else:
+        price_text = f"{float(price):.2f}".rstrip("0").rstrip(".")
+        price_text = f"{price_text} {offer.get('currency') or 'USDT'}"
     if offer.get("unlimited_stock"):
         stock_text = f"{t(lang, 'stock_label').title()}: ∞"
-        max_name_length = max(8, 64 - len(stock_text) - 3)
+        suffix = f"{price_text} | {stock_text}"
+        max_name_length = max(8, 64 - len(suffix) - 3)
         name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
-        return f"{name} | {stock_text}"
+        return f"{name} | {suffix}"
     stock = int(offer.get("stock") or 0)
     stock_text = f"{t(lang, 'stock_label').title()}: {stock}"
     # Telegram limits button labels to 64 characters. Always reserve room for
-    # the live stock quantity so a long offer name can never hide it.
-    max_name_length = max(8, 64 - len(stock_text) - 3)
+    # the price and live stock quantity so a long name can never hide them.
+    suffix = f"{price_text} | {stock_text}"
+    max_name_length = max(8, 64 - len(suffix) - 3)
     name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
-    return f"{name} | {stock_text}"
+    return f"{name} | {suffix}"
 
 
 def lang_keyboard():

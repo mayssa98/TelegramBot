@@ -49,7 +49,7 @@ def test_offer_button_label_uses_store_style():
         },
     )
 
-    assert label == "SuperGrok 12 Months | Stock: 12"
+    assert label == "SuperGrok 12 Months | 30 USDT | Stock: 12"
 
 
 def test_offer_button_label_uses_sky_blue_for_low_stock():
@@ -63,13 +63,15 @@ def test_offer_button_label_uses_sky_blue_for_low_stock():
         },
     )
 
-    assert label == "Low Stock Product | Stock: 2"
+    assert label == "Low Stock Product | 5 USDT | Stock: 2"
 
 
-def test_offer_button_always_keeps_live_stock_visible_with_long_name():
-    label = offer_button_label("en", {"name": "A" * 100, "stock": 35})
+def test_offer_button_always_keeps_price_and_live_stock_visible_with_long_name():
+    label = offer_button_label(
+        "en", {"name": "A" * 100, "price": 2.5, "stock": 35},
+    )
 
-    assert label.endswith("| Stock: 35")
+    assert label.endswith("| 2.5 USDT | Stock: 35")
     assert len(label) <= 64
 
 
@@ -181,7 +183,7 @@ def test_offer_button_label_truncates_long_names():
         },
     )
 
-    assert label.endswith("| Stock: 0")
+    assert label.endswith("| 2.5 USDT | Stock: 0")
     assert len(label) <= 64
 
 
@@ -189,13 +191,14 @@ def test_offer_button_uses_admin_selected_animated_emoji(monkeypatch):
     monkeypatch.setattr(kb.db, "list_offers", lambda _service_id: [{
         "id": 8,
         "name": "Premium",
+        "price": 5,
         "stock": 2,
         "custom_emoji_id": "admin-selected-id",
     }])
 
     button = kb.offers_keyboard("en", 1).inline_keyboard[0][0]
 
-    assert button.text == "Premium | Stock: 2"
+    assert button.text == "Premium | 5 USDT | Stock: 2"
     assert button.icon_custom_emoji_id == "admin-selected-id"
 
 
