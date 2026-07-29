@@ -294,16 +294,17 @@ class handler(BaseHTTPRequestHandler):
             try:
                 result = reseller_service.detect_supplier_price_changes()
                 announced = 0
+                db.set_setting("price_cron_last_run_at", int(time.time()))
+                db.set_setting("price_cron_last_status", "announcing")
+                db.set_setting("price_cron_last_checked", int(result["checked"]))
+                db.set_setting("price_cron_last_changes", len(result["changes"]))
+                db.set_setting("price_cron_last_flash_sales", len(result["flash_sales"]))
                 for event in result["flash_sales"]:
                     announced += _loop.run_until_complete(
                         announce_api_flash_sale(_application(), event)
                     )
                 result["announced_messages"] = announced
-                db.set_setting("price_cron_last_run_at", int(time.time()))
                 db.set_setting("price_cron_last_status", "ok" if result["ok"] else "partial")
-                db.set_setting("price_cron_last_checked", int(result["checked"]))
-                db.set_setting("price_cron_last_changes", len(result["changes"]))
-                db.set_setting("price_cron_last_flash_sales", len(result["flash_sales"]))
                 db.set_setting("price_cron_last_announced", announced)
                 self._reply(200 if result["ok"] else 207, result)
             except Exception as exc:
