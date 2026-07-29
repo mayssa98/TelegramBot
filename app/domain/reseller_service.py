@@ -425,6 +425,50 @@ def detect_restock_events() -> dict[str, Any]:
     }
 
 
+def detect_supplier_price_changes() -> dict[str, Any]:
+    """Refresh API prices while preserving each configured markup percentage."""
+    configured = {
+        PROVIDER: bool(MAILREADER_API_KEY),
+        SHAMEKH_PROVIDER: bool(SHAMEKH_API_KEY),
+        KAKAO_PROVIDER: bool(KAKAO_API_KEY),
+        VEX_PROVIDER: bool(VEX_API_KEY),
+    }
+    changes: list[dict[str, Any]] = []
+    flash_sales: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    checked = 0
+
+    for provider in sorted(SUPPORTED_PROVIDERS):
+        if not configured[provider]:
+            continue
+        try:
+            live_catalog = catalog(provider)
+        except (ResellerApiError, ValueError) as exc:
+            errors.append({"provider": provider, "error": str(exc)})
+            continue
+        for product in live_catalog["products"]:
+            if not product.get("enabled") or not product.get("local_offer_id"):
+                continue
+            checked += 1
+            change = db.sync_reseller_supplier_price(
+                provider, product["id"], product["wholesale_price"],
+            )
+            if not change:
+                continue
+            change.update({"provider": provider, "product_id": product["id"]})
+            changes.append(change)
+            if change["decreased"]:
+                flash_sales.append(change)
+
+    return {
+        "ok": not errors,
+        "checked": checked,
+        "changes": changes,
+        "flash_sales": flash_sales,
+        "errors": errors,
+    }
+
+
 def save_product(
     product_id: str,
     *,

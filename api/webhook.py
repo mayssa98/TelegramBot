@@ -31,7 +31,7 @@ from api.dashboard import render_dashboard
 from app import __version__
 from app.domain import inventory_service, order_service, reseller_service, support_service
 from app.web import dashboard_api
-from bot import announce_channel_restock, build_app
+from bot import announce_api_flash_sale, announce_channel_restock, build_app
 from config import BOT_TOKEN, CURRENCY, DASHBOARD_PASSWORD
 from payment_verifier import binance_healthcheck
 
@@ -282,6 +282,34 @@ class handler(BaseHTTPRequestHandler):
                 log.exception("Automatic reseller stock check failed")
                 db.set_setting("stock_cron_last_run_at", int(time.time()))
                 db.set_setting("stock_cron_last_status", "failed")
+                self._reply(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/cron/prices":
+            expected = os.environ.get("CRON_SECRET", "").strip()
+            supplied = self.headers.get("Authorization", "")
+            if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                result = reseller_service.detect_supplier_price_changes()
+                announced = 0
+                for event in result["flash_sales"]:
+                    announced += _loop.run_until_complete(
+                        announce_api_flash_sale(_application(), event)
+                    )
+                result["announced_messages"] = announced
+                db.set_setting("price_cron_last_run_at", int(time.time()))
+                db.set_setting("price_cron_last_status", "ok" if result["ok"] else "partial")
+                db.set_setting("price_cron_last_checked", int(result["checked"]))
+                db.set_setting("price_cron_last_changes", len(result["changes"]))
+                db.set_setting("price_cron_last_flash_sales", len(result["flash_sales"]))
+                db.set_setting("price_cron_last_announced", announced)
+                self._reply(200 if result["ok"] else 207, result)
+            except Exception as exc:
+                log.exception("Automatic reseller price check failed")
+                db.set_setting("price_cron_last_run_at", int(time.time()))
+                db.set_setting("price_cron_last_status", "failed")
                 self._reply(500, {"ok": False, "error": str(exc)})
             return
 

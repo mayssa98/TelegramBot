@@ -595,6 +595,49 @@ async def announce_flash_sale(context, offer_id):
     return sent
 
 
+async def announce_api_flash_sale(context, event):
+    """Broadcast a supplier-driven price drop without creating a temporary price."""
+    offer = db.get_offer(int(event["offer_id"]))
+    if not offer or not offer.get("active", 1) or not db.offer_has_stock(offer):
+        return 0
+    service = db.get_service(offer["service_id"]) or {}
+    old_price = float(event["previous_price"])
+    new_price = float(event["price"])
+    discount_percent = round(((old_price - new_price) / old_price) * 100) if old_price else 0
+    sent = 0
+    for user in db.list_broadcast_users():
+        user_id = user.get("telegram_id")
+        if not user_id:
+            continue
+        lang = user.get("lang") or DEFAULT_LANG
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=premium_customer_text(
+                    lang,
+                    "api_flash_sale_announcement",
+                    emoji=service.get("emoji") or "🔥",
+                    service=service.get("name") or SHOP_NAME,
+                    offer=offer.get("name") or f"Offer #{offer['id']}",
+                    old_price=f"{old_price:.2f}",
+                    price=f"{new_price:.2f}",
+                    cur=CURRENCY,
+                    discount=discount_percent,
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.offer_detail_keyboard(lang, offer),
+            )
+            sent += 1
+        except Exception as exc:
+            message = str(exc).lower()
+            if "blocked" in message or "chat not found" in message or "deactivated" in message:
+                db.mark_broadcast_blocked(user_id)
+            else:
+                log.warning("API flash-sale broadcast failed for user %s: %s", user_id, exc)
+        await asyncio.sleep(0.04)
+    return sent
+
+
 async def broadcast_admin_message(context, source_chat_id, message_id):
     """Copy an admin-authored Telegram message to every active bot user."""
     sent = 0

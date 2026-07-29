@@ -714,6 +714,87 @@ def observe_reseller_stock(provider, product_id, stock):
     return max(0, int(previous["supplier_stock_seen"]))
 
 
+def sync_reseller_supplier_price(provider, product_id, wholesale_price):
+    """Keep the configured markup percentage when a supplier price changes."""
+    collection = get_conn().reseller_products
+    config = collection.find_one({
+        "provider": str(provider),
+        "product_id": str(product_id),
+        "enabled": True,
+        "local_offer_id": {"$ne": None},
+    })
+    if not config:
+        return None
+    offer = get_conn().offers.find_one({"id": int(config["local_offer_id"])})
+    if not offer or offer.get("flash_sale_active"):
+        return None
+
+    new_wholesale = max(0.0, float(wholesale_price))
+    previous_wholesale = float(
+        config.get("supplier_price_seen")
+        if config.get("supplier_price_seen") is not None
+        else config.get("wholesale_price") or 0
+    )
+    previous_retail = float(config.get("retail_price") or offer.get("price") or 0)
+    markup_percent = config.get("profit_markup_percent")
+    if markup_percent is None:
+        markup_percent = (
+            ((previous_retail / previous_wholesale) - 1) * 100
+            if previous_wholesale > 0
+            else 0.0
+        )
+    markup_percent = max(0.0, float(markup_percent))
+    now = int(time.time())
+
+    # Supplier adapters normalize missing/malformed prices to zero. Never turn
+    # a paid offer into a free product because of an incomplete API response.
+    if new_wholesale <= 0 < previous_wholesale:
+        collection.update_one(
+            {"_id": config["_id"]},
+            {"$set": {"supplier_price_checked_at": now}},
+        )
+        return None
+
+    if previous_wholesale == new_wholesale:
+        collection.update_one(
+            {"_id": config["_id"]},
+            {"$set": {
+                "supplier_price_seen": new_wholesale,
+                "supplier_price_checked_at": now,
+                "profit_markup_percent": markup_percent,
+            }},
+        )
+        return None
+
+    new_retail = round(new_wholesale * (1 + markup_percent / 100), 2)
+    if new_wholesale > 0 and new_retail <= new_wholesale:
+        new_retail = round(new_wholesale + 0.01, 2)
+    collection.update_one(
+        {"_id": config["_id"]},
+        {"$set": {
+            "wholesale_price": new_wholesale,
+            "supplier_price_seen": new_wholesale,
+            "supplier_price_checked_at": now,
+            "profit_markup_percent": markup_percent,
+            "retail_price": new_retail,
+            "updated_at": now,
+        }},
+    )
+    get_conn().offers.update_one(
+        {"id": int(config["local_offer_id"])},
+        {"$set": {"price": new_retail}},
+    )
+    return {
+        "offer_id": int(config["local_offer_id"]),
+        "previous_wholesale": previous_wholesale,
+        "wholesale_price": new_wholesale,
+        "previous_price": previous_retail,
+        "price": new_retail,
+        "markup_percent": markup_percent,
+        "decreased": new_wholesale < previous_wholesale and new_retail < previous_retail,
+    }
+
+
 def save_reseller_product_config(
     provider,
     product_id,
@@ -736,6 +817,11 @@ def save_reseller_product_config(
 ):
     """Persist retail pricing and visibility without storing supplier secrets."""
     now = int(time.time())
+    markup_percent = (
+        max(0.0, ((float(retail_price) / float(wholesale_price)) - 1) * 100)
+        if float(wholesale_price) > 0
+        else 0.0
+    )
     get_conn().reseller_products.update_one(
         {"provider": str(provider), "product_id": str(product_id)},
         {
@@ -744,6 +830,7 @@ def save_reseller_product_config(
                 "wholesale_price": float(wholesale_price),
                 "currency": str(currency or "USDT")[:12],
                 "retail_price": float(retail_price),
+                "profit_markup_percent": markup_percent,
                 "enabled": bool(enabled),
                 "service_id": int(service_id) if service_id is not None else None,
                 "local_offer_id": int(local_offer_id) if local_offer_id is not None else None,

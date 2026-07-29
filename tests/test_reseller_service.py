@@ -451,3 +451,52 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
         "added": 4,
     }]
     assert reseller_service.detect_restock_events()["events"] == []
+
+
+def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
+    monkeypatch, mock_mongodb,
+):
+    service_id = db.add_service("API prices", "🔥")
+    offer_id = db.add_offer(
+        service_id, "API plan", 15.0, 8,
+        supplier_provider="mailreader", supplier_product_id="sku-price",
+    )
+    db.save_reseller_product_config(
+        "mailreader",
+        "sku-price",
+        name="API plan",
+        wholesale_price=10.0,
+        currency="USDT",
+        retail_price=15.0,
+        enabled=True,
+        service_id=service_id,
+        local_offer_id=offer_id,
+    )
+    wholesale = {"value": 10.0}
+
+    monkeypatch.setattr(reseller_service, "MAILREADER_API_KEY", "configured")
+    monkeypatch.setattr(reseller_service, "SHAMEKH_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
+    monkeypatch.setattr(
+        reseller_service,
+        "catalog",
+        lambda _provider: {
+            "products": [{
+                "id": "sku-price",
+                "enabled": True,
+                "local_offer_id": offer_id,
+                "wholesale_price": wholesale["value"],
+            }]
+        },
+    )
+
+    assert reseller_service.detect_supplier_price_changes()["changes"] == []
+    wholesale["value"] = 8.0
+    result = reseller_service.detect_supplier_price_changes()
+
+    assert len(result["flash_sales"]) == 1
+    assert result["flash_sales"][0]["markup_percent"] == 50.0
+    assert result["flash_sales"][0]["previous_price"] == 15.0
+    assert result["flash_sales"][0]["price"] == 12.0
+    assert db.get_offer(offer_id)["price"] == 12.0

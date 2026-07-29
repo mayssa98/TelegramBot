@@ -209,6 +209,11 @@ TRANSLATIONS = {
         "en": "⚡ *FLASH SALE — LIMITED TIME*\n\n{emoji} *{offer}*\nOld price: *{old_price} {cur}*\n🔥 Flash price: *{price} {cur}*\n\n⌛ Ends in *{remaining}*\n\nTap below to buy instantly. Delivery is automatic.",
         "ar": "⚡ *تخفيض سريع — لفترة محدودة*\n\n{emoji} *{offer}*\nالسعر السابق: *{old_price} {cur}*\n🔥 سعر العرض: *{price} {cur}*\n\n⌛ ينتهي خلال *{remaining}*\n\nاضغط أدناه للشراء فوراً. التسليم تلقائي.",
     },
+    "api_flash_sale_announcement": {
+        "fr": "🔥 *FLASH SALE — BAISSE DE PRIX API*\n\n{emoji} *{service} — {offer}*\nAncien prix : *{old_price} {cur}*\n⚡ Nouveau prix : *{price} {cur}*\n🎯 Réduction : *{discount}%*\n\nCommandez avant la prochaine variation de prix !",
+        "en": "🔥 *FLASH SALE — API PRICE DROP*\n\n{emoji} *{service} — {offer}*\nOld price: *{old_price} {cur}*\n⚡ New price: *{price} {cur}*\n🎯 Discount: *{discount}%*\n\nOrder before the next price change!",
+        "ar": "🔥 *FLASH SALE — API PRICE DROP*\n\n{emoji} *{service} — {offer}*\nOld price: *{old_price} {cur}*\n⚡ New price: *{price} {cur}*\n🎯 Discount: *{discount}%*\n\nOrder before the next price change!",
+    },
     "offer_stock_announcement": {
         "fr": "📣 *OFFRE DISPONIBLE*\n\n{emoji} *{service} — {offer}*\n💎 Prix actuel : *{price} {cur}*\n📦 Stock disponible : *{stock} compte(s)*\n\n⚡ Commandez directement avant la rupture de stock !",
         "en": "📣 *AVAILABLE OFFER*\n\n{emoji} *{service} — {offer}*\n💎 Current price: *{price} {cur}*\n📦 Available stock: *{stock} account(s)*\n\n⚡ Order directly before it sells out!",
