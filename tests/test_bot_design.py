@@ -8,19 +8,19 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from telegram.constants import ParseMode
 
-import keyboards as kb
 import database as db
+import keyboards as kb
 from app.domain import affiliate_service
 from bot import (
     AUTO_PAYMENT_MESSAGES,
     AUTO_PAYMENT_TASKS,
     AUTO_TOPUP_TASKS,
-    announce_flash_sale,
-    announce_channel_restock,
+    PENDING,
     announce_channel_purchase,
+    announce_channel_restock,
+    announce_flash_sale,
     broadcast_admin_message,
     broadcast_maintenance_notice,
-    PENDING,
     cb_admin,
     cb_navigation,
     cmd_start,
@@ -29,19 +29,19 @@ from bot import (
     custom_emojis_from_message,
     handle_buy_confirmed,
     handle_pending_input,
-    text_without_custom_emojis,
-    text_with_custom_emoji_tokens,
+    notify_admin_interaction,
+    notify_successful_referral,
+    numbered_delivery_content,
+    on_text_menu,
     order_service_groups,
     orders_text_export,
-    numbered_delivery_content,
-    notify_successful_referral,
-    notify_admin_interaction,
-    on_text_menu,
     payment_scanner_frame,
     premium_customer_text,
     rich_text_from_message,
     send_main_menu,
     stop_auto_payment_check,
+    text_with_custom_emoji_tokens,
+    text_without_custom_emojis,
 )
 from i18n import t
 
@@ -933,6 +933,16 @@ def test_topup_verification_keyboard_offers_txid_fallback(mock_mongodb):
     callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
 
     assert callbacks == ["topup_txid", "home"]
+
+
+def test_topup_keyboard_offers_bsc_and_polygon(mock_mongodb):
+    callbacks = [
+        button.callback_data
+        for row in kb.topup_keyboard("en").inline_keyboard
+        for button in row
+    ]
+
+    assert callbacks == ["topup_claim", "topup_bsc", "topup_polygon", "home"]
 
 
 def test_topup_claim_starts_automatic_scan(monkeypatch, mock_mongodb):

@@ -26,6 +26,23 @@ def test_topup_txid_cannot_be_used_twice(mock_mongodb, monkeypatch):
     assert wallet_service.claim_transfer(99, "TXID_UNIQUE_123")["code"] == "already_used"
 
 
+def test_onchain_topup_requires_admin_approval_before_credit(mock_mongodb):
+    submitted = wallet_service.submit_onchain_topup(
+        42, "0x" + "a" * 64, 8.5, "polygon",
+    )
+
+    assert submitted["status"] == "manual_review"
+    assert wallet_service.balance_cents(42) == 0
+
+    approved = wallet_service.approve_onchain_topup(submitted["id"], 999)
+
+    assert approved["status"] == "confirmed"
+    assert approved["balance"] == 8.5
+    assert wallet_service.balance_cents(42) == 850
+    assert wallet_service.approve_onchain_topup(submitted["id"], 999) is None
+    assert wallet_service.balance_cents(42) == 850
+
+
 def test_wallet_pays_order_and_reduces_external_total(mock_mongodb):
     db.add_service("AI", "🤖")
     offer_id = db.add_offer(1, "Premium", 10.0, 1)

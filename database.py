@@ -78,6 +78,7 @@ def init_db():
     db.referrals.create_index("referrer_id")
     db.wallets.create_index("user_id", unique=True)
     db.wallet_topups.create_index("txid", unique=True)
+    db.wallet_topups.create_index("id", unique=True, sparse=True)
     db.affiliate_rewards.create_index([("referrer_id", ASCENDING), ("milestone", ASCENDING)], unique=True)
     db.loyalty.create_index("user_id", unique=True)
     db.pending_states.create_index("user_id", unique=True)

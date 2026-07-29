@@ -933,6 +933,8 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_txid",
         "await_onchain_txid",
         "await_topup_txid",
+        "await_onchain_topup_amount",
+        "await_onchain_topup_txid",
         "await_quantity",
         "catalog_request",
         "adm_setprice",
@@ -1079,6 +1081,16 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 AUTO_TOPUP_MESSAGES.pop(user_id, None)
 
         task.add_done_callback(cleanup_topup_scan)
+        return
+    if data in {"topup_bsc", "topup_polygon"}:
+        await stop_auto_topup_check(uid)
+        network = "bsc" if data == "topup_bsc" else "polygon"
+        network_label = "BSC (BEP20)" if network == "bsc" else "Polygon"
+        PENDING[uid] = ("await_onchain_topup_amount", network)
+        await q.message.reply_text(
+            t(lang, "topup_onchain_amount", network=network_label),
+            parse_mode=ParseMode.MARKDOWN,
+        )
         return
     if data == "topup_txid":
         await stop_auto_topup_check(uid)
@@ -1788,6 +1800,69 @@ async def handle_pending_input(update, context, lang):
             )
         return
 
+    if kind == "await_onchain_topup_amount":
+        try:
+            amount = round(float(text.replace(",", ".")), 2)
+            if amount < 1:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text("⚠️ Enter a valid amount of at least 1 USDT.")
+            return
+        network = str(ref)
+        network_label = "BSC (BEP20)" if network == "bsc" else "Polygon"
+        contract_warning = (
+            "Verify that the USDT contract address ends in *97955*."
+            if network == "bsc"
+            else "Verify that the USDT contract address ends in *58e8f*."
+        )
+        PENDING[uid] = (
+            "await_onchain_topup_txid",
+            {"network": network, "amount": amount},
+        )
+        await update.message.reply_text(
+            t(
+                lang, "topup_onchain_instructions",
+                network=network_label,
+                amount=f"{amount:.2f}",
+                address=USDT_EVM_ADDRESS,
+                contract_warning=contract_warning,
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if kind == "await_onchain_topup_txid":
+        result = await asyncio.to_thread(
+            wallet_service.submit_onchain_topup,
+            uid, text, float(ref["amount"]), str(ref["network"]),
+        )
+        if result["status"] != "manual_review":
+            await update.message.reply_text(result.get("message") or "Invalid transaction ID.")
+            return
+        PENDING.pop(uid, None)
+        network_label = "BSC (BEP20)" if result["network"] == "bsc" else "Polygon"
+        await update.message.reply_text(
+            t(
+                lang, "topup_onchain_submitted",
+                amount=f"{result['amount']:.2f}", network=network_label,
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.home_keyboard(lang, uid),
+        )
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                ADMIN_ID,
+                "🔎 <b>Wallet top-up review</b>\n"
+                f"Request: <b>#{result['id']}</b>\n"
+                f"User: <code>{uid}</code>\n"
+                f"Network: <b>{network_label}</b>\n"
+                f"Claimed amount: <b>{result['amount']:.2f} USDT</b>\n"
+                f"TXID: <code>{html.escape(result['txid'])}</code>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.topup_review_keyboard(result["id"]),
+            )
+        return
+
     # --- Admin : prix ---
     if kind == "adm_setprice" and uid == ADMIN_ID:
         try:
@@ -2331,6 +2406,59 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🛠️ *Panneau Admin*",
             reply_markup=admin.admin_panel_keyboard(),
         )
+        return
+
+    if data.startswith("adm_topup_approve:"):
+        topup_id = int(data.split(":", 1)[1])
+        approved = wallet_service.approve_onchain_topup(topup_id, uid)
+        if not approved:
+            await q.edit_message_text("⚠️ This top-up was already processed or no longer exists.")
+            return
+        amount = int(approved["amount_cents"]) / 100
+        customer_id = int(approved["user_id"])
+        await q.edit_message_text(
+            "✅ <b>Wallet top-up approved</b>\n"
+            f"Request: <b>#{topup_id}</b>\n"
+            f"User: <code>{customer_id}</code>\n"
+            f"Credited: <b>{amount:.2f} USDT</b>",
+            parse_mode=ParseMode.HTML,
+        )
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                customer_id,
+                premium_customer_text(
+                    lang_of(customer_id),
+                    "topup_onchain_approved",
+                    amount=f"{amount:.2f}",
+                    balance=f"{float(approved['balance']):.2f}",
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.home_keyboard(lang_of(customer_id), customer_id),
+            )
+        return
+
+    if data.startswith("adm_topup_reject:"):
+        topup_id = int(data.split(":", 1)[1])
+        rejected = wallet_service.reject_onchain_topup(topup_id, uid)
+        if not rejected:
+            await q.edit_message_text("⚠️ This top-up was already processed or no longer exists.")
+            return
+        customer_id = int(rejected["user_id"])
+        await q.edit_message_text(
+            "❌ <b>Wallet top-up rejected</b>\n"
+            f"Request: <b>#{topup_id}</b>\n"
+            f"User: <code>{customer_id}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                customer_id,
+                premium_customer_text(
+                    lang_of(customer_id), "topup_onchain_rejected",
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.support_keyboard(lang_of(customer_id)),
+            )
         return
 
     if data == "adm_user_activity":

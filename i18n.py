@@ -77,6 +77,41 @@ TRANSLATIONS = {
     },
     "topup_claim": {"fr": "✅ Verify Payment", "en": "✅ Verify Payment", "ar": "✅ Verify Payment"},
     "topup_verify_txid": {"fr": "🧾 Verify with TXID", "en": "🧾 Verify with TXID", "ar": "🧾 Verify with TXID"},
+    "topup_bsc": {
+        "fr": "🟨 Recharger via USDT BSC",
+        "en": "🟨 Top up via USDT BSC",
+        "ar": "🟨 Top up via USDT BSC",
+    },
+    "topup_polygon": {
+        "fr": "🟪 Recharger via USDT Polygon",
+        "en": "🟪 Top up via USDT Polygon",
+        "ar": "🟪 Top up via USDT Polygon",
+    },
+    "topup_onchain_amount": {
+        "fr": "💰 Entrez le montant à ajouter à votre portefeuille via USDT {network} (minimum 1 USDT) :",
+        "en": "💰 Enter the amount to add to your wallet via USDT {network} (minimum 1 USDT):",
+        "ar": "💰 Enter the amount to add to your wallet via USDT {network} (minimum 1 USDT):",
+    },
+    "topup_onchain_instructions": {
+        "fr": "💳 *RECHARGEMENT USDT — {network}*\n\nEnvoyez exactement *{amount} USDT* à :\n`{address}`\n\n⚠️ Utilisez uniquement le réseau *{network}*.\n{contract_warning}\n\nAprès le transfert, envoyez ici le hash/TXID. Le solde sera crédité après vérification administrative.",
+        "en": "💳 *USDT TOP UP — {network}*\n\nSend exactly *{amount} USDT* to:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\n\nAfter transferring, send the hash/transaction ID here. Your wallet is credited after administrator verification.",
+        "ar": "💳 *USDT TOP UP — {network}*\n\nSend exactly *{amount} USDT* to:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\n\nAfter transferring, send the hash/transaction ID here. Your wallet is credited after administrator verification.",
+    },
+    "topup_onchain_submitted": {
+        "fr": "🔎 *Rechargement soumis*\n\nMontant : *{amount} USDT*\nRéseau : *{network}*\nVotre demande attend la vérification administrative. Le solde n’est pas encore crédité.",
+        "en": "🔎 *Top up submitted*\n\nAmount: *{amount} USDT*\nNetwork: *{network}*\nYour request is awaiting administrator verification. The balance has not been credited yet.",
+        "ar": "🔎 *Top up submitted*\n\nAmount: *{amount} USDT*\nNetwork: *{network}*\nYour request is awaiting administrator verification. The balance has not been credited yet.",
+    },
+    "topup_onchain_approved": {
+        "fr": "✅ *Rechargement confirmé*\n\nMontant ajouté : *{amount} USDT*\nNouveau solde : *{balance} USDT*",
+        "en": "✅ *Top up confirmed*\n\nAmount added: *{amount} USDT*\nNew balance: *{balance} USDT*",
+        "ar": "✅ *Top up confirmed*\n\nAmount added: *{amount} USDT*\nNew balance: *{balance} USDT*",
+    },
+    "topup_onchain_rejected": {
+        "fr": "❌ Votre rechargement USDT n’a pas été validé. Contactez le support avec votre preuve de paiement.",
+        "en": "❌ Your USDT top up was not approved. Contact support with your payment proof.",
+        "ar": "❌ Your USDT top up was not approved. Contact support with your payment proof.",
+    },
     "topup_home_button": {"fr": "🏠 Home", "en": "🏠 Home", "ar": "🏠 Home"},
     "topup_ask_txid": {
         "fr": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
