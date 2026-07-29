@@ -315,6 +315,57 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
     return result
 
 
+def submit_onchain_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
+    """Save a BSC/Polygon transaction for administrator verification."""
+    try:
+        txid = validate_txid_format(txid)
+        check_txid_uniqueness(txid, order_id)
+    except TxidValidationError as exc:
+        return {"status": "failed", "error_code": exc.code, "error_message": exc.message}
+
+    order = db.get_order(order_id)
+    if not order or order.get("user_id") != user_id:
+        return {
+            "status": "failed",
+            "error_code": "not_owner",
+            "error_message": "Commande introuvable ou non autorisée.",
+        }
+    if order.get("payment_method") not in {"usdt_bsc", "usdt_polygon"}:
+        return {
+            "status": "failed",
+            "error_code": "wrong_payment_method",
+            "error_message": "Cette commande n'utilise pas un paiement blockchain.",
+        }
+    if order.get("status") not in {
+        OrderStatus.PENDING_PAYMENT,
+        OrderStatus.AWAITING_VERIFICATION,
+        OrderStatus.VERIFICATION_FAILED,
+    }:
+        return {
+            "status": "failed",
+            "error_code": "invalid_status",
+            "error_message": "Cette commande ne peut plus recevoir de transaction.",
+        }
+    if order.get("expires_at") and order["expires_at"] < int(time.time()):
+        from app.domain.order_service import expire_order
+        expire_order(order_id)
+        return {
+            "status": "failed",
+            "error_code": "expired",
+            "error_message": "Cette commande a expiré.",
+        }
+
+    network = "BSC (BEP20)" if order["payment_method"] == "usdt_bsc" else "Polygon"
+    db.update_order(
+        order_id,
+        txid=txid,
+        status=OrderStatus.AWAITING_VERIFICATION,
+        verify_method=f"manual_{order['payment_method']}",
+    )
+    mark_manual_review(order_id, f"USDT {network} — TXID: {txid}")
+    return {"status": "manual_review", "order": db.get_order(order_id), "network": network}
+
+
 def auto_check_payment(order_id: int, user_id: int) -> dict[str, Any]:
     result: dict[str, Any] = {
         "status": "failed",

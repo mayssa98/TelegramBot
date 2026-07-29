@@ -21,6 +21,10 @@ REQUIRED_CHANNEL: str = os.environ.get("HP_REQUIRED_CHANNEL", "@blackmarketBotCh
 # Paiement Binance Pay
 # ---------------------------------------------------------------------------
 BINANCE_PAY_ID: str = os.environ.get("HP_BINANCE_PAY_ID", "")
+USDT_EVM_ADDRESS: str = os.environ.get(
+    "HP_USDT_EVM_ADDRESS",
+    "0x6529804d712d5ef4bef5c60af4a3683bd7300411",
+).strip()
 
 # ---------------------------------------------------------------------------
 # Vérification automatique via Binance API (lecture seule)

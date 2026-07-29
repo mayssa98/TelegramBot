@@ -5,7 +5,6 @@ Usage : t(lang, "key", **kwargs)
 import contextlib
 import re
 
-
 CUSTOM_EMOJI_TOKEN_RE = re.compile(r"\[\[TGEMOJI:[0-9A-Za-z_-]+:[0-9a-fA-F]+\]\]")
 
 
@@ -383,6 +382,36 @@ TRANSLATIONS = {
         "fr": "🟡 Payer avec Binance Pay",
         "en": "🟡 Pay with Binance Pay",
         "ar": "🟡 الدفع عبر Binance Pay",
+    },
+    "btn_pay_bsc": {
+        "fr": "🟨 USDT — BSC (BEP20)",
+        "en": "🟨 USDT — BSC (BEP20)",
+        "ar": "🟨 USDT — BSC (BEP20)",
+    },
+    "btn_pay_polygon": {
+        "fr": "🟪 USDT — Polygon",
+        "en": "🟪 USDT — Polygon",
+        "ar": "🟪 USDT — Polygon",
+    },
+    "btn_submit_chain_txid": {
+        "fr": "🧾 Envoyer le TXID",
+        "en": "🧾 Submit transaction ID",
+        "ar": "🧾 Submit transaction ID",
+    },
+    "onchain_order_created": {
+        "fr": "💳 *PAIEMENT USDT — {network}*\n\n🛍️ Produit : *{offer}*\n📦 Quantité : *{qty}*\n🚨 Envoyez exactement : *{total} USDT*\n\n📍 Adresse :\n`{address}`\n\n⚠️ Utilisez uniquement le réseau *{network}*.\n{contract_warning}\nUne transaction envoyée sur un autre réseau peut être définitivement perdue.\n\nCommande : *#{oid}*",
+        "en": "💳 *USDT PAYMENT — {network}*\n\n🛍️ Product: *{offer}*\n📦 Quantity: *{qty}*\n🚨 Send exactly: *{total} USDT*\n\n📍 Address:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\nA transfer sent through another network may be permanently lost.\n\nOrder: *#{oid}*",
+        "ar": "💳 *USDT PAYMENT — {network}*\n\n🛍️ Product: *{offer}*\n📦 Quantity: *{qty}*\n🚨 Send exactly: *{total} USDT*\n\n📍 Address:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\nA transfer sent through another network may be permanently lost.\n\nOrder: *#{oid}*",
+    },
+    "ask_onchain_txid": {
+        "fr": "✍️ Envoyez maintenant le hash/TXID de votre transaction USDT {network} pour la commande #{oid}.",
+        "en": "✍️ Send the hash/transaction ID of your USDT {network} transfer for order #{oid}.",
+        "ar": "✍️ Send the hash/transaction ID of your USDT {network} transfer for order #{oid}.",
+    },
+    "onchain_payment_submitted": {
+        "fr": "🔎 *Transaction enregistrée*\n\nCommande #{oid} — USDT {network}\nVotre paiement attend maintenant la vérification de l’administrateur. La livraison commencera uniquement après confirmation.",
+        "en": "🔎 *Transaction submitted*\n\nOrder #{oid} — USDT {network}\nYour payment is now awaiting administrator verification. Delivery starts only after confirmation.",
+        "ar": "🔎 *Transaction submitted*\n\nOrder #{oid} — USDT {network}\nYour payment is now awaiting administrator verification. Delivery starts only after confirmation.",
     },
     "onboarding_1": {
         "fr": "✨ *Bienvenue dans l’univers {shop}*\n\nDes services numériques premium, présentés simplement et accessibles en quelques secondes.\n\n`1/3`  Découvrir",

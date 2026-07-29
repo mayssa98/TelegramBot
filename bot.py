@@ -47,6 +47,7 @@ from config import (
     LIVE_STOCK_REFRESH_SECONDS,
     REQUIRED_CHANNEL,
     SHOP_NAME,
+    USDT_EVM_ADDRESS,
     configuration_issues,
 )
 from i18n import TRANSLATIONS, status_label, t
@@ -889,6 +890,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     blocking_states = {
         "await_txid",
+        "await_onchain_txid",
         "await_topup_txid",
         "await_quantity",
         "catalog_request",
@@ -1198,8 +1200,15 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("buyq:"):
         await handle_buy_confirmation(update, context, lang)
         return
-    if data.startswith(("confirm_buy:", "pay_wallet:", "pay_binance:")):
-        payment_method = "wallet" if data.startswith("pay_wallet:") else "binance"
+    if data.startswith((
+        "confirm_buy:", "pay_wallet:", "pay_binance:", "pay_bsc:", "pay_polygon:",
+    )):
+        payment_method = (
+            "wallet" if data.startswith("pay_wallet:")
+            else "usdt_bsc" if data.startswith("pay_bsc:")
+            else "usdt_polygon" if data.startswith("pay_polygon:")
+            else "binance"
+        )
         await handle_buy_confirmed(update, context, lang, payment_method=payment_method)
         return
     if data.startswith("cancel_buy:"):
@@ -1238,6 +1247,23 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(t(lang, "ask_txid", oid=oid),
                                    parse_mode=ParseMode.MARKDOWN)
         return
+    if data.startswith("paid_chain:"):
+        oid = int(data.split(":", 1)[1])
+        order = db.get_order(oid)
+        if not order or order.get("user_id") != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        network = (
+            "BSC (BEP20)"
+            if order.get("payment_method") == "usdt_bsc"
+            else "Polygon"
+        )
+        PENDING[uid] = ("await_onchain_txid", {"order_id": oid, "network": network})
+        await q.message.reply_text(
+            t(lang, "ask_onchain_txid", oid=oid, network=network),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
     if data.startswith("verify_auto:"):
         oid = int(data.split(":", 1)[1])
         order = db.get_order(oid)
@@ -1263,16 +1289,27 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         oid = int(data.split(":")[1])
         order = db.get_order(oid)
         if order and order["user_id"] == uid:
-            text = premium_customer_text(
-                lang, "order_created", oid=oid, service=order["service_name"],
-                offer=order["offer_name"], qty=order["qty"],
-                total=f"{order['total_price']:.2f}", cur=CURRENCY,
-                binance_id=BINANCE_PAY_ID, telegram_id=uid,
+            onchain = order.get("payment_method") in {"usdt_bsc", "usdt_polygon"}
+            text = (
+                onchain_payment_screen(lang, order)
+                if onchain
+                else premium_customer_text(
+                    lang, "order_created", oid=oid, service=order["service_name"],
+                    offer=order["offer_name"], qty=order["qty"],
+                    total=f"{order['total_price']:.2f}", cur=CURRENCY,
+                    binance_id=BINANCE_PAY_ID, telegram_id=uid,
+                )
             )
             await q.message.reply_text(
-                text, parse_mode=ParseMode.HTML,
-                reply_markup=kb.paid_keyboard(
-                    lang, oid, BINANCE_PAY_ID, f"{order['total_price']:.2f}", CURRENCY,
+                text,
+                parse_mode=ParseMode.MARKDOWN if onchain else ParseMode.HTML,
+                reply_markup=(
+                    kb.onchain_payment_keyboard(lang, oid)
+                    if onchain
+                    else kb.paid_keyboard(
+                        lang, oid, BINANCE_PAY_ID,
+                        f"{order['total_price']:.2f}", CURRENCY,
+                    )
                 ),
             )
         return
@@ -1396,6 +1433,22 @@ async def handle_buy_confirmation(update, context, lang):
         await q.message.reply_text(t(lang, "out_of_stock"))
 
 
+def onchain_payment_screen(lang, order):
+    method = order.get("payment_method")
+    network = "BSC (BEP20)" if method == "usdt_bsc" else "Polygon"
+    contract_warning = (
+        "Verify that the USDT contract address ends in *97955*."
+        if method == "usdt_bsc"
+        else "Verify that the USDT contract address ends in *58e8f*."
+    )
+    return t(
+        lang, "onchain_order_created",
+        oid=order["id"], offer=order["offer_name"], qty=order["qty"],
+        total=f"{order['total_price']:.2f}", network=network,
+        address=USDT_EVM_ADDRESS, contract_warning=contract_warning,
+    )
+
+
 async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
     """Cr?e la commande apr?s confirmation de l'utilisateur."""
     q = update.callback_query
@@ -1422,6 +1475,14 @@ async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
         await q.edit_message_text(t(lang, "wallet_payment_processing"), parse_mode=ParseMode.MARKDOWN)
         result = await asyncio.to_thread(payment_service.confirm_wallet_order, order["id"], uid)
         await send_payment_result(q.message, context, lang, order["id"], result, uid)
+        return
+
+    if payment_method in {"usdt_bsc", "usdt_polygon"}:
+        await q.edit_message_text(
+            onchain_payment_screen(lang, order),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.onchain_payment_keyboard(lang, order["id"]),
+        )
         return
 
     text = premium_customer_text(
@@ -1655,6 +1716,37 @@ async def handle_pending_input(update, context, lang):
     if kind == "await_txid":
         await process_txid(update, context, lang, ref, text)
         PENDING.pop(uid, None)
+        return
+
+    if kind == "await_onchain_txid":
+        order_id = int(ref["order_id"])
+        result = await asyncio.to_thread(
+            payment_service.submit_onchain_payment, order_id, text, uid,
+        )
+        if result["status"] != "manual_review":
+            await update.message.reply_text(
+                result.get("error_message") or "Invalid transaction ID.",
+            )
+            return
+        PENDING.pop(uid, None)
+        await update.message.reply_text(
+            t(
+                lang, "onchain_payment_submitted",
+                oid=order_id, network=result["network"],
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.orders_keyboard(lang),
+        )
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                ADMIN_ID,
+                "🔎 <b>On-chain payment review</b>\n"
+                f"Order: <b>#{order_id}</b>\n"
+                f"Network: <b>{html.escape(result['network'])}</b>\n"
+                f"Amount: <b>{float(result['order']['total_price']):.2f} USDT</b>\n"
+                f"TXID: <code>{html.escape(text)}</code>",
+                parse_mode=ParseMode.HTML,
+            )
         return
 
     if kind == "await_topup_txid":
@@ -2620,7 +2712,7 @@ def build_app():
     app.add_handler(
         CallbackQueryHandler(
             block_maintenance_purchases,
-            pattern=r"^(buy|buyq|qty_page|confirm_buy|pay_wallet|pay_binance):",
+            pattern=r"^(buy|buyq|qty_page|confirm_buy|pay_wallet|pay_binance|pay_bsc|pay_polygon):",
         ),
         group=-1,
     )

@@ -36,6 +36,15 @@ def test_quantity_confirmation_keeps_selected_quantity():
 
     assert keyboard.inline_keyboard[0][0].callback_data == "pay_wallet:9:4"
     assert keyboard.inline_keyboard[1][0].callback_data == "pay_binance:9:4"
+    assert keyboard.inline_keyboard[2][0].callback_data == "pay_bsc:9:4"
+    assert keyboard.inline_keyboard[3][0].callback_data == "pay_polygon:9:4"
+
+
+def test_onchain_payment_keyboard_submits_txid_without_auto_confirmation():
+    keyboard = kb.onchain_payment_keyboard("en", 81)
+
+    assert keyboard.inline_keyboard[0][0].callback_data == "paid_chain:81"
+    assert keyboard.inline_keyboard[1][0].callback_data == "cancel_buy:81"
 
 
 def test_offer_button_label_uses_store_style():
@@ -49,7 +58,7 @@ def test_offer_button_label_uses_store_style():
         },
     )
 
-    assert label == "SuperGrok 12 Months | 30 USDT | Stock: 12"
+    assert label == "SuperGrok 12 Months | $30 | Stock: 12"
 
 
 def test_offer_button_label_uses_sky_blue_for_low_stock():
@@ -63,7 +72,16 @@ def test_offer_button_label_uses_sky_blue_for_low_stock():
         },
     )
 
-    assert label == "Low Stock Product | 5 USDT | Stock: 2"
+    assert label == "Low Stock Product | $5 | Stock: 2"
+
+
+def test_offer_button_keeps_non_dollar_currency_visible():
+    label = offer_button_label(
+        "en",
+        {"name": "European plan", "price": 4.5, "currency": "EUR", "stock": 3},
+    )
+
+    assert label == "European plan | 4.5 EUR | Stock: 3"
 
 
 def test_offer_button_always_keeps_price_and_live_stock_visible_with_long_name():
@@ -71,7 +89,7 @@ def test_offer_button_always_keeps_price_and_live_stock_visible_with_long_name()
         "en", {"name": "A" * 100, "price": 2.5, "stock": 35},
     )
 
-    assert label.endswith("| 2.5 USDT | Stock: 35")
+    assert label.endswith("| $2.5 | Stock: 35")
     assert len(label) <= 64
 
 
@@ -183,7 +201,7 @@ def test_offer_button_label_truncates_long_names():
         },
     )
 
-    assert label.endswith("| 2.5 USDT | Stock: 0")
+    assert label.endswith("| $2.5 | Stock: 0")
     assert len(label) <= 64
 
 
@@ -198,7 +216,7 @@ def test_offer_button_uses_admin_selected_animated_emoji(monkeypatch):
 
     button = kb.offers_keyboard("en", 1).inline_keyboard[0][0]
 
-    assert button.text == "Premium | 5 USDT | Stock: 2"
+    assert button.text == "Premium | $5 | Stock: 2"
     assert button.icon_custom_emoji_id == "admin-selected-id"
 
 

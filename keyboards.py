@@ -17,7 +17,8 @@ BUTTON_TEXT_KEYS = {
     "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
-    "btn_pay_binance", "btn_cancel", "btn_continue_payment", "btn_new_order",
+    "btn_pay_binance", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
+    "btn_cancel", "btn_continue_payment", "btn_new_order",
     "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_verify_join", "btn_channel_buy_now",
     "btn_receive_accounts_admin",
 }
@@ -86,8 +87,9 @@ def offer_button_label(lang, offer):
     if price is None:
         price_text = t(lang, "price_tbd")
     else:
-        price_text = f"{float(price):.2f}".rstrip("0").rstrip(".")
-        price_text = f"{price_text} {offer.get('currency') or 'USDT'}"
+        amount = f"{float(price):.2f}".rstrip("0").rstrip(".")
+        currency = str(offer.get("currency") or "USDT").upper()
+        price_text = f"${amount}" if currency in {"USD", "USDT"} else f"{amount} {currency}"
     if offer.get("unlimited_stock"):
         stock_text = f"{t(lang, 'stock_label').title()}: ∞"
         suffix = f"{price_text} | {stock_text}"
@@ -362,7 +364,24 @@ def confirm_buy_keyboard(lang, offer_id, qty=1):
     return InlineKeyboardMarkup([
         [translated_button(lang, "btn_pay_wallet", callback_data=f"pay_wallet:{offer_id}:{qty}")],
         [translated_button(lang, "btn_pay_binance", callback_data=f"pay_binance:{offer_id}:{qty}")],
+        [translated_button(lang, "btn_pay_bsc", callback_data=f"pay_bsc:{offer_id}:{qty}")],
+        [translated_button(lang, "btn_pay_polygon", callback_data=f"pay_polygon:{offer_id}:{qty}")],
         [translated_button(lang, "btn_cancel", callback_data=f"cancel_buy:{offer_id}")],
+    ])
+
+
+def onchain_payment_keyboard(lang, order_id):
+    return InlineKeyboardMarkup([
+        [translated_button(
+            lang, "btn_submit_chain_txid",
+            callback_data=f"paid_chain:{int(order_id)}",
+            style="success",
+        )],
+        [translated_button(
+            lang, "btn_cancel_order",
+            callback_data=f"cancel_buy:{int(order_id)}",
+            style="danger",
+        )],
     ])
 
 

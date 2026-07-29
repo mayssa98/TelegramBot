@@ -6,7 +6,7 @@ import pytest
 
 import database as db
 from app.constants import OrderStatus
-from app.domain import payment_service
+from app.domain import order_service, payment_service
 
 
 @pytest.fixture
@@ -343,3 +343,19 @@ def test_customer_cannot_use_admin_test_payment(mock_mongodb, monkeypatch):
     assert result["status"] == "failed"
     assert result["error_code"] == "not_found"
     assert db.get_order(41)["status"] == OrderStatus.PENDING_PAYMENT
+def test_onchain_payment_is_saved_for_manual_review(mock_mongodb):
+    service_id = db.add_service("VPN", "🔒")
+    offer_id = db.add_offer(service_id, "VPN plan", 5.0, 2)
+    order = order_service.create_order(
+        42, db.get_offer(offer_id), payment_method="usdt_bsc",
+    )
+    txid = "0x" + "a" * 64
+
+    result = payment_service.submit_onchain_payment(order["id"], txid, 42)
+
+    saved = db.get_order(order["id"])
+    assert result["status"] == "manual_review"
+    assert result["network"] == "BSC (BEP20)"
+    assert saved["status"] == OrderStatus.MANUAL_REVIEW
+    assert saved["txid"] == txid
+    assert saved["verify_method"] == "manual_usdt_bsc"
