@@ -128,9 +128,6 @@ AFFILIATE_DAILY_CAP: int = int(os.environ.get("HP_AFFILIATE_DAILY_CAP", "10"))
 # ---------------------------------------------------------------------------
 ORDER_EXPIRY_SECONDS: int = int(os.environ.get("HP_ORDER_EXPIRY_SECONDS", "1800"))
 LOW_STOCK_THRESHOLD: int = int(os.environ.get("HP_LOW_STOCK_THRESHOLD", "5"))
-LIVE_STOCK_REFRESH_SECONDS: int = max(
-    15, int(os.environ.get("HP_LIVE_STOCK_REFRESH_SECONDS", "60"))
-)
 
 # Délai (secondes) max d'attente d'une vérification automatique avant repli manuel.
 VERIFY_TIMEOUT: int = int(os.environ.get("HP_VERIFY_TIMEOUT", "120"))

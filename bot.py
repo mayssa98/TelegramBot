@@ -34,7 +34,6 @@ from app.domain import (
     loyalty_service,
     order_service,
     payment_service,
-    reseller_service,
     support_service,
     wallet_service,
 )
@@ -44,7 +43,6 @@ from config import (
     BOT_TOKEN,
     CURRENCY,
     DEFAULT_LANG,
-    LIVE_STOCK_REFRESH_SECONDS,
     REQUIRED_CHANNEL,
     SHOP_NAME,
     USDT_EVM_ADDRESS,
@@ -996,30 +994,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------- Catalogue (client) ----------------
-async def refresh_live_api_stock(context):
-    """Refresh API-backed offers at most once per configured live interval."""
-    if not db.claim_interval_task("live-api-stock", LIVE_STOCK_REFRESH_SECONDS):
-        return {"ok": True, "skipped": True, "events": []}
-    try:
-        result = await asyncio.to_thread(reseller_service.detect_restock_events)
-    except Exception:
-        log.exception("Live supplier stock refresh failed")
-        return {"ok": False, "events": []}
-
-    for event in result["events"]:
-        await announce_channel_restock(
-            context,
-            event["offer_id"],
-            event["added"],
-            event["stock"],
-        )
-    if result.get("errors"):
-        log.warning("Some live stock providers failed: %s", result["errors"])
-    return result
-
-
 async def show_catalog(update, context, lang):
-    await refresh_live_api_stock(context)
     text = t(lang, "catalog_title", shop=SHOP_NAME)
     msg = update.message or update.callback_query.message
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN,
@@ -1069,7 +1044,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_main_menu(update, context, lang)
         return
     if data == "catalog":
-        await refresh_live_api_stock(context)
         await show_callback_screen(
             q,
             t(lang, "catalog_title", shop=SHOP_NAME),
@@ -1162,7 +1136,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     if data.startswith("svc:"):
-        await refresh_live_api_stock(context)
         sid = int(data.split(":")[1])
         svc = db.get_service(sid)
         offers = db.list_offers(sid)
@@ -1179,7 +1152,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     if data.startswith("off:"):
-        await refresh_live_api_stock(context)
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
         if not off or not db.offer_has_stock(off):
