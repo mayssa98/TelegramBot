@@ -272,9 +272,16 @@ class handler(BaseHTTPRequestHandler):
                         )
                     )
                 result["announced_messages"] = announced
+                db.set_setting("stock_cron_last_run_at", int(time.time()))
+                db.set_setting("stock_cron_last_status", "ok" if result["ok"] else "partial")
+                db.set_setting("stock_cron_last_checked", int(result["checked"]))
+                db.set_setting("stock_cron_last_events", len(result["events"]))
+                db.set_setting("stock_cron_last_announced", announced)
                 self._reply(200 if result["ok"] else 207, result)
             except Exception as exc:
                 log.exception("Automatic reseller stock check failed")
+                db.set_setting("stock_cron_last_run_at", int(time.time()))
+                db.set_setting("stock_cron_last_status", "failed")
                 self._reply(500, {"ok": False, "error": str(exc)})
             return
 
