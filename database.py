@@ -621,6 +621,28 @@ def set_setting(key, value):
     get_conn().settings.update_one({"key": key}, {"$set": {"value": str(value)}}, upsert=True)
 
 
+def claim_interval_task(key, interval_seconds):
+    """Allow one process to run a shared task once per interval."""
+    now = int(time.time())
+    task_key = f"task:{key}"
+    collection = get_conn().settings
+    claimed = collection.find_one_and_update(
+        {"key": task_key, "next_run_at": {"$lte": now}},
+        {"$set": {"next_run_at": now + max(1, int(interval_seconds))}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if claimed:
+        return True
+    try:
+        collection.insert_one({
+            "key": task_key,
+            "next_run_at": now + max(1, int(interval_seconds)),
+        })
+        return True
+    except DuplicateKeyError:
+        return False
+
+
 def get_text_override(key, lang):
     row = get_conn().text_overrides.find_one({"key": str(key), "lang": str(lang)})
     return row.get("text") if row else None
@@ -672,6 +694,24 @@ def list_reseller_product_configs(provider="mailreader"):
             {"provider": str(provider)}
         ).sort("name", ASCENDING)
     ]
+
+
+def observe_reseller_stock(provider, product_id, stock):
+    """Atomically store supplier stock and return the previously observed value."""
+    now = int(time.time())
+    previous = get_conn().reseller_products.find_one_and_update(
+        {"provider": str(provider), "product_id": str(product_id)},
+        {
+            "$set": {
+                "supplier_stock_seen": max(0, int(stock or 0)),
+                "supplier_stock_checked_at": now,
+            },
+        },
+        return_document=ReturnDocument.BEFORE,
+    )
+    if not previous or previous.get("supplier_stock_seen") is None:
+        return None
+    return max(0, int(previous["supplier_stock_seen"]))
 
 
 def save_reseller_product_config(

@@ -399,3 +399,55 @@ def test_vex_order_is_delivered_and_replayed_without_double_charge(monkeypatch, 
     }]
     fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 94})
     assert fulfillment["supplier_order_id"] == "VEX-12345678"
+def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mock_mongodb):
+    offer_id = db.add_offer(
+        service_id=db.add_service("API stock", "📦"),
+        name="API plan",
+        price=9.0,
+        stock=0,
+        supplier_provider="mailreader",
+        supplier_product_id="sku-1",
+    )
+    db.save_reseller_product_config(
+        "mailreader",
+        "sku-1",
+        name="API plan",
+        wholesale_price=5.0,
+        currency="USDT",
+        retail_price=9.0,
+        enabled=True,
+        service_id=1,
+        local_offer_id=offer_id,
+    )
+    stock = {"value": 2}
+
+    def fake_catalog(provider):
+        assert provider == "mailreader"
+        db.update_offer(offer_id, stock=stock["value"])
+        return {
+            "products": [{
+                "id": "sku-1",
+                "enabled": True,
+                "local_offer_id": offer_id,
+                "stock": stock["value"],
+            }]
+        }
+
+    monkeypatch.setattr(reseller_service, "MAILREADER_API_KEY", "configured")
+    monkeypatch.setattr(reseller_service, "SHAMEKH_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "catalog", fake_catalog)
+
+    assert reseller_service.detect_restock_events()["events"] == []
+    stock["value"] = 6
+    result = reseller_service.detect_restock_events()
+    assert result["events"] == [{
+        "provider": "mailreader",
+        "product_id": "sku-1",
+        "offer_id": offer_id,
+        "previous_stock": 2,
+        "stock": 6,
+        "added": 4,
+    }]
+    assert reseller_service.detect_restock_events()["events"] == []

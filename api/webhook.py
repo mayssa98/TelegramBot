@@ -31,7 +31,7 @@ from api.dashboard import render_dashboard
 from app import __version__
 from app.domain import inventory_service, order_service, reseller_service, support_service
 from app.web import dashboard_api
-from bot import build_app
+from bot import announce_channel_restock, build_app
 from config import BOT_TOKEN, CURRENCY, DASHBOARD_PASSWORD
 from payment_verifier import binance_healthcheck
 
@@ -252,6 +252,31 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
         path = url.path.rstrip("/")
+
+        if path == "/api/cron/restock":
+            expected = os.environ.get("CRON_SECRET", "").strip()
+            supplied = self.headers.get("Authorization", "")
+            if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                result = reseller_service.detect_restock_events()
+                announced = 0
+                for event in result["events"]:
+                    announced += _loop.run_until_complete(
+                        announce_channel_restock(
+                            _application(),
+                            event["offer_id"],
+                            event["added"],
+                            event["stock"],
+                        )
+                    )
+                result["announced_messages"] = announced
+                self._reply(200 if result["ok"] else 207, result)
+            except Exception as exc:
+                log.exception("Automatic reseller stock check failed")
+                self._reply(500, {"ok": False, "error": str(exc)})
+            return
 
         if path in ("", "/"):
             body = public_site_html().encode("utf-8")

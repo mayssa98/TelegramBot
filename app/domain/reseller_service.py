@@ -9,8 +9,9 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-import database as db
 from pymongo.errors import DuplicateKeyError
+
+import database as db
 from config import (
     KAKAO_API_BASE,
     KAKAO_API_KEY,
@@ -373,6 +374,54 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         "providers": provider_summaries(),
         "products": products,
         "selected_count": sum(1 for product in products if product["enabled"]),
+    }
+
+
+def detect_restock_events() -> dict[str, Any]:
+    """Refresh configured API products and return newly added supplier stock."""
+    configured = {
+        PROVIDER: bool(MAILREADER_API_KEY),
+        SHAMEKH_PROVIDER: bool(SHAMEKH_API_KEY),
+        KAKAO_PROVIDER: bool(KAKAO_API_KEY),
+        VEX_PROVIDER: bool(VEX_API_KEY),
+    }
+    events: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    checked = 0
+
+    for provider in sorted(SUPPORTED_PROVIDERS):
+        if not configured[provider]:
+            continue
+        try:
+            live_catalog = catalog(provider)
+        except (ResellerApiError, ValueError) as exc:
+            errors.append({"provider": provider, "error": str(exc)})
+            continue
+
+        for product in live_catalog["products"]:
+            if not product.get("enabled") or not product.get("local_offer_id"):
+                continue
+            checked += 1
+            stock = max(0, int(product.get("stock") or 0))
+            previous = db.observe_reseller_stock(provider, product["id"], stock)
+            # The first successful poll establishes a baseline and must not spam
+            # customers with stock that was already available.
+            if previous is None or stock <= previous:
+                continue
+            events.append({
+                "provider": provider,
+                "product_id": product["id"],
+                "offer_id": int(product["local_offer_id"]),
+                "previous_stock": previous,
+                "stock": stock,
+                "added": stock - previous,
+            })
+
+    return {
+        "ok": not errors,
+        "checked": checked,
+        "events": events,
+        "errors": errors,
     }
 
 
