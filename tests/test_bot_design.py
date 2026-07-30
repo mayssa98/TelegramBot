@@ -548,22 +548,22 @@ def test_referrer_receives_progress_and_wallet_success_messages(mock_mongodb, mo
     context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@affiliate_channel")
 
-    for index in range(4):
+    for index in range(9):
         user_id = 100 + index
         mock_mongodb.users.insert_one({"telegram_id": user_id})
         assert affiliate_service.register_referral_link(user_id, referrer_id)
     asyncio.run(notify_successful_referral(context, referrer_id))
     progress_message = context.bot.send_message.await_args.args[1]
-    assert "4/5" in progress_message
+    assert "9/10" in progress_message
     assert "1 USDT" in progress_message
 
-    mock_mongodb.users.insert_one({"telegram_id": 104})
-    assert affiliate_service.register_referral_link(104, referrer_id)
+    mock_mongodb.users.insert_one({"telegram_id": 109})
+    assert affiliate_service.register_referral_link(109, referrer_id)
     asyncio.run(notify_successful_referral(context, referrer_id))
     private_call = context.bot.send_message.await_args_list[-1]
     success_message = private_call.args[1]
     assert private_call.args[0] == referrer_id
-    assert "5 valid referrals" in success_message
+    assert "10 valid referrals" in success_message
     assert "1 USDT" in success_message
     assert "1.00 USDT" in success_message
     assert context.bot.send_message.await_count == 2
