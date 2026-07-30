@@ -718,6 +718,15 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(200, {"ok": True, **result})
                 return
 
+            elif action == "adjust_user_wallet":
+                uid = int(form["user_id"])
+                amount = float(form.get("amount", "0").strip().replace(",", "."))
+                result = wallet_service.adjust_balance(
+                    uid, amount, ADMIN_ID, form.get("reason", ""),
+                )
+                self._reply(200, {"ok": True, **result})
+                return
+
             elif action == "close_ticket":
                 tid = int(form["ticket_id"])
                 support_service.close_ticket(tid)

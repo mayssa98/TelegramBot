@@ -19,7 +19,6 @@ def test_order_filters_and_pagination(mock_mongodb):
         {"id": 2, "user_id": 20, "offer_id": 6, "offer_name": "Beta", "service_name": "Video", "status": "delivered", "created_at": 2},
         {"id": 3, "user_id": 10, "offer_id": 5, "offer_name": "Alpha Plus", "service_name": "AI", "status": "delivered", "created_at": 3},
     ])
-
     result = dashboard_api.list_orders({"status": ["delivered"], "page": ["1"], "per_page": ["1"]})
 
     assert result["total"] == 2
@@ -88,6 +87,7 @@ def test_inventory_never_exposes_encrypted_payload(mock_mongodb):
 
 def test_customer_detail_metrics(mock_mongodb):
     mock_mongodb.users.insert_one({"telegram_id": 42, "username": "buyer", "created_at": 1})
+    mock_mongodb.wallets.insert_one({"user_id": 42, "balance_cents": 1234})
     mock_mongodb.orders.insert_many([
         {"id": 1, "user_id": 42, "status": "delivered", "total_price": 7.5, "created_at": 2},
         {"id": 2, "user_id": 42, "status": "pending_payment", "total_price": 3.0, "created_at": 3},
@@ -99,6 +99,7 @@ def test_customer_detail_metrics(mock_mongodb):
     assert customer["order_count"] == 2
     assert customer["paid_order_count"] == 1
     assert customer["total_spent"] == 7.5
+    assert customer["wallet_balance"] == 12.34
 
 
 def test_dashboard_renders_mongodb_dates():

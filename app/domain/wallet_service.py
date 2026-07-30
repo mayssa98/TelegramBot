@@ -271,6 +271,48 @@ def credit_all_users(
     }
 
 
+def adjust_balance(user_id: int, amount: float, admin_id: int, reason: str = "") -> dict[str, Any]:
+    """Credit or debit one wallet atomically without allowing a negative balance."""
+    user_id = int(user_id)
+    amount_cents = round(float(amount) * 100)
+    reason = str(reason or "").strip()[:500]
+    if amount_cents == 0 or abs(amount_cents) > 1_000_000:
+        raise ValueError("Le montant doit être compris entre -10 000 et 10 000 USDT, hors zéro.")
+
+    conn = db.get_conn()
+    if not conn.users.find_one({"telegram_id": user_id}, {"_id": 1}):
+        raise ValueError("Utilisateur introuvable.")
+
+    if amount_cents > 0:
+        wallet = conn.wallets.find_one_and_update(
+            {"user_id": user_id},
+            {"$inc": {"balance_cents": amount_cents}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    else:
+        wallet = conn.wallets.find_one_and_update(
+            {"user_id": user_id, "balance_cents": {"$gte": abs(amount_cents)}},
+            {"$inc": {"balance_cents": amount_cents}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if not wallet:
+            raise ValueError("Solde insuffisant pour effectuer ce débit.")
+
+    new_balance_cents = max(0, int(wallet.get("balance_cents", 0)))
+    db.audit_event(
+        "wallet.admin_adjustment",
+        actor_id=admin_id,
+        details={
+            "user_id": user_id,
+            "amount_cents": amount_cents,
+            "balance_cents": new_balance_cents,
+            "reason": reason,
+        },
+    )
+    return {"user_id": user_id, "amount": amount_cents / 100, "balance": new_balance_cents / 100}
+
+
 def apply_balance(user_id: int, amount: float) -> float:
     requested = max(0, round(amount * 100))
     if not requested:

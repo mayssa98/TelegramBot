@@ -2282,9 +2282,11 @@ def render_dashboard(
                             <th>Telegram ID</th>
                             <th>Username</th>
                             <th>Prénom</th>
-                            <th>Langue</th>
-                            <th>Commandes</th>
+                            <th>Portefeuille</th>
+                            <th>Achats</th>
                             <th>Total dépensé</th>
+                            <th>Affiliés</th>
+                            <th>Dernière activité</th>
                             <th>Statut</th>
                             <th>Action</th>
                         </tr>
@@ -2890,7 +2892,7 @@ def render_dashboard(
             tbody.innerHTML = "";
 
             if (!dashboardData.users || dashboardData.users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Aucun client enregistré.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Aucun membre enregistré.</td></tr>';
                 return;
             }
 
@@ -2900,11 +2902,13 @@ def render_dashboard(
                 const banClass = user.banned ? "btn-primary" : "btn-danger";
                 tr.innerHTML = `
                     <td><code>${user.telegram_id}</code></td>
-                    <td>@${user.username || '—'}</td>
-                    <td>${user.first_name || '—'}</td>
-                    <td>${user.lang || 'fr'}</td>
-                    <td>${user.order_count || 0}</td>
+                    <td>${escapeHtml(user.username ? '@' + user.username : '—')}</td>
+                    <td>${escapeHtml(user.first_name || user.full_name || '—')}</td>
+                    <td><strong>${Number(user.wallet_balance || 0).toFixed(2)} ${escapeHtml(dashboardData.currency)}</strong></td>
+                    <td>${user.paid_order_count || 0} / ${user.order_count || 0}</td>
                     <td>${(user.total_spent || user.total_paid || 0).toFixed(2)} ${dashboardData.currency}</td>
+                    <td>${user.referral_count || 0}</td>
+                    <td>${user.last_active_at ? formatDateTime(user.last_active_at) : 'Jamais'}</td>
                     <td><span class="badge badge-${user.banned ? 'cancelled' : 'paid'}">${user.banned ? 'Banni' : 'Actif'}</span></td>
                     <td>
                         <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="viewCustomer(${user.telegram_id})">🔍 Profil</button>
@@ -3896,14 +3900,69 @@ def render_dashboard(
                         <div><strong>Username :</strong> ${escapeHtml(customer.username ? '@' + customer.username : '—')}</div>
                         <div><strong>Prénom :</strong> ${escapeHtml(customer.first_name || '—')}</div>
                         <div><strong>Langue :</strong> ${escapeHtml(customer.lang || 'fr')}</div>
+                        <div><strong>Portefeuille :</strong> ${Number(customer.wallet_balance || 0).toFixed(2)} ${escapeHtml(dashboardData.currency)}</div>
+                        <div><strong>Inscrit le :</strong> ${customer.created_at ? formatDateTime(customer.created_at) : '—'}</div>
+                        <div><strong>Dernière activité :</strong> ${customer.last_active_at ? formatDateTime(customer.last_active_at) : 'Jamais'}</div>
+                        <div><strong>Interactions :</strong> ${customer.interaction_count || 0}</div>
                         <div><strong>Commandes :</strong> ${customer.order_count || 0}</div>
                         <div><strong>Payées :</strong> ${customer.paid_order_count || 0}</div>
                         <div><strong>Total dépensé :</strong> ${(customer.total_spent || 0).toFixed(2)} ${escapeHtml(dashboardData.currency)}</div>
                         <div><strong>Filleuls :</strong> ${customer.referral_count || 0}</div>
                     </div>
+                    <div class="service-card" style="margin:18px 0;">
+                        <h4 style="margin-bottom:12px;">Gérer le portefeuille</h4>
+                        <form onsubmit="adjustCustomerWallet(event, ${customer.telegram_id})" style="display:grid;grid-template-columns:minmax(140px,180px) 1fr auto;gap:10px;align-items:end;">
+                            <div class="form-group" style="margin:0;">
+                                <label>Montant (${escapeHtml(dashboardData.currency)})</label>
+                                <input name="amount" type="number" step="0.01" min="-10000" max="10000" required placeholder="+10 ou -5">
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label>Motif</label>
+                                <input name="reason" maxlength="500" placeholder="Bonus, correction, remboursement...">
+                            </div>
+                            <button class="btn btn-primary" type="submit">Appliquer</button>
+                        </form>
+                        <p class="muted" style="margin-top:8px;">Montant positif pour créditer, négatif pour débiter. Le solde ne peut pas devenir négatif.</p>
+                    </div>
                     <h4>Commandes récentes</h4><ul>${orders}</ul>
                     <h4>Tickets</h4><ul>${tickets}</ul>`;
                 openModal("customer-detail-modal");
+            } catch (err) {
+                showToast(err.message || "Erreur réseau", "error");
+            }
+        }
+
+        async function adjustCustomerWallet(event, userId) {
+            event.preventDefault();
+            const form = event.target;
+            const amount = Number(form.elements.amount.value);
+            if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 10000) {
+                showToast("Saisissez un montant valide entre -10 000 et 10 000", "error");
+                return;
+            }
+            const verb = amount > 0 ? "créditer" : "débiter";
+            if (!confirm(`Confirmer : ${verb} ${Math.abs(amount).toFixed(2)} ${dashboardData.currency} pour l'utilisateur ${userId} ?`)) return;
+            const params = new URLSearchParams({
+                action: "adjust_user_wallet",
+                user_id: userId,
+                amount: amount.toFixed(2),
+                reason: form.elements.reason.value || "",
+            });
+            try {
+                const res = await fetch("/admin", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-Dashboard-Write-Token": dashboardWriteToken,
+                    },
+                    body: params,
+                });
+                const payload = await res.json();
+                if (!res.ok || !payload.ok) throw new Error(payload.error || "Modification impossible");
+                showToast(`Nouveau solde : ${Number(payload.balance).toFixed(2)} ${dashboardData.currency}`);
+                closeModal("customer-detail-modal");
+                await refreshDashboardData();
             } catch (err) {
                 showToast(err.message || "Erreur réseau", "error");
             }

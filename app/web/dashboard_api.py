@@ -202,6 +202,10 @@ def _customer_summary(user: dict[str, Any]) -> dict[str, Any]:
         "paid_order_count": metrics["count"],
         "total_spent": round(float(metrics["total"]), 2),
         "referral_count": conn.referrals.count_documents({"referrer_id": user_id}),
+        "wallet_balance": round(
+            float((conn.wallets.find_one({"user_id": user_id}) or {}).get("balance_cents", 0)) / 100,
+            2,
+        ),
     })
     return result
 

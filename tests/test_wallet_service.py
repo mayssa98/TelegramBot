@@ -132,3 +132,27 @@ def test_bulk_wallet_credit_is_applied_once_per_user(mock_mongodb):
 def test_bulk_wallet_credit_rejects_invalid_amount(mock_mongodb):
     with pytest.raises(ValueError, match="compris entre"):
         wallet_service.credit_all_users(0, "bulk_credit_test_456", 999)
+
+
+def test_admin_can_credit_and_debit_one_wallet(mock_mongodb):
+    db.upsert_user(42, "buyer", "Buyer")
+
+    credited = wallet_service.adjust_balance(42, 25, 999, "Bonus")
+    debited = wallet_service.adjust_balance(42, -7.50, 999, "Correction")
+
+    assert credited["balance"] == 25
+    assert debited["balance"] == 17.5
+    assert wallet_service.balance_cents(42) == 1750
+    audit = mock_mongodb.audit_events.find_one({"action": "wallet.admin_adjustment"})
+    assert audit["actor_id"] == 999
+    assert audit["details"]["user_id"] == 42
+
+
+def test_admin_wallet_debit_cannot_make_balance_negative(mock_mongodb):
+    db.upsert_user(42, "buyer", "Buyer")
+    mock_mongodb.wallets.insert_one({"user_id": 42, "balance_cents": 500})
+
+    with pytest.raises(ValueError, match="Solde insuffisant"):
+        wallet_service.adjust_balance(42, -5.01, 999)
+
+    assert wallet_service.balance_cents(42) == 500
