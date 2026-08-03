@@ -284,7 +284,9 @@ def test_start_requires_channel_and_group_membership(monkeypatch):
     call = message.reply_text.await_args
     assert "MEMBERS-ONLY ACCESS" in call.args[0]
     assert call.kwargs["reply_markup"] is not None
-    bot_client.get_chat_member.assert_awaited_once_with("@blackmarketBotChannel", 42)
+    assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
+        "@blackmarketBotChannel", "@Blackmarketgrp",
+    ]
 
 
 def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
@@ -346,6 +348,31 @@ def test_membership_check_accepts_links_and_numeric_chat_ids(monkeypatch):
     ]
 
 
+def test_membership_check_resolves_usernames_to_numeric_chat_ids(monkeypatch):
+    from bot import required_membership_status
+
+    bot_client = SimpleNamespace(
+        get_chat=AsyncMock(side_effect=[
+            SimpleNamespace(id=-100111, title="Black Market Channel"),
+            SimpleNamespace(id=-100222, title="Black Market Group"),
+        ]),
+        get_chat_member=AsyncMock(return_value=SimpleNamespace(status="member")),
+    )
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@blackmarketBotChannel")
+    monkeypatch.setattr("bot.REQUIRED_GROUP", "@Blackmarketgrp")
+
+    allowed, details = asyncio.run(required_membership_status(bot_client, 42))
+
+    assert allowed is True
+    assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
+        -100111, -100222,
+    ]
+    assert [detail["title"] for detail in details] == [
+        "Black Market Channel", "Black Market Group",
+    ]
+
+
 def test_membership_check_accepts_owner_status(monkeypatch):
     from bot import is_required_channel_member
 
@@ -377,7 +404,7 @@ def test_membership_status_reports_failed_chat(monkeypatch):
     ]
 
 
-def test_verify_joining_rejects_missing_membership_without_admin_notification(monkeypatch):
+def test_verify_joining_rejects_missing_membership_and_notifies_admin(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     query = SimpleNamespace(
         data="verify_channel_join",
@@ -397,8 +424,11 @@ def test_verify_joining_rejects_missing_membership_without_admin_notification(mo
 
     asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace(bot=bot_client)))
 
-    bot_client.get_chat_member.assert_awaited_once_with("@channel", 42)
-    bot_client.send_message.assert_not_awaited()
+    assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
+        "@channel", "@group",
+    ]
+    bot_client.send_message.assert_awaited_once()
+    assert "MEMBERSHIP VERIFICATION FAILED" in bot_client.send_message.await_args.args[1]
     query.edit_message_text.assert_awaited_once()
     assert "MEMBERSHIP NOT DETECTED" in query.edit_message_text.await_args.args[0]
 

@@ -556,21 +556,54 @@ async def required_membership_status(bot, user_id):
         return True, []
     details = []
     for chat in required_chats:
+        resolved_chat = chat
+        chat_title = str(chat)
         try:
-            member = await bot.get_chat_member(chat, user_id)
+            # Resolving public usernames first avoids unreliable username-based
+            # getChatMember lookups and continues working if Telegram changes
+            # the public username while the numeric chat ID stays the same.
+            if hasattr(bot, "get_chat"):
+                chat_info = await bot.get_chat(chat)
+                resolved_chat = chat_info.id
+                chat_title = (
+                    getattr(chat_info, "title", None)
+                    or getattr(chat_info, "full_name", None)
+                    or str(chat)
+                )
+
+            member = None
+            last_error = None
+            for attempt in range(2):
+                try:
+                    member = await bot.get_chat_member(resolved_chat, user_id)
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    if attempt == 0:
+                        await asyncio.sleep(0.25)
+            if member is None:
+                raise last_error
         except Exception as exc:
             log.warning("Unable to verify membership in %s for %s: %s", chat, user_id, exc)
-            details.append({"chat": chat, "ok": False, "error": str(exc)})
-            return False, details
+            detail = {"chat": chat, "ok": False, "error": str(exc)}
+            if resolved_chat != chat:
+                detail["chat_id"] = resolved_chat
+            if chat_title != str(chat):
+                detail["title"] = chat_title
+            details.append(detail)
+            continue
         status = getattr(getattr(member, "status", None), "value", getattr(member, "status", ""))
         status = str(status).lower()
         is_member = status in {"creator", "owner", "administrator", "member"} or (
             status == "restricted" and bool(getattr(member, "is_member", False))
         )
-        details.append({"chat": chat, "ok": is_member, "status": status})
-        if not is_member:
-            return False, details
-    return True, details
+        detail = {"chat": chat, "ok": is_member, "status": status}
+        if resolved_chat != chat:
+            detail["chat_id"] = resolved_chat
+        if chat_title != str(chat):
+            detail["title"] = chat_title
+        details.append(detail)
+    return all(detail["ok"] for detail in details), details
 
 
 def _format_membership_diagnostics(user_id, details):
@@ -579,12 +612,20 @@ def _format_membership_diagnostics(user_id, details):
     lines = [f"Membership verification failed for <code>{user_id}</code>:"]
     for detail in details:
         chat = html.escape(str(detail.get("chat", "")))
+        title = html.escape(str(detail.get("title", "")))
+        chat_id = html.escape(str(detail.get("chat_id", "")))
+        identity = f"<code>{chat}</code>"
+        if title and title != chat:
+            identity += f" ({title})"
+        if chat_id and chat_id != chat:
+            identity += f" [<code>{chat_id}</code>]"
         if detail.get("error"):
             error = html.escape(str(detail["error"])[:500])
-            lines.append(f"- <code>{chat}</code>: API error: {error}")
+            lines.append(f"- {identity}: API error: {error}")
         else:
             status = html.escape(str(detail.get("status", "unknown")))
-            lines.append(f"- <code>{chat}</code>: status=<code>{status}</code>")
+            result = "OK" if detail.get("ok") else "NOT JOINED"
+            lines.append(f"- {identity}: {result}, status=<code>{status}</code>")
     return "\n".join(lines)
 
 
@@ -1167,7 +1208,24 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "verify_channel_join":
         allowed, details = await required_membership_status(context.bot, uid)
         if not allowed:
-            log.info(_format_membership_diagnostics(uid, details))
+            diagnostics = _format_membership_diagnostics(uid, details)
+            log.info(diagnostics)
+            user = q.from_user
+            full_name = getattr(user, "full_name", None) or getattr(user, "first_name", None)
+            raw_username = getattr(user, "username", None)
+            name = html.escape(full_name or "Unknown user")
+            username = f"@{html.escape(raw_username)}" if raw_username else "Not provided"
+            with contextlib.suppress(Exception):
+                await context.bot.send_message(
+                    ADMIN_ID,
+                    "<b>MEMBERSHIP VERIFICATION FAILED</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    f"<b>Customer:</b> {name}\n"
+                    f"<b>Username:</b> {username}\n"
+                    f"<b>Telegram ID:</b> <code>{uid}</code>\n\n"
+                    f"{diagnostics}",
+                    parse_mode=ParseMode.HTML,
+                )
             await q.edit_message_text(
                 premium_customer_text(lang, "channel_join_not_verified"),
                 parse_mode=ParseMode.HTML,
