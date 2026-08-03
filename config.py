@@ -123,6 +123,7 @@ AFFILIATE_QUALIFY_CENTS: int = int(os.environ.get("HP_AFFILIATE_QUALIFY_CENTS", 
 AFFILIATE_FIVE_REWARD_CENTS: int = int(os.environ.get("HP_AFFILIATE_FIVE_REWARD_CENTS", "500"))
 AFFILIATE_TEN_REWARD_CENTS: int = int(os.environ.get("HP_AFFILIATE_TEN_REWARD_CENTS", "200"))
 AFFILIATE_DAILY_CAP: int = int(os.environ.get("HP_AFFILIATE_DAILY_CAP", "10"))
+AFFILIATE_MIN_PURCHASE_CENTS: int = int(os.environ.get("HP_AFFILIATE_MIN_PURCHASE_CENTS", "100"))
 
 # ---------------------------------------------------------------------------
 # Commandes

@@ -248,7 +248,7 @@ def test_temporary_verifier_error_never_enters_manual_review(mock_mongodb, monke
     assert order["txid"] == ""
 
 
-def test_payment_does_not_change_already_valid_referral(mock_mongodb, mock_payment_verifier):
+def test_confirmed_payment_qualifies_pending_referral_once(mock_mongodb, mock_payment_verifier):
     from app.domain import affiliate_service
 
     mock_mongodb.users.insert_many([{"telegram_id": 999}, {"telegram_id": 111}])
@@ -267,8 +267,10 @@ def test_payment_does_not_change_already_valid_referral(mock_mongodb, mock_payme
 
     result = payment_service.submit_payment(30, "TXID_QUALIFIED", 111)
 
-    assert result["affiliate"] is None
+    assert result["affiliate"]["valid_referrals"] == 1
+    assert result["affiliate"]["rewarded"] is False
     assert mock_mongodb.referrals.find_one({"referred_id": 111})["valid"] is True
+    assert affiliate_service.on_confirmed_payment(111, 30) is None
 
 
 def test_admin_test_payment_bypasses_binance_and_delivers(mock_mongodb, monkeypatch):

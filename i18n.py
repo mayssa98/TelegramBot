@@ -58,9 +58,9 @@ TRANSLATIONS = {
         "ar": "❌ *Membership not detected*\n\nJoin @blackmarketBotChannel and @Blackmarketgrp, then tap *Verify joining* again.",
     },
     "channel_member_welcome": {
-        "fr": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *1 USDT for every 10 valid referrals*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 25 USDT → *3% OFF*\n🥈 *Silver* — spend 70 USDT → *6% OFF*\n💎 *Platinum* — spend 200 USDT → *9% OFF*\n👑 *Diamond* — spend 500 USDT → *12% OFF*\n\nEach unlocked discount applies to every product for *3 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
-        "en": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *1 USDT for every 10 valid referrals*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 25 USDT → *3% OFF*\n🥈 *Silver* — spend 70 USDT → *6% OFF*\n💎 *Platinum* — spend 200 USDT → *9% OFF*\n👑 *Diamond* — spend 500 USDT → *12% OFF*\n\nEach unlocked discount applies to every product for *3 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
-        "ar": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *1 USDT for every 10 valid referrals*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 25 USDT → *3% OFF*\n🥈 *Silver* — spend 70 USDT → *6% OFF*\n💎 *Platinum* — spend 200 USDT → *9% OFF*\n👑 *Diamond* — spend 500 USDT → *12% OFF*\n\nEach unlocked discount applies to every product for *3 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
+        "fr": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *2 USDT for every 10 qualified referrals*. A referral qualifies only after they buy from the bot for at least *1 USDT*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 25 USDT → *3% OFF*\n🥈 *Silver* — spend 70 USDT → *6% OFF*\n💎 *Platinum* — spend 200 USDT → *9% OFF*\n👑 *Diamond* — spend 500 USDT → *12% OFF*\n\nEach unlocked discount applies to every product for *3 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
+        "en": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *2 USDT for every 10 qualified referrals*. A referral qualifies only after they buy from the bot for at least *1 USDT*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 25 USDT → *3% OFF*\n🥈 *Silver* — spend 70 USDT → *6% OFF*\n💎 *Platinum* — spend 200 USDT → *9% OFF*\n👑 *Diamond* — spend 500 USDT → *12% OFF*\n\nEach unlocked discount applies to every product for *3 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
+        "ar": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *2 USDT for every 10 qualified referrals*. A referral qualifies only after they buy from the bot for at least *1 USDT*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 25 USDT → *3% OFF*\n🥈 *Silver* — spend 70 USDT → *6% OFF*\n💎 *Platinum* — spend 200 USDT → *9% OFF*\n👑 *Diamond* — spend 500 USDT → *12% OFF*\n\nEach unlocked discount applies to every product for *3 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
     },    # ---------------- Menu principal ----------------
     "menu_catalog": {"fr": "🛍️ Catalogue", "en": "🛍️ Catalog", "ar": "🛍️ المتجر"},
     "menu_orders": {"fr": "🧾 Mes commandes", "en": "🧾 My orders", "ar": "🧾 طلباتي"},
@@ -212,9 +212,9 @@ TRANSLATIONS = {
         "ar": "🔐 *الخصوصية*\n\nيحتفظ المتجر فقط بالبيانات اللازمة للطلبات والمدفوعات والتسليم والتذاكر. بيانات المخزون السرية مشفرة ولا تُكتب في السجلات.",
     },
     "affiliate_title": {
-        "fr": "🎊 *PROGRAMME D'AFFILIATION*\n\n💰 Gains : *{earned} USDT*\n💳 Portefeuille : *{balance} USDT*\n👥 Filleuls valides : *{referrals}*\n🎯 Progression : *{progress}/10*\n\n💵 Invitez *10 personnes* et gagnez *1 USDT*.\n\n🔗 *Votre lien*\n`{link}`\n\n⚠️ Auto-parrainage et faux comptes refusés.",
-        "en": "🎊 *AFFILIATE & REWARDS PROGRAM*\n\n📊 *Your affiliate progress*\n💰 Total earned: *{earned} USDT*\n💳 Wallet balance: *{balance} USDT*\n👥 Valid referrals: *{referrals}*\n🎯 Next reward: *{progress}/10 referrals*\n\n🎁 *How affiliate rewards work*\nShare your personal link. Every new, unique user who starts the bot through your link counts as one valid referral. Invite *10 valid referrals* and *1 USDT* is automatically added to your wallet. You can use this balance to pay for products in the catalog.\n\n🏆 *Purchase discount levels*\n🥉 Bronze — spend *25 USDT*: *3% off*\n🥈 Silver — spend *70 USDT*: *6% off*\n💎 Platinum — spend *200 USDT*: *9% off*\n👑 Diamond — spend *500 USDT*: *12% off*\n\nDiscount levels are based on your cumulative confirmed purchases. Once activated, your discount applies to every product for *3 days*.\n\n🔗 *Your referral link*\n`{link}`\n\n⚠️ Self-referrals, duplicate users and fake accounts are not accepted.",
-        "ar": "🎊 *برنامج الإحالة*\n\n💰 الأرباح: *{earned} USDT*\n💳 المحفظة: *{balance} USDT*\n👥 الإحالات الصالحة: *{referrals}*\n🎯 التقدم: *{progress}/10*\n\n💵 ادعُ *10 إحالات صالحة* واربح *1 USDT*.\n\n🔗 `{link}`\n\n⚠️ الإحالة الذاتية والحسابات الوهمية مرفوضة.",
+        "fr": "🎊 *PROGRAMME D'AFFILIATION*\n\n💰 Gains : *{earned} USDT*\n💳 Portefeuille : *{balance} USDT*\n👥 Filleuls valides : *{referrals}*\n🎯 Progression : *{progress}/10*\n\n🛒 Chaque filleul doit acheter pour au moins *1 USDT* via le bot.\n💵 Invitez *10 filleuls qualifiés* et gagnez *2 USDT*.\n\n🔗 *Votre lien*\n`{link}`\n\n⚠️ Auto-parrainage et faux comptes refusés.",
+        "en": "🎊 *AFFILIATE & REWARDS PROGRAM*\n\n📊 *Your affiliate progress*\n💰 Total earned: *{earned} USDT*\n💳 Wallet balance: *{balance} USDT*\n👥 Qualified referrals: *{referrals}*\n🎯 Next reward: *{progress}/10 referrals*\n\n🎁 *How affiliate rewards work*\nShare your personal link. A new, unique user qualifies only after they buy from the bot for at least *1 USDT*. Invite *10 qualified referrals* and *2 USDT* is automatically added to your wallet. You can use this balance to pay for products in the catalog.\n\n🏆 *Purchase discount levels*\n🥉 Bronze — spend *25 USDT*: *3% off*\n🥈 Silver — spend *70 USDT*: *6% off*\n💎 Platinum — spend *200 USDT*: *9% off*\n👑 Diamond — spend *500 USDT*: *12% off*\n\nDiscount levels are based on your cumulative confirmed purchases. Once activated, your discount applies to every product for *3 days*.\n\n🔗 *Your referral link*\n`{link}`\n\n⚠️ Self-referrals, duplicate users and fake accounts are not accepted.",
+        "ar": "🎊 *برنامج الإحالة*\n\n💰 الأرباح: *{earned} USDT*\n💳 المحفظة: *{balance} USDT*\n👥 الإحالات الصالحة: *{referrals}*\n🎯 التقدم: *{progress}/10*\n\n🛒 تُحتسب الإحالة بعد شراء ما لا يقل عن *1 USDT* من البوت.\n💵 ادعُ *10 إحالات مؤهلة* واربح *2 USDT*.\n\n🔗 `{link}`\n\n⚠️ الإحالة الذاتية والحسابات الوهمية مرفوضة.",
     },
     "affiliate_copy": {"fr": "🔗 Copier le lien", "en": "🔗 Copy Link", "ar": "🔗 نسخ الرابط"},
     "affiliate_copy_message": {
@@ -344,14 +344,14 @@ TRANSLATIONS = {
         "ar": "✏️ *أدخل الكمية المطلوبة (1-{stock}):*\n\nالمنتج: *{offer}*\nالمخزون المتاح: *{stock}*\nسعر الوحدة: *{price} {cur}*",
     },
     "affiliate_referral_success": {
-        "fr": "🎉 *Nouveau filleul valide !*\n\nProgression : *{progress}/10*\nEncore *{remaining}* filleul(s) valide(s) pour gagner *1 USDT*.",
-        "en": "🎉 *New valid referral!*\n\nProgress: *{progress}/10*\nOnly *{remaining}* more valid referral(s) to earn *1 USDT*.",
-        "ar": "🎉 *إحالة صالحة جديدة!*\n\nالتقدم: *{progress}/10*\nمتبقي *{remaining}* إحالة صالحة لربح *1 USDT*.",
+        "fr": "🎉 *Nouveau filleul valide !*\n\nProgression : *{progress}/10*\nEncore *{remaining}* filleul(s) valide(s) pour gagner *2 USDT*.",
+        "en": "🎉 *New qualified referral!*\n\nProgress: *{progress}/10*\nOnly *{remaining}* more qualified referral(s) to earn *2 USDT*.",
+        "ar": "🎉 *إحالة صالحة جديدة!*\n\nالتقدم: *{progress}/10*\nمتبقي *{remaining}* إحالة صالحة لربح *2 USDT*.",
     },
     "affiliate_ten_success": {
-        "fr": "✅ *Objectif atteint !*\n\nVous avez complété *10 filleuls valides*. *1 USDT* a été ajouté automatiquement à votre portefeuille.\n\nNouveau solde : *{balance} USDT*.",
-        "en": "✅ *Goal completed!*\n\nYou completed *10 valid referrals*. *1 USDT* was automatically added to your wallet.\n\nNew balance: *{balance} USDT*.",
-        "ar": "✅ *تم تحقيق الهدف!*\n\nأكملت *10 إحالات صالحة*. تمت إضافة *1 USDT* تلقائيًا إلى محفظتك.\n\nالرصيد الجديد: *{balance} USDT*.",
+        "fr": "✅ *Objectif atteint !*\n\nVous avez complété *10 filleuls valides*. *2 USDT* ont été ajoutés automatiquement à votre portefeuille.\n\nNouveau solde : *{balance} USDT*.",
+        "en": "✅ *Goal completed!*\n\nYou completed *10 valid referrals*. *2 USDT* was automatically added to your wallet.\n\nNew balance: *{balance} USDT*.",
+        "ar": "✅ *تم تحقيق الهدف!*\n\nأكملت *10 إحالات صالحة*. تمت إضافة *2 USDT* تلقائيًا إلى محفظتك.\n\nالرصيد الجديد: *{balance} USDT*.",
     },
     "quantity_invalid": {
         "fr": "⚠️ Quantité invalide. Envoyez un nombre entier entre *1* et *{stock}*.",
@@ -528,8 +528,13 @@ TRANSLATIONS = {
     },
     "affiliate_payment_progress": {
         "fr": "👥 Un filleul a effectué son premier paiement. Progression : {count}/{target}.",
-        "en": "👥 A referral completed their first payment. Progress: {count}/{target}.",
+        "en": "👥 A referral bought from the bot for at least 1 USDT. Progress: {count}/{target}.",
         "ar": "👥 أكمل أحد الإحالات أول دفعة. التقدم: {count}/{target}.",
+    },
+    "affiliate_program_update": {
+        "fr": "🎁 *Affiliate program update*\n\nInvitations now count only after the invited user buys from the bot for at least *1 USDT*.\n\nYou still earn *2 USDT* for every *10 qualified referrals*.",
+        "en": "🎁 *Affiliate program update*\n\nInvitations now count only after the invited user buys from the bot for at least *1 USDT*.\n\nYou still earn *2 USDT* for every *10 qualified referrals*.",
+        "ar": "🎁 *Affiliate program update*\n\nInvitations now count only after the invited user buys from the bot for at least *1 USDT*.\n\nYou still earn *2 USDT* for every *10 qualified referrals*.",
     },
     "payment_manual_review": {
         "fr": "🔎 Le paiement de la commande #{oid} nécessite une vérification manuelle. Votre TXID est conservé et l’administrateur a été prévenu.",

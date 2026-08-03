@@ -160,7 +160,13 @@ def test_maintenance_notice_is_sent_to_every_active_user(mock_mongodb):
 def test_customer_button_click_is_reported_to_admin(monkeypatch, mock_mongodb):
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     bot_client = SimpleNamespace(send_message=AsyncMock())
-    message = SimpleNamespace(text="Offer screen", caption=None)
+    message = SimpleNamespace(
+        text="Offer screen",
+        caption=None,
+        reply_markup=SimpleNamespace(inline_keyboard=[[
+            SimpleNamespace(text="Buy Premium now", callback_data="buy:17"),
+        ]]),
+    )
     query = SimpleNamespace(data="buy:17", message=message)
     user = SimpleNamespace(
         id=42, full_name="Test Buyer", first_name="Test",
@@ -180,6 +186,8 @@ def test_customer_button_click_is_reported_to_admin(monkeypatch, mock_mongodb):
     call = bot_client.send_message.await_args
     assert call.args[0] == 999
     assert "buy:17" in call.args[1]
+    assert "Buy Premium now" in call.args[1]
+    assert "CUSTOMER ACTIVITY" in call.args[1]
     assert "Test Buyer" in call.args[1]
     assert "42" in call.args[1]
     event = mock_mongodb.interaction_events.find_one({"user_id": 42})
@@ -259,7 +267,7 @@ def test_delivery_accounts_use_numeric_labels_without_hash_delimiters():
         "1.\nfirst@example.com:pass\n\n2.\nsecond@example.com:pass\n\n3.\nthird@example.com:pass"
     )
 
-def test_start_allows_users_without_channel_membership(monkeypatch):
+def test_start_requires_channel_and_group_membership(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     user = SimpleNamespace(id=42, username="buyer", first_name="Buyer")
     bot_client = SimpleNamespace(
@@ -274,8 +282,9 @@ def test_start_allows_users_without_channel_membership(monkeypatch):
 
     message.reply_text.assert_awaited_once()
     call = message.reply_text.await_args
-    assert "WELCOME TO" in call.args[0]
-    bot_client.get_chat_member.assert_not_awaited()
+    assert "MEMBERS-ONLY ACCESS" in call.args[0]
+    assert call.kwargs["reply_markup"] is not None
+    bot_client.get_chat_member.assert_awaited_once_with("@blackmarketBotChannel", 42)
 
 
 def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
@@ -303,7 +312,7 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     assert "1 USDT" in rendered
     assert "12% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
-    bot_client.get_chat_member.assert_not_awaited()
+    assert bot_client.get_chat_member.await_count == 2
 
 
 def test_group_membership_is_also_required(monkeypatch):
@@ -368,7 +377,7 @@ def test_membership_status_reports_failed_chat(monkeypatch):
     ]
 
 
-def test_verify_joining_no_longer_notifies_admin_for_missing_membership(monkeypatch):
+def test_verify_joining_rejects_missing_membership_without_admin_notification(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     query = SimpleNamespace(
         data="verify_channel_join",
@@ -388,9 +397,10 @@ def test_verify_joining_no_longer_notifies_admin_for_missing_membership(monkeypa
 
     asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace(bot=bot_client)))
 
-    bot_client.get_chat_member.assert_not_awaited()
+    bot_client.get_chat_member.assert_awaited_once_with("@channel", 42)
     bot_client.send_message.assert_not_awaited()
     query.edit_message_text.assert_awaited_once()
+    assert "MEMBERSHIP NOT DETECTED" in query.edit_message_text.await_args.args[0]
 
 @pytest.mark.parametrize(
     ("key", "incoming_text", "emoji_id"),
@@ -621,20 +631,24 @@ def test_referrer_receives_progress_and_wallet_success_messages(mock_mongodb, mo
         user_id = 100 + index
         mock_mongodb.users.insert_one({"telegram_id": user_id})
         assert affiliate_service.register_referral_link(user_id, referrer_id)
+        mock_mongodb.orders.insert_one({"id": index + 1, "user_id": user_id, "total_price": 1.0})
+        affiliate_service.on_confirmed_payment(user_id, index + 1)
     asyncio.run(notify_successful_referral(context, referrer_id))
     progress_message = context.bot.send_message.await_args.args[1]
     assert "9/10" in progress_message
-    assert "1 USDT" in progress_message
+    assert "2 USDT" in progress_message
 
     mock_mongodb.users.insert_one({"telegram_id": 109})
     assert affiliate_service.register_referral_link(109, referrer_id)
+    mock_mongodb.orders.insert_one({"id": 10, "user_id": 109, "total_price": 1.0})
+    affiliate_service.on_confirmed_payment(109, 10)
     asyncio.run(notify_successful_referral(context, referrer_id))
     private_call = context.bot.send_message.await_args_list[-1]
     success_message = private_call.args[1]
     assert private_call.args[0] == referrer_id
     assert "10 valid referrals" in success_message
-    assert "1 USDT" in success_message
-    assert "1.00 USDT" in success_message
+    assert "2 USDT" in success_message
+    assert "2.00 USDT" in success_message
     assert context.bot.send_message.await_count == 2
 
 

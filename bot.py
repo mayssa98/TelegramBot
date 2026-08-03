@@ -136,62 +136,117 @@ async def block_non_channel_members(update: Update, context: ContextTypes.DEFAUL
     )
     raise ApplicationHandlerStop
 
+def _interaction_button_name(query):
+    """Return the exact visible label of a pressed inline button when available."""
+    callback_data = str(getattr(query, "data", "") or "")
+    markup = getattr(getattr(query, "message", None), "reply_markup", None)
+    for row in getattr(markup, "inline_keyboard", None) or []:
+        for button in row:
+            if str(getattr(button, "callback_data", "") or "") == callback_data:
+                label = " ".join(str(getattr(button, "text", "") or "").split())
+                if label:
+                    return label
+
+    action, _, value = callback_data.partition(":")
+    names = {
+        "home": "Main menu", "catalog": "Catalog", "catalog_request": "Request a product",
+        "orders": "My orders", "account": "My account", "affiliate": "Affiliate program",
+        "affiliate_copy": "Copy referral link", "support": "Support", "language": "Language",
+        "topup": "Top up balance", "topup_claim": "Verify top-up",
+        "topup_txid": "Verify top-up with TXID", "topup_bsc": "Top up with BSC",
+        "topup_polygon": "Top up with Polygon", "verify_channel_join": "Verify membership",
+        "paid": "Verify payment with TXID", "verify_auto": "Verify payment automatically",
+        "paid_chain": "Submit blockchain TXID", "continue_pay": "Continue payment",
+        "confirm_buy": "Create new order", "cancel_buy": "Cancel order",
+        "pay_wallet": "Pay with wallet", "pay_binance": "Pay with Binance Pay",
+        "pay_bsc": "Pay with USDT BSC", "pay_polygon": "Pay with USDT Polygon",
+        "orders_export": "Export orders", "rating": "Rate purchase",
+        "support_cat": "Support category", "support_order": "Support order",
+        "svc": "Open service", "off": "Open offer", "buy": "Buy now",
+        "buyq": "Select quantity", "qty_page": "Change quantity page", "tour": "Onboarding",
+    }
+    name = names.get(action) or action.replace("_", " ").strip().title() or "Unknown button"
+    return f"{name} ({value})" if value else name
+
+
 async def notify_admin_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Privately report every customer message and button action to the admin."""
+    """Send the admin a professional, detailed customer activity card."""
     user = update.effective_user
     if not user or user.id == ADMIN_ID:
         return
 
-    display_name = html.escape(user.full_name or user.first_name or "Unknown")
-    username = f"@{html.escape(user.username)}" if user.username else "—"
+    raw_name = user.full_name or user.first_name or "Unknown user"
+    display_name = html.escape(raw_name)
+    raw_username = user.username or ""
+    username = f"@{html.escape(raw_username)}" if raw_username else "Not provided"
+    profile = f'<a href="tg://user?id={user.id}">{display_name}</a>'
     header = (
-        "🔔 <b>Bot interaction</b>\n"
-        f"👤 <b>User:</b> {display_name}\n"
-        f"🔗 <b>Username:</b> {username}\n"
-        f"🆔 <b>Telegram ID:</b> <code>{user.id}</code>\n"
+        "<b>CUSTOMER ACTIVITY</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>Customer:</b> {profile}\n"
+        f"<b>Username:</b> {username}\n"
+        f"<b>Telegram ID:</b> <code>{user.id}</code>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
     )
 
+    media_message = None
     if update.callback_query:
-        callback = html.escape(str(update.callback_query.data or ""))
-        raw_callback = str(update.callback_query.data or "")
+        query = update.callback_query
+        raw_callback = str(query.data or "")
+        button_name = _interaction_button_name(query)
         source_text = (
-            getattr(update.callback_query.message, "text", None)
-            or getattr(update.callback_query.message, "caption", None)
+            getattr(query.message, "text", None)
+            or getattr(query.message, "caption", None)
             or ""
         )
-        details = f"🔘 <b>Button:</b> <code>{callback[:500]}</code>"
+        details = (
+            "<b>Interaction:</b> Button click\n"
+            f"<b>Button:</b> {html.escape(button_name[:200])}\n"
+            f"<b>Action code:</b> <code>{html.escape(raw_callback[:500])}</code>"
+        )
         if source_text:
-            details += f"\n📝 <b>Screen:</b> {html.escape(source_text[:700])}"
+            details += (
+                "\n\n<b>Screen before the click:</b>\n"
+                f"<blockquote>{html.escape(source_text[:1200])}</blockquote>"
+            )
         interaction_type = "button"
         interaction_action = raw_callback
-        interaction_content = ""
+        interaction_content = button_name
         interaction_screen = source_text
     elif update.effective_message:
         message = update.effective_message
-        content = message.text or message.caption
+        content = message.text or message.caption or ""
         if content:
-            details = (
-                "💬 <b>Message:</b>\n"
-                f"<blockquote>{html.escape(content[:1500])}</blockquote>"
-            )
             interaction_type = "command" if str(content).startswith("/") else "message"
+            type_name = "Command" if interaction_type == "command" else "Text message"
             interaction_action = str(content).split(maxsplit=1)[0] if interaction_type == "command" else ""
             interaction_content = content
-        elif message.photo:
-            details = "🖼 <b>Sent a photo</b>"
-            interaction_type, interaction_action, interaction_content = "media", "photo", ""
-        elif message.document:
-            details = "📎 <b>Sent a document</b>"
-            interaction_type, interaction_action, interaction_content = "media", "document", ""
-        elif message.video:
-            details = "🎥 <b>Sent a video</b>"
-            interaction_type, interaction_action, interaction_content = "media", "video", ""
-        elif message.voice:
-            details = "🎙 <b>Sent a voice message</b>"
-            interaction_type, interaction_action, interaction_content = "media", "voice", ""
+            details = (
+                f"<b>Interaction:</b> {type_name}\n"
+                "<b>Customer sent:</b>\n"
+                f"<blockquote>{html.escape(content[:2500])}</blockquote>"
+            )
+        elif getattr(message, "photo", None):
+            details = "<b>Interaction:</b> Photo\n<b>Customer sent:</b> A photo (copied below)"
+            interaction_type, interaction_action, interaction_content = "media", "photo", "Photo"
+            media_message = message
+        elif getattr(message, "document", None):
+            document = message.document
+            filename = html.escape(str(getattr(document, "file_name", "") or "Unnamed file"))
+            details = f"<b>Interaction:</b> Document\n<b>Customer sent:</b> {filename} (copied below)"
+            interaction_type, interaction_action, interaction_content = "media", "document", filename
+            media_message = message
+        elif getattr(message, "video", None):
+            details = "<b>Interaction:</b> Video\n<b>Customer sent:</b> A video (copied below)"
+            interaction_type, interaction_action, interaction_content = "media", "video", "Video"
+            media_message = message
+        elif getattr(message, "voice", None):
+            details = "<b>Interaction:</b> Voice message\n<b>Customer sent:</b> A voice message (copied below)"
+            interaction_type, interaction_action, interaction_content = "media", "voice", "Voice message"
+            media_message = message
         else:
-            details = "📨 <b>Sent an unsupported message type</b>"
-            interaction_type, interaction_action, interaction_content = "other", "unsupported", ""
+            details = "<b>Interaction:</b> Other message\n<b>Customer sent:</b> Unsupported Telegram content"
+            interaction_type, interaction_action, interaction_content = "other", "unsupported", "Unsupported content"
         interaction_screen = ""
     else:
         return
@@ -200,8 +255,8 @@ async def notify_admin_interaction(update: Update, context: ContextTypes.DEFAULT
         db.log_interaction(
             user.id,
             first_name=user.first_name or "",
-            full_name=user.full_name or "",
-            username=user.username or "",
+            full_name=raw_name,
+            username=raw_username,
             interaction_type=interaction_type,
             action=interaction_action,
             content=interaction_content,
@@ -215,10 +270,20 @@ async def notify_admin_interaction(update: Update, context: ContextTypes.DEFAULT
             ADMIN_ID,
             f"{header}{details}",
             parse_mode=ParseMode.HTML,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
+        if media_message and hasattr(context.bot, "copy_message"):
+            chat = getattr(media_message, "chat", None)
+            chat_id = getattr(chat, "id", None) or getattr(media_message, "chat_id", None)
+            message_id = getattr(media_message, "message_id", None)
+            if chat_id and message_id:
+                await context.bot.copy_message(
+                    chat_id=ADMIN_ID,
+                    from_chat_id=chat_id,
+                    message_id=message_id,
+                )
     except Exception:
         log.exception("Unable to notify admin about interaction from user %s", user.id)
-
 
 async def block_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -524,13 +589,10 @@ def _format_membership_diagnostics(user_id, details):
 
 
 async def register_start_referral(context, referred_id, referrer_id):
-    """Register a preserved start-link referral only after channel verification."""
+    """Register a preserved start-link referral for later purchase qualification."""
     if not referrer_id:
         return
-    accepted = affiliate_service.register_referral_link(referred_id, int(referrer_id))
-    if accepted:
-        with contextlib.suppress(Exception):
-            await notify_successful_referral(context, int(referrer_id))
+    affiliate_service.register_referral_link(referred_id, int(referrer_id))
 
 
 async def send_channel_member_welcome(send, context, user_id, lang):
@@ -740,6 +802,31 @@ async def broadcast_maintenance_notice(context, message):
     return sent
 
 
+async def broadcast_affiliate_program_update(context):
+    """Notify every active bot user about the affiliate qualification rule."""
+    sent = 0
+    for user in db.list_broadcast_users():
+        user_id = user.get("telegram_id")
+        if not user_id:
+            continue
+        lang = user.get("lang") or DEFAULT_LANG
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=premium_customer_text(lang, "affiliate_program_update"),
+                parse_mode=ParseMode.HTML,
+            )
+            sent += 1
+        except Exception as exc:
+            error = str(exc).lower()
+            if "blocked" in error or "chat not found" in error or "deactivated" in error:
+                db.mark_broadcast_blocked(user_id)
+            else:
+                log.warning("Affiliate program update failed for user %s: %s", user_id, exc)
+        await asyncio.sleep(0.04)
+    return sent
+
+
 async def announce_channel_purchase(context, order_id):
     """Compatibility no-op: purchase results stay in the private bot chat."""
     return False
@@ -788,6 +875,15 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args and context.args[0].startswith("ref_"):
         with contextlib.suppress(ValueError, TypeError):
             referrer_id = int(context.args[0][4:])
+
+    if not await is_required_channel_member(context.bot, u.id):
+        PENDING[u.id] = ("await_channel_join", referrer_id)
+        await update.message.reply_text(
+            premium_customer_text(lang, "channel_join_required"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.channel_join_keyboard(lang),
+        )
+        return
 
     if pending and pending[0] == "await_channel_join":
         PENDING.pop(u.id, None)
@@ -1069,6 +1165,16 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if data == "verify_channel_join":
+        allowed, details = await required_membership_status(context.bot, uid)
+        if not allowed:
+            log.info(_format_membership_diagnostics(uid, details))
+            await q.edit_message_text(
+                premium_customer_text(lang, "channel_join_not_verified"),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.channel_join_keyboard(lang),
+            )
+            return
+
         pending = PENDING.pop(uid, None)
         referrer_id = pending[1] if pending and pending[0] == "await_channel_join" else 0
         db.set_user_lang(uid, DEFAULT_LANG)
@@ -2147,6 +2253,17 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                     ),
                     parse_mode=ParseMode.HTML,
                 )
+            else:
+                await context.bot.send_message(
+                    referrer_id,
+                    premium_customer_text(
+                        ref_lang,
+                        "affiliate_payment_progress",
+                        count=affiliate["valid_referrals"],
+                        target=affiliate_service.REFERRAL_TARGET,
+                    ),
+                    parse_mode=ParseMode.HTML,
+                )
         loyalty = result.get("loyalty")
         if loyalty and loyalty.get("activated"):
             await message.reply_text(
@@ -2887,6 +3004,8 @@ def build_app():
     app = Application.builder().token(BOT_TOKEN).request(request).build()
     # Observe every customer update without consuming it.
     app.add_handler(TypeHandler(Update, notify_admin_interaction), group=-4)
+    app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-3)
+    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-3)
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(
