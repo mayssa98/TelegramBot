@@ -259,7 +259,7 @@ def test_delivery_accounts_use_numeric_labels_without_hash_delimiters():
         "1.\nfirst@example.com:pass\n\n2.\nsecond@example.com:pass\n\n3.\nthird@example.com:pass"
     )
 
-def test_start_requires_channel_membership(monkeypatch):
+def test_start_allows_users_without_channel_membership(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     user = SimpleNamespace(id=42, username="buyer", first_name="Buyer")
     bot_client = SimpleNamespace(
@@ -274,9 +274,8 @@ def test_start_requires_channel_membership(monkeypatch):
 
     message.reply_text.assert_awaited_once()
     call = message.reply_text.await_args
-    assert "MEMBERS-ONLY ACCESS" in call.args[0]
-    callbacks = [button.callback_data for row in call.kwargs["reply_markup"].inline_keyboard for button in row]
-    assert "verify_channel_join" in callbacks
+    assert "WELCOME TO" in call.args[0]
+    bot_client.get_chat_member.assert_not_awaited()
 
 
 def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
@@ -304,7 +303,7 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     assert "1 USDT" in rendered
     assert "12% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
-    assert bot_client.get_chat_member.await_count == 2
+    bot_client.get_chat_member.assert_not_awaited()
 
 
 def test_group_membership_is_also_required(monkeypatch):
@@ -369,17 +368,19 @@ def test_membership_status_reports_failed_chat(monkeypatch):
     ]
 
 
-def test_verify_joining_notifies_admin_with_diagnostic(monkeypatch):
+def test_verify_joining_no_longer_notifies_admin_for_missing_membership(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     query = SimpleNamespace(
         data="verify_channel_join",
         from_user=SimpleNamespace(id=42),
         message=message,
         answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
     )
     bot_client = SimpleNamespace(
         get_chat_member=AsyncMock(return_value=SimpleNamespace(status="left")),
         send_message=AsyncMock(),
+        username="blackmarket_test_bot",
     )
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
@@ -387,9 +388,9 @@ def test_verify_joining_notifies_admin_with_diagnostic(monkeypatch):
 
     asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace(bot=bot_client)))
 
-    bot_client.send_message.assert_awaited_once()
-    assert "Membership verification failed" in bot_client.send_message.await_args.args[1]
-    assert "status=<code>left</code>" in bot_client.send_message.await_args.args[1]
+    bot_client.get_chat_member.assert_not_awaited()
+    bot_client.send_message.assert_not_awaited()
+    query.edit_message_text.assert_awaited_once()
 
 @pytest.mark.parametrize(
     ("key", "incoming_text", "emoji_id"),

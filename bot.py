@@ -789,15 +789,6 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with contextlib.suppress(ValueError, TypeError):
             referrer_id = int(context.args[0][4:])
 
-    if not await is_required_channel_member(context.bot, u.id):
-        PENDING[u.id] = ("await_channel_join", int(referrer_id or 0))
-        await update.message.reply_text(
-            premium_customer_text(lang, "channel_join_required"),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.channel_join_keyboard(lang),
-        )
-        return
-
     if pending and pending[0] == "await_channel_join":
         PENDING.pop(u.id, None)
     await register_start_referral(context, u.id, referrer_id)
@@ -1078,20 +1069,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if data == "verify_channel_join":
-        is_member, details = await required_membership_status(context.bot, uid)
-        if not is_member:
-            with contextlib.suppress(Exception):
-                await context.bot.send_message(
-                    ADMIN_ID,
-                    _format_membership_diagnostics(uid, details),
-                    parse_mode=ParseMode.HTML,
-                )
-            await q.message.reply_text(
-                premium_customer_text(lang, "channel_join_not_verified"),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.channel_join_keyboard(lang),
-            )
-            return
         pending = PENDING.pop(uid, None)
         referrer_id = pending[1] if pending and pending[0] == "await_channel_join" else 0
         db.set_user_lang(uid, DEFAULT_LANG)
@@ -2910,10 +2887,6 @@ def build_app():
     app = Application.builder().token(BOT_TOKEN).request(request).build()
     # Observe every customer update without consuming it.
     app.add_handler(TypeHandler(Update, notify_admin_interaction), group=-4)
-    # Group -3: required channel membership before all customer actions.
-    # Require channel membership before all customer actions.
-    app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-3)
-    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-3)
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
     app.add_handler(
