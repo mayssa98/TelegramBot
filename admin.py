@@ -69,9 +69,9 @@ def texts_category_keyboard(category, page=0, page_size=8):
 def admin_panel_keyboard():
     maintenance_enabled = db.shop_settings()["maintenance_enabled"]
     maintenance_label = (
-        "🔴 Maintenance : ACTIVÉE"
+        "🔴 Full maintenance lock: ON"
         if maintenance_enabled
-        else "🟢 Maintenance : DÉSACTIVÉE"
+        else "🟢 Full maintenance lock: OFF"
     )
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Commandes payées", callback_data="adm_list:paid")],

@@ -19,6 +19,7 @@ from bot import (
     announce_channel_purchase,
     announce_channel_restock,
     announce_flash_sale,
+    block_maintenance_users,
     broadcast_admin_message,
     broadcast_maintenance_notice,
     cb_admin,
@@ -155,6 +156,63 @@ def test_maintenance_notice_is_sent_to_every_active_user(mock_mongodb):
         "The shop is temporarily unavailable." in call.kwargs["text"]
         for call in bot_client.send_message.await_args_list
     )
+
+
+def test_full_maintenance_blocks_every_customer_command(monkeypatch):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.db.shop_settings", lambda: {
+        "maintenance_enabled": True,
+        "maintenance_message": "We will be back shortly.",
+    })
+    message = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        callback_query=None,
+        effective_message=message,
+    )
+
+    with pytest.raises(Exception) as stopped:
+        asyncio.run(block_maintenance_users(update, SimpleNamespace()))
+
+    assert stopped.value.__class__.__name__ == "ApplicationHandlerStop"
+    message.reply_text.assert_awaited_once()
+    assert "BOT UNDER MAINTENANCE" in message.reply_text.await_args.args[0]
+    assert "We will be back shortly." in message.reply_text.await_args.args[0]
+
+
+def test_full_maintenance_blocks_customer_buttons(monkeypatch):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.db.shop_settings", lambda: {
+        "maintenance_enabled": True,
+        "maintenance_message": "Please try later.",
+    })
+    message = SimpleNamespace(reply_text=AsyncMock())
+    query = SimpleNamespace(answer=AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        callback_query=query,
+        effective_message=message,
+    )
+
+    with pytest.raises(Exception):
+        asyncio.run(block_maintenance_users(update, SimpleNamespace()))
+
+    query.answer.assert_awaited_once_with("Maintenance mode is active.", show_alert=True)
+    message.reply_text.assert_awaited_once()
+
+
+def test_full_maintenance_never_blocks_admin(monkeypatch):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.db.shop_settings", Mock(side_effect=AssertionError("not needed")))
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=999),
+        callback_query=None,
+        effective_message=SimpleNamespace(reply_text=AsyncMock()),
+    )
+
+    asyncio.run(block_maintenance_users(update, SimpleNamespace()))
+
+    update.effective_message.reply_text.assert_not_awaited()
 
 
 def test_customer_button_click_is_reported_to_admin(monkeypatch, mock_mongodb):

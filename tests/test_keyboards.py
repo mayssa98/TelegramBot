@@ -323,7 +323,7 @@ def test_admin_panel_has_persistent_maintenance_toggle(mock_mongodb):
         for button in row
         if button.callback_data == "adm_maintenance_toggle"
     )
-    assert "DÉSACTIVÉE" in button.text
+    assert "OFF" in button.text
 
     db.set_setting("maintenance_enabled", True)
     keyboard = admin.admin_panel_keyboard()
@@ -333,7 +333,7 @@ def test_admin_panel_has_persistent_maintenance_toggle(mock_mongodb):
         for button in row
         if button.callback_data == "adm_maintenance_toggle"
     )
-    assert "ACTIVÉE" in button.text
+    assert "ON" in button.text
 
 
 def test_admin_panel_has_user_activity_option(mock_mongodb):

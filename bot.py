@@ -295,15 +295,28 @@ async def block_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE)
         raise ApplicationHandlerStop
 
 
-async def block_maintenance_purchases(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Disable only new purchases while keeping orders and support available."""
+async def block_maintenance_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lock the entire customer bot during maintenance while preserving admin access."""
     user = update.effective_user
-    if not user or user.id == ADMIN_ID or not update.callback_query:
+    if not user or user.id == ADMIN_ID:
         return
     settings = db.shop_settings()
-    if settings["maintenance_enabled"]:
-        await update.callback_query.answer(settings["maintenance_message"], show_alert=True)
-        raise ApplicationHandlerStop
+    if not settings["maintenance_enabled"]:
+        return
+
+    message = settings["maintenance_message"].strip() or (
+        "The bot is temporarily under maintenance. Please try again later."
+    )
+    if update.callback_query:
+        await update.callback_query.answer("Maintenance mode is active.", show_alert=True)
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            "🛠️ <b>BOT UNDER MAINTENANCE</b>\n\n"
+            f"{html.escape(message)}\n\n"
+            "Please try again later.",
+            parse_mode=ParseMode.HTML,
+        )
+    raise ApplicationHandlerStop
 
 
 
@@ -2700,11 +2713,11 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context, settings["maintenance_message"],
             )
             detail = (
-                "Les nouveaux achats sont bloqués pendant la maintenance.\n"
+                "Tous les clients sont maintenant bloqués. Seul l'admin peut utiliser le bot.\n"
                 f"📢 Notification envoyée à {sent} utilisateur(s)."
             )
         else:
-            detail = "Les achats sont de nouveau disponibles."
+            detail = "Le bot est de nouveau accessible à tous les clients."
         await show_callback_screen(
             q,
             "🛠️ *Panneau Admin*\n\n"
@@ -3060,19 +3073,14 @@ def build_app():
     from telegram.request import HTTPXRequest
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     app = Application.builder().token(BOT_TOKEN).request(request).build()
-    # Observe every customer update without consuming it.
-    app.add_handler(TypeHandler(Update, notify_admin_interaction), group=-4)
-    app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-3)
-    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-3)
-    app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-2)
-    app.add_handler(CallbackQueryHandler(block_banned_users), group=-2)
-    app.add_handler(
-        CallbackQueryHandler(
-            block_maintenance_purchases,
-            pattern=r"^(buy|buyq|qty_page|confirm_buy|pay_wallet|pay_binance|pay_bsc|pay_polygon):",
-        ),
-        group=-1,
-    )
+    # Observe every customer update without consuming it, then apply global gates.
+    app.add_handler(TypeHandler(Update, notify_admin_interaction), group=-5)
+    app.add_handler(MessageHandler(filters.ALL, block_maintenance_users), group=-4)
+    app.add_handler(CallbackQueryHandler(block_maintenance_users), group=-4)
+    app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-3)
+    app.add_handler(CallbackQueryHandler(block_banned_users), group=-3)
+    app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-2)
+    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-2)
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", lambda u, c: send_main_menu(u, c, lang_of(u.effective_user.id))))
     app.add_handler(CommandHandler("catalog", cmd_catalog))

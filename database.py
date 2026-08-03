@@ -856,7 +856,7 @@ def shop_settings():
         "affiliate_target": AFFILIATE_DAILY_CAP,
         "affiliate_reward_cents": AFFILIATE_FIVE_REWARD_CENTS,
         "maintenance_enabled": False,
-        "maintenance_message": "La boutique est temporairement en maintenance.",
+        "maintenance_message": "The bot is temporarily under maintenance while we make improvements.",
         "welcome_message": "",
         "help_message": "",
         "terms_message": "",
