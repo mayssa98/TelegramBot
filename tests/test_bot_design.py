@@ -323,6 +323,31 @@ def test_group_membership_is_also_required(monkeypatch):
         "@channel", "@Blackmarketgrp",
     ]
 
+
+def test_membership_check_accepts_links_and_numeric_chat_ids(monkeypatch):
+    from bot import is_required_channel_member
+
+    bot_client = SimpleNamespace(get_chat_member=AsyncMock(return_value=SimpleNamespace(status="member")))
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.REQUIRED_CHANNEL", "https://t.me/blackmarketBotChannel")
+    monkeypatch.setattr("bot.REQUIRED_GROUP", "-1001234567890")
+
+    assert asyncio.run(is_required_channel_member(bot_client, 42)) is True
+    assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
+        "@blackmarketBotChannel", -1001234567890,
+    ]
+
+
+def test_membership_check_accepts_owner_status(monkeypatch):
+    from bot import is_required_channel_member
+
+    bot_client = SimpleNamespace(get_chat_member=AsyncMock(return_value=SimpleNamespace(status="owner")))
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
+    monkeypatch.setattr("bot.REQUIRED_GROUP", "@group")
+
+    assert asyncio.run(is_required_channel_member(bot_client, 42)) is True
+
 @pytest.mark.parametrize(
     ("key", "incoming_text", "emoji_id"),
     [

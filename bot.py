@@ -452,19 +452,47 @@ def render_stored_rich_text(value, *, parse_legacy_markdown=True):
 
 
 # ---------------- /start ----------------
+def _normalize_required_chat(chat):
+    """Convert channel/group config into a Telegram get_chat_member target."""
+    chat = str(chat or "").strip()
+    if not chat:
+        return ""
+    if chat.startswith("https://t.me/"):
+        chat = chat.removeprefix("https://t.me/").strip("/")
+    elif chat.startswith("http://t.me/"):
+        chat = chat.removeprefix("http://t.me/").strip("/")
+    elif chat.startswith("t.me/"):
+        chat = chat.removeprefix("t.me/").strip("/")
+    if "/" in chat:
+        chat = chat.split("/", 1)[0]
+    if re.fullmatch(r"-?\d+", chat):
+        return int(chat)
+    if chat.startswith("@"):
+        return chat
+    return f"@{chat}"
+
+
 async def is_required_channel_member(bot, user_id):
     """Return whether a customer belongs to both the required channel and group."""
     if user_id == ADMIN_ID:
         return True
-    for chat in (REQUIRED_CHANNEL, REQUIRED_GROUP):
+    required_chats = [
+        normalized
+        for chat in (REQUIRED_CHANNEL, REQUIRED_GROUP)
+        if (normalized := _normalize_required_chat(chat))
+    ]
+    if not required_chats:
+        return True
+    for chat in required_chats:
         try:
             member = await bot.get_chat_member(chat, user_id)
         except Exception as exc:
             log.warning("Unable to verify membership in %s for %s: %s", chat, user_id, exc)
             return False
         status = getattr(getattr(member, "status", None), "value", getattr(member, "status", ""))
-        is_member = str(status) in {"creator", "administrator", "member"} or (
-            str(status) == "restricted" and bool(getattr(member, "is_member", False))
+        status = str(status).lower()
+        is_member = status in {"creator", "owner", "administrator", "member"} or (
+            status == "restricted" and bool(getattr(member, "is_member", False))
         )
         if not is_member:
             return False
