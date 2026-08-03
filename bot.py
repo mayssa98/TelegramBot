@@ -474,29 +474,53 @@ def _normalize_required_chat(chat):
 
 async def is_required_channel_member(bot, user_id):
     """Return whether a customer belongs to both the required channel and group."""
+    allowed, _details = await required_membership_status(bot, user_id)
+    return allowed
+
+
+async def required_membership_status(bot, user_id):
+    """Return membership result plus per-chat diagnostics for admins/logs."""
     if user_id == ADMIN_ID:
-        return True
+        return True, []
     required_chats = [
         normalized
         for chat in (REQUIRED_CHANNEL, REQUIRED_GROUP)
         if (normalized := _normalize_required_chat(chat))
     ]
     if not required_chats:
-        return True
+        return True, []
+    details = []
     for chat in required_chats:
         try:
             member = await bot.get_chat_member(chat, user_id)
         except Exception as exc:
             log.warning("Unable to verify membership in %s for %s: %s", chat, user_id, exc)
-            return False
+            details.append({"chat": chat, "ok": False, "error": str(exc)})
+            return False, details
         status = getattr(getattr(member, "status", None), "value", getattr(member, "status", ""))
         status = str(status).lower()
         is_member = status in {"creator", "owner", "administrator", "member"} or (
             status == "restricted" and bool(getattr(member, "is_member", False))
         )
+        details.append({"chat": chat, "ok": is_member, "status": status})
         if not is_member:
-            return False
-    return True
+            return False, details
+    return True, details
+
+
+def _format_membership_diagnostics(user_id, details):
+    if not details:
+        return f"Membership verification failed for <code>{user_id}</code>: no required chats configured."
+    lines = [f"Membership verification failed for <code>{user_id}</code>:"]
+    for detail in details:
+        chat = html.escape(str(detail.get("chat", "")))
+        if detail.get("error"):
+            error = html.escape(str(detail["error"])[:500])
+            lines.append(f"- <code>{chat}</code>: API error: {error}")
+        else:
+            status = html.escape(str(detail.get("status", "unknown")))
+            lines.append(f"- <code>{chat}</code>: status=<code>{status}</code>")
+    return "\n".join(lines)
 
 
 async def register_start_referral(context, referred_id, referrer_id):
@@ -1054,7 +1078,14 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if data == "verify_channel_join":
-        if not await is_required_channel_member(context.bot, uid):
+        is_member, details = await required_membership_status(context.bot, uid)
+        if not is_member:
+            with contextlib.suppress(Exception):
+                await context.bot.send_message(
+                    ADMIN_ID,
+                    _format_membership_diagnostics(uid, details),
+                    parse_mode=ParseMode.HTML,
+                )
             await q.message.reply_text(
                 premium_customer_text(lang, "channel_join_not_verified"),
                 parse_mode=ParseMode.HTML,

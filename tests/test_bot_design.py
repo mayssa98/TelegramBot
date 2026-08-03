@@ -348,6 +348,49 @@ def test_membership_check_accepts_owner_status(monkeypatch):
 
     assert asyncio.run(is_required_channel_member(bot_client, 42)) is True
 
+
+def test_membership_status_reports_failed_chat(monkeypatch):
+    from bot import required_membership_status
+
+    bot_client = SimpleNamespace(get_chat_member=AsyncMock(side_effect=[
+        SimpleNamespace(status="member"),
+        SimpleNamespace(status="left"),
+    ]))
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
+    monkeypatch.setattr("bot.REQUIRED_GROUP", "@group")
+
+    allowed, details = asyncio.run(required_membership_status(bot_client, 42))
+
+    assert allowed is False
+    assert details == [
+        {"chat": "@channel", "ok": True, "status": "member"},
+        {"chat": "@group", "ok": False, "status": "left"},
+    ]
+
+
+def test_verify_joining_notifies_admin_with_diagnostic(monkeypatch):
+    message = SimpleNamespace(reply_text=AsyncMock())
+    query = SimpleNamespace(
+        data="verify_channel_join",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+    )
+    bot_client = SimpleNamespace(
+        get_chat_member=AsyncMock(return_value=SimpleNamespace(status="left")),
+        send_message=AsyncMock(),
+    )
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
+    monkeypatch.setattr("bot.REQUIRED_GROUP", "@group")
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace(bot=bot_client)))
+
+    bot_client.send_message.assert_awaited_once()
+    assert "Membership verification failed" in bot_client.send_message.await_args.args[1]
+    assert "status=<code>left</code>" in bot_client.send_message.await_args.args[1]
+
 @pytest.mark.parametrize(
     ("key", "incoming_text", "emoji_id"),
     [
