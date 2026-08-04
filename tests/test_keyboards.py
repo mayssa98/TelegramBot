@@ -315,6 +315,19 @@ def test_admin_panel_has_custom_announcement_button():
     assert "adm_broadcast_message" in callbacks
 
 
+def test_home_menu_offers_optional_channel_and_group_links(mock_mongodb):
+    keyboard = kb.home_keyboard("en", 42)
+    urls = {
+        button.url
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.url
+    }
+
+    assert "https://t.me/blackmarketBotChannel" in urls
+    assert "https://t.me/Blackmarketgrp" in urls
+
+
 def test_admin_panel_has_persistent_maintenance_toggle(mock_mongodb):
     keyboard = admin.admin_panel_keyboard()
     button = next(

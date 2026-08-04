@@ -325,7 +325,7 @@ def test_delivery_accounts_use_numeric_labels_without_hash_delimiters():
         "1.\nfirst@example.com:pass\n\n2.\nsecond@example.com:pass\n\n3.\nthird@example.com:pass"
     )
 
-def test_start_requires_channel_and_group_membership(monkeypatch):
+def test_start_allows_access_without_channel_or_group_membership(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     user = SimpleNamespace(id=42, username="buyer", first_name="Buyer")
     bot_client = SimpleNamespace(
@@ -340,11 +340,9 @@ def test_start_requires_channel_and_group_membership(monkeypatch):
 
     message.reply_text.assert_awaited_once()
     call = message.reply_text.await_args
-    assert "MEMBERS-ONLY ACCESS" in call.args[0]
+    assert "WELCOME TO" in call.args[0]
     assert call.kwargs["reply_markup"] is not None
-    assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
-        "@blackmarketBotChannel", "@Blackmarketgrp",
-    ]
+    bot_client.get_chat_member.assert_not_awaited()
 
 
 def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
@@ -372,7 +370,7 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     assert "1 USDT" in rendered
     assert "12% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
-    assert bot_client.get_chat_member.await_count == 2
+    bot_client.get_chat_member.assert_not_awaited()
 
 
 def test_group_membership_is_also_required(monkeypatch):
@@ -462,7 +460,7 @@ def test_membership_status_reports_failed_chat(monkeypatch):
     ]
 
 
-def test_verify_joining_rejects_missing_membership_and_notifies_admin(monkeypatch):
+def test_legacy_verify_button_unlocks_without_membership(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     query = SimpleNamespace(
         data="verify_channel_join",
@@ -482,13 +480,10 @@ def test_verify_joining_rejects_missing_membership_and_notifies_admin(monkeypatc
 
     asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace(bot=bot_client)))
 
-    assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
-        "@channel", "@group",
-    ]
-    bot_client.send_message.assert_awaited_once()
-    assert "MEMBERSHIP VERIFICATION FAILED" in bot_client.send_message.await_args.args[1]
+    bot_client.get_chat_member.assert_not_awaited()
+    bot_client.send_message.assert_not_awaited()
     query.edit_message_text.assert_awaited_once()
-    assert "MEMBERSHIP NOT DETECTED" in query.edit_message_text.await_args.args[0]
+    assert "WELCOME TO" in query.edit_message_text.await_args.args[0]
 
 @pytest.mark.parametrize(
     ("key", "incoming_text", "emoji_id"),

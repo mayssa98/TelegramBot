@@ -930,15 +930,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with contextlib.suppress(ValueError, TypeError):
             referrer_id = int(context.args[0][4:])
 
-    if not await is_required_channel_member(context.bot, u.id):
-        PENDING[u.id] = ("await_channel_join", referrer_id)
-        await update.message.reply_text(
-            premium_customer_text(lang, "channel_join_required"),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.channel_join_keyboard(lang),
-        )
-        return
-
+    # Membership in the community channel/group is optional. Clear any
+    # verification state left by older deployments without blocking access.
     if pending and pending[0] == "await_channel_join":
         PENDING.pop(u.id, None)
     await register_start_referral(context, u.id, referrer_id)
@@ -1219,33 +1212,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if data == "verify_channel_join":
-        allowed, details = await required_membership_status(context.bot, uid)
-        if not allowed:
-            diagnostics = _format_membership_diagnostics(uid, details)
-            log.info(diagnostics)
-            user = q.from_user
-            full_name = getattr(user, "full_name", None) or getattr(user, "first_name", None)
-            raw_username = getattr(user, "username", None)
-            name = html.escape(full_name or "Unknown user")
-            username = f"@{html.escape(raw_username)}" if raw_username else "Not provided"
-            with contextlib.suppress(Exception):
-                await context.bot.send_message(
-                    ADMIN_ID,
-                    "<b>MEMBERSHIP VERIFICATION FAILED</b>\n"
-                    "━━━━━━━━━━━━━━━━━━━━\n"
-                    f"<b>Customer:</b> {name}\n"
-                    f"<b>Username:</b> {username}\n"
-                    f"<b>Telegram ID:</b> <code>{uid}</code>\n\n"
-                    f"{diagnostics}",
-                    parse_mode=ParseMode.HTML,
-                )
-            await q.edit_message_text(
-                premium_customer_text(lang, "channel_join_not_verified"),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.channel_join_keyboard(lang),
-            )
-            return
-
+        # Compatibility for join prompts sent by older deployments: unlock
+        # immediately because community membership is now optional.
         pending = PENDING.pop(uid, None)
         referrer_id = pending[1] if pending and pending[0] == "await_channel_join" else 0
         db.set_user_lang(uid, DEFAULT_LANG)
@@ -3079,8 +3047,6 @@ def build_app():
     app.add_handler(CallbackQueryHandler(block_maintenance_users), group=-4)
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-3)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-3)
-    app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-2)
-    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-2)
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", lambda u, c: send_main_menu(u, c, lang_of(u.effective_user.id))))
     app.add_handler(CommandHandler("catalog", cmd_catalog))
