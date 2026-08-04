@@ -214,6 +214,19 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "__PANEL_" not in page
 
 
+def test_dashboard_attaches_write_token_to_every_admin_request():
+    page = render_dashboard(
+        {"summary": {}, "alerts": [], "services": []},
+        active_tab="catalog",
+        dashboard_write_token="safe-write-token",
+    )
+
+    assert "window.fetch = (input, options = {}) =>" in page
+    assert 'requestUrl.pathname.startsWith("/admin")' in page
+    assert 'headers.set("X-Dashboard-Write-Token", dashboardWriteToken)' in page
+    assert 'credentials: "same-origin"' in page
+
+
 def test_dashboard_uses_midnight_merchant_command_center():
     page = render_dashboard({
         "summary": {"orders": 2, "pending_orders": 1, "open_tickets": 1},

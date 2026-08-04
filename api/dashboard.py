@@ -2593,6 +2593,36 @@ def render_dashboard(
         let apiWorkspaceStep = "overview";
         let selectedApiProductId = null;
         let activeApiProvider = "mailreader";
+
+        // Every dashboard API request must carry the scoped write token. Most
+        // browsers preserve Basic Auth for fetch(), but embedded/mobile
+        // browsers can omit it on POST requests, which previously caused
+        // authenticated offer edits to fail with a misleading 401 response.
+        const nativeDashboardFetch = window.fetch.bind(window);
+        window.fetch = (input, options = {}) => {
+            const requestUrl = new URL(
+                typeof input === "string" ? input : input.url,
+                window.location.href
+            );
+            if (
+                requestUrl.origin === window.location.origin &&
+                requestUrl.pathname.startsWith("/admin")
+            ) {
+                const headers = new Headers(
+                    options.headers || (input instanceof Request ? input.headers : {})
+                );
+                if (dashboardWriteToken) {
+                    headers.set("X-Dashboard-Write-Token", dashboardWriteToken);
+                }
+                options = {
+                    ...options,
+                    headers,
+                    credentials: "same-origin"
+                };
+            }
+            return nativeDashboardFetch(input, options);
+        };
+
         const ORDER_STATUSES = [
             "pending_payment",
             "awaiting_verification",
