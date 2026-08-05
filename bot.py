@@ -1484,19 +1484,37 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer(t(lang, "not_for_you"), show_alert=True)
             return
         await stop_auto_payment_check(oid)
-        task = context.application.create_task(
-            run_auto_payment_check(q.message, context, lang, oid, uid),
-            update=update,
-            name=f"payment-scan-{oid}",
+        # Await the Binance lookup inside this webhook request. Background
+        # tasks are not reliable on serverless hosts such as Vercel because
+        # the runtime may freeze as soon as the callback response completes.
+        scanner = await q.message.reply_text(
+            premium_customer_text(
+                lang, "payment_scanner", frame=payment_scanner_frame(0), oid=oid,
+            ),
+            parse_mode=ParseMode.HTML,
         )
-        AUTO_PAYMENT_TASKS[oid] = task
-
-        def cleanup_scan(completed_task, order_id=oid):
-            if AUTO_PAYMENT_TASKS.get(order_id) is completed_task:
-                AUTO_PAYMENT_TASKS.pop(order_id, None)
-                AUTO_PAYMENT_MESSAGES.pop(order_id, None)
-
-        task.add_done_callback(cleanup_scan)
+        result = await asyncio.to_thread(payment_service.auto_check_payment, oid, uid)
+        if result["status"] in (
+            "delivered", "confirmed", "confirmed_no_delivery", "already_paid",
+        ):
+            with contextlib.suppress(Exception):
+                await scanner.edit_text(
+                    premium_customer_text(lang, "payment_scanner_success", oid=oid),
+                    parse_mode=ParseMode.HTML,
+                )
+            await send_payment_result(q.message, context, lang, oid, result, uid)
+        else:
+            with contextlib.suppress(Exception):
+                await scanner.edit_text(
+                    premium_customer_text(lang, "payment_scanner_timeout", oid=oid),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=kb.txid_verify_keyboard(lang, oid),
+                )
+            await q.message.reply_text(
+                premium_customer_text(lang, "auto_check_timeout", oid=oid),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.txid_verify_keyboard(lang, oid),
+            )
         return
     if data.startswith("continue_pay:"):
         oid = int(data.split(":")[1])

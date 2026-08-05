@@ -681,6 +681,67 @@ def test_payment_keyboard_prioritizes_verification():
     assert kb.txid_verify_keyboard("fr", 17).inline_keyboard[1][0].callback_data == "cancel_buy:17"
 
 
+def test_payment_verification_is_awaited_inside_webhook(monkeypatch, mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 17, "user_id": 42, "status": "pending_payment", "total_price": 2.8,
+    })
+    scanner = SimpleNamespace(edit_text=AsyncMock())
+    message = SimpleNamespace(reply_text=AsyncMock(return_value=scanner))
+    query = SimpleNamespace(
+        data="verify_auto:17",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+    )
+    result = {
+        "status": "confirmed", "order": {"id": 17},
+        "delivered_content": None, "affiliate": None,
+    }
+    check = Mock(return_value=result)
+    send_result = AsyncMock()
+    monkeypatch.setattr("bot.payment_service.auto_check_payment", check)
+    monkeypatch.setattr("bot.send_payment_result", send_result)
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    # Deliberately omit context.application: a serverless verification must
+    # not depend on a detached background task.
+    context = SimpleNamespace(bot=SimpleNamespace())
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), context))
+
+    check.assert_called_once_with(17, 42)
+    scanner.edit_text.assert_awaited_once()
+    send_result.assert_awaited_once_with(message, context, "en", 17, result, 42)
+    assert 17 not in AUTO_PAYMENT_TASKS
+
+
+def test_payment_verification_failure_keeps_txid_fallback_visible(monkeypatch, mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 18, "user_id": 42, "status": "pending_payment", "total_price": 2.8,
+    })
+    scanner = SimpleNamespace(edit_text=AsyncMock())
+    message = SimpleNamespace(reply_text=AsyncMock(return_value=scanner))
+    query = SimpleNamespace(
+        data="verify_auto:18",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+    )
+    monkeypatch.setattr("bot.payment_service.auto_check_payment", Mock(return_value={
+        "status": "failed", "error_code": "not_found",
+    }))
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(
+        SimpleNamespace(callback_query=query),
+        SimpleNamespace(bot=SimpleNamespace()),
+    ))
+
+    assert message.reply_text.await_count == 2
+    fallback = message.reply_text.await_args_list[-1]
+    assert "TXID" in fallback.args[0]
+    assert fallback.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "paid:18"
+
+
 def test_txid_verification_stops_scanner_and_deletes_waiting_message():
     async def scenario():
         scanner = SimpleNamespace(delete=AsyncMock())
