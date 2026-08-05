@@ -1,11 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["iad1"],
+  "regions": ["dxb1"],
   "fluid": true,
   "functions": {
     "api/webhook.py": {
       "maxDuration": 300,
-      "regions": ["iad1"]
+      "regions": ["dxb1"]
     }
   },
   "crons": [
