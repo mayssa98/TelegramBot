@@ -403,9 +403,20 @@ def auto_check_payment(order_id: int, user_id: int) -> dict[str, Any]:
         item.get("txid")
         for item in db.get_conn().orders.find({"txid": {"$nin": ["", None]}, "id": {"$ne": order_id}}, {"txid": 1})
     ]
+    competing_order = db.get_conn().orders.find_one({
+        "id": {"$ne": order_id},
+        "payment_method": "binance",
+        "total_price": order["total_price"],
+        "status": {"$in": [
+            OrderStatus.PENDING_PAYMENT,
+            OrderStatus.AWAITING_VERIFICATION,
+            OrderStatus.VERIFICATION_FAILED,
+        ]},
+    }, {"id": 1})
     verification = verify_payment_by_amount(
         order["total_price"], CURRENCY, order.get("created_at"),
         used_txids=used_txids, expected_memo=user_id,
+        allow_missing_memo=competing_order is None,
     )
     if verification["status"] == "confirmed":
         txid = verification.get("txid", "")

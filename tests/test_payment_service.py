@@ -143,8 +143,15 @@ def test_first_automatic_verification_requires_amount_and_memo(
 ):
     captured = {}
 
-    def verifier(amount, currency=None, created_at=None, used_txids=None, expected_memo=None):
-        captured.update({"amount": amount, "expected_memo": expected_memo})
+    def verifier(
+        amount, currency=None, created_at=None, used_txids=None,
+        expected_memo=None, allow_missing_memo=False,
+    ):
+        captured.update({
+            "amount": amount,
+            "expected_memo": expected_memo,
+            "allow_missing_memo": allow_missing_memo,
+        })
         return {"status": "failed", "code": "not_found"}
 
     monkeypatch.setattr(payment_service, "verify_payment_by_amount", verifier)
@@ -156,7 +163,33 @@ def test_first_automatic_verification_requires_amount_and_memo(
 
     payment_service.auto_check_payment(13, 123)
 
-    assert captured == {"amount": 5.0, "expected_memo": 123}
+    assert captured == {
+        "amount": 5.0,
+        "expected_memo": 123,
+        "allow_missing_memo": True,
+    }
+
+
+def test_competing_order_disables_memo_less_automatic_verification(
+    mock_mongodb, monkeypatch
+):
+    captured = {}
+
+    def verifier(*args, **kwargs):
+        captured.update(kwargs)
+        return {"status": "failed", "code": "not_found"}
+
+    monkeypatch.setattr(payment_service, "verify_payment_by_amount", verifier)
+    for order_id, user_id in ((14, 123), (15, 456)):
+        mock_mongodb.orders.insert_one({
+            "id": order_id, "user_id": user_id, "payment_method": "binance",
+            "total_price": 5.0, "status": OrderStatus.PENDING_PAYMENT,
+            "txid": "", "created_at": 100, "expires_at": 9999999999,
+        })
+
+    payment_service.auto_check_payment(14, 123)
+
+    assert captured["allow_missing_memo"] is False
 
 
 def test_submit_payment_duplicate_txid(mock_mongodb):

@@ -138,3 +138,52 @@ def test_automatic_verification_matches_amount_and_memo(monkeypatch):
 
     assert result["status"] == "confirmed"
     assert result["txid"] == "RIGHT_MEMO_TX"
+
+
+def test_automatic_verification_accepts_one_unique_payment_without_memo(monkeypatch):
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_KEY", "key")
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_SECRET", "secret")
+    monkeypatch.setattr(payment_verifier, "_fetch_pay_transactions", lambda _start: [{
+        "transactionId": "UNIQUE_NO_MEMO_TX",
+        "transactionTime": 101_000,
+        "amount": "1.00",
+        "currency": "USDT",
+        "note": "",
+    }])
+
+    result = payment_verifier.verify_payment_by_amount(
+        1, "USDT", created_at=100, expected_memo=123,
+        allow_missing_memo=True,
+    )
+
+    assert result["status"] == "confirmed"
+    assert result["txid"] == "UNIQUE_NO_MEMO_TX"
+
+
+def test_automatic_verification_rejects_ambiguous_payments_without_memo(monkeypatch):
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_KEY", "key")
+    monkeypatch.setattr(payment_verifier, "BINANCE_API_SECRET", "secret")
+    monkeypatch.setattr(payment_verifier, "_fetch_pay_transactions", lambda _start: [
+        {
+            "transactionId": "NO_MEMO_TX_ONE",
+            "transactionTime": 101_000,
+            "amount": "1.00",
+            "currency": "USDT",
+            "note": "",
+        },
+        {
+            "transactionId": "NO_MEMO_TX_TWO",
+            "transactionTime": 102_000,
+            "amount": "1.00",
+            "currency": "USDT",
+            "note": "",
+        },
+    ])
+
+    result = payment_verifier.verify_payment_by_amount(
+        1, "USDT", created_at=100, expected_memo=123,
+        allow_missing_memo=True,
+    )
+
+    assert result["status"] == "failed"
+    assert result["code"] == "not_found"

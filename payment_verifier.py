@@ -214,7 +214,14 @@ def _transaction_time_ms(transaction):
     return None
 
 
-def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=None, expected_memo=None):
+def verify_payment_by_amount(
+    amount,
+    currency=None,
+    created_at=None,
+    used_txids=None,
+    expected_memo=None,
+    allow_missing_memo=False,
+):
     if not BINANCE_API_KEY or not BINANCE_API_SECRET:
         return {"status": "failed", "code": "not_configured", "reason": "Vérification automatique non configurée"}
 
@@ -225,6 +232,7 @@ def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=
         expected = Decimal(str(amount)).quantize(Decimal("0.00000001"))
         expected_asset = str(currency or PAY_CURRENCY).upper()
         transactions = _fetch_pay_transactions(start_ms)
+        memo_less_matches = []
         for transaction in transactions:
             txid = str(transaction.get("transactionId", "")).strip()
             if not txid or txid in used_txids:
@@ -239,7 +247,10 @@ def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=
             if received <= 0 or asset != expected_asset:
                 continue
             if received == expected:
-                if expected_memo is not None and _transaction_memo(transaction) != str(expected_memo):
+                memo = _transaction_memo(transaction)
+                if expected_memo is not None and memo != str(expected_memo):
+                    if allow_missing_memo and not memo:
+                        memo_less_matches.append(txid)
                     continue
                 return {
                     "status": "confirmed",
@@ -247,6 +258,13 @@ def verify_payment_by_amount(amount, currency=None, created_at=None, used_txids=
                     "txid": txid,
                     "reason": "Paiement Binance Pay confirmé par montant exact",
                 }
+        if len(memo_less_matches) == 1:
+            return {
+                "status": "confirmed",
+                "code": "confirmed",
+                "txid": memo_less_matches[0],
+                "reason": "Paiement Binance Pay sans memo confirme par correspondance unique",
+            }
         return {"status": "failed", "code": "not_found", "reason": "Aucun paiement exact récent détecté"}
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
         return {"status": "failed", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
