@@ -1,0 +1,20 @@
+<resources>
+    <style name="Theme.BotControl" parent="android:style/Theme.Material">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">#07101D</item>
+        <item name="android:statusBarColor">#07101D</item>
+        <item name="android:windowActionModeOverlay">false</item>
+        <item name="android:actionBarStyle">@style/Widget.BotControl.ActionBar</item>
+        <item name="android:colorAccent">#22D3EE</item>
+    </style>
+
+    <style name="Widget.BotControl.ActionBar" parent="@android:style/Widget.Material.ActionBar.Solid">
+        <item name="android:background">#0B1728</item>
+        <item name="android:titleTextStyle">@style/Widget.BotControl.ActionBar.Title</item>
+    </style>
+
+    <style name="Widget.BotControl.ActionBar.Title" parent="@android:style/TextAppearance.Material.Widget.ActionBar.Title">
+        <item name="android:textColor">#E8EEF8</item>
+    </style>
+</resources>

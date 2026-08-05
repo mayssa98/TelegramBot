@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Bot Control</string>
+    <string name="default_dashboard_url">https://telegram-bot-mayssa98s-projects.vercel.app/admin</string>
+</resources>

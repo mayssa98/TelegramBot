@@ -7,3 +7,6 @@ __pycache__/
 .venv/
 .vercel
 .env*
+mobile-app/.gradle/
+mobile-app/local.properties
+mobile-app/app/build/
