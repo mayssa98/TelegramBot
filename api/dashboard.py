@@ -1071,7 +1071,44 @@ def render_dashboard(
         .type-track { height:9px; background:rgba(255,255,255,.07); border-radius:99px; overflow:hidden; }
         .type-fill { height:100%; background:#22d3ee; border-radius:99px; }
         .interaction-content { max-width:420px; white-space:normal; word-break:break-word; }
+        .service-clicks-card { min-height:0; margin-bottom:24px; }
+        .service-clicks-head {
+            display:flex; align-items:flex-start; justify-content:space-between;
+            gap:16px; margin-bottom:16px;
+        }
+        .service-clicks-head p { margin:5px 0 0; color:var(--text-muted); font-size:13px; }
+        .service-clicks-total {
+            flex:0 0 auto; padding:7px 11px; border:1px solid var(--border-color);
+            border-radius:999px; color:#c4b5fd; background:rgba(157,114,255,.1);
+            font-size:12px; font-weight:700;
+        }
+        .service-click-days {
+            display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px;
+        }
+        .service-click-day {
+            min-width:0; padding:14px; border:1px solid var(--border-color);
+            border-radius:11px; background:rgba(255,255,255,.02);
+        }
+        .service-click-day-head {
+            display:flex; justify-content:space-between; gap:12px; margin-bottom:12px;
+            color:var(--text-muted); font-size:12px;
+        }
+        .service-click-day-head strong { color:var(--text-main); font-size:13px; }
+        .service-click-row {
+            display:grid; grid-template-columns:minmax(90px,1.1fr) minmax(70px,2fr) auto;
+            align-items:center; gap:9px; margin-top:9px; font-size:12px;
+        }
+        .service-click-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .service-click-track { height:8px; border-radius:99px; overflow:hidden; background:rgba(255,255,255,.07); }
+        .service-click-fill { height:100%; border-radius:99px; background:linear-gradient(90deg,#7c3aed,#22d3ee); }
+        .service-click-count { min-width:22px; text-align:right; font-weight:800; }
         @media (max-width: 900px) { .analytics-grid { grid-template-columns:1fr; } }
+        @media (max-width: 600px) {
+            .service-clicks-card { padding:14px; }
+            .service-clicks-head { align-items:flex-start; }
+            .service-click-days { grid-template-columns:minmax(0,1fr); }
+            .service-click-row { grid-template-columns:minmax(82px,1fr) minmax(60px,1.4fr) auto; gap:7px; }
+        }
 
         /* Midnight Merchant visual system */
         :root {
@@ -2349,6 +2386,16 @@ def render_dashboard(
                     <div id="interactions-type-chart"></div>
                 </div>
             </div>
+            <div class="chart-card service-clicks-card">
+                <div class="service-clicks-head">
+                    <div>
+                        <h3>Services consultés par jour</h3>
+                        <p>Clics des utilisateurs sur chaque service du catalogue pendant les 30 derniers jours.</p>
+                    </div>
+                    <span class="service-clicks-total" id="service-clicks-summary">0 clic</span>
+                </div>
+                <div class="service-click-days" id="service-clicks-daily"></div>
+            </div>
             <div class="filters">
                 <div class="search-box">
                     <input id="interaction-search" placeholder="Nom, username, ID, message ou bouton..." oninput="filterInteractions()">
@@ -3564,6 +3611,36 @@ def render_dashboard(
                     <div class="type-track"><div class="type-fill" style="width:${count / maxType * 100}%"></div></div>
                 </div>`).join("")
                 : '<div class="empty-state">Aucune interaction enregistrée.</div>';
+
+            const serviceClicks = data.service_clicks || {};
+            const serviceDays = [...(serviceClicks.daily || [])].reverse();
+            const serviceTotal = serviceClicks.total || 0;
+            const serviceCount = (serviceClicks.services || []).length;
+            document.getElementById("service-clicks-summary").textContent =
+                `${serviceTotal} clic${serviceTotal === 1 ? "" : "s"} • ${serviceCount} service${serviceCount === 1 ? "" : "s"}`;
+            const maxServiceClicks = Math.max(
+                1,
+                ...serviceDays.flatMap(day => (day.services || []).map(service => service.count || 0)),
+            );
+            document.getElementById("service-clicks-daily").innerHTML = serviceDays.length
+                ? serviceDays.map(day => {
+                    const label = new Date(`${day.date}T00:00:00Z`).toLocaleDateString(
+                        "fr-FR", {weekday:"short", day:"2-digit", month:"short", timeZone:"UTC"},
+                    );
+                    const rows = (day.services || []).map(service => {
+                        const width = Math.max(4, Math.round((service.count || 0) / maxServiceClicks * 100));
+                        return `<div class="service-click-row" title="${escapeHtml(service.name || "Service")}: ${service.count || 0}">
+                            <span class="service-click-name">${escapeHtml(service.name || `Service #${service.service_id}`)}</span>
+                            <span class="service-click-track"><span class="service-click-fill" style="display:block;width:${width}%"></span></span>
+                            <span class="service-click-count">${service.count || 0}</span>
+                        </div>`;
+                    }).join("");
+                    return `<article class="service-click-day">
+                        <div class="service-click-day-head"><strong>${escapeHtml(label)}</strong><span>${day.total || 0} clic${day.total === 1 ? "" : "s"}</span></div>
+                        ${rows}
+                    </article>`;
+                }).join("")
+                : '<div class="empty-state">Aucun clic sur un service pendant cette période.</div>';
 
             const tbody = document.querySelector("#interactions-table tbody");
             const events = data.events || [];

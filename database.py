@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import os
+import re
 import time
 from datetime import UTC, datetime
 
@@ -1020,17 +1021,25 @@ def interaction_analytics(days=30, limit=1000):
     ]
     daily_counts = {}
     type_counts = {}
+    service_click_counts = {}
+    service_click_totals = {}
     active_today = set()
     live_users = set()
     for event in conn.interaction_events.find(
         {"created_at": {"$gte": start}},
-        {"created_at": 1, "user_id": 1, "interaction_type": 1},
+        {"created_at": 1, "user_id": 1, "interaction_type": 1, "action": 1, "content": 1},
     ):
         timestamp = int(event.get("created_at") or 0)
         day = datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%d")
         daily_counts[day] = daily_counts.get(day, 0) + 1
         kind = str(event.get("interaction_type") or "other")
         type_counts[kind] = type_counts.get(kind, 0) + 1
+        action = str(event.get("action") or "")
+        if kind == "button" and re.fullmatch(r"svc:\d+", action):
+            service_id = int(action.split(":", 1)[1])
+            key = (day, service_id)
+            service_click_counts[key] = service_click_counts.get(key, 0) + 1
+            service_click_totals[service_id] = service_click_totals.get(service_id, 0) + 1
         if timestamp >= today_start:
             active_today.add(event.get("user_id"))
         if timestamp >= live_since:
@@ -1040,6 +1049,38 @@ def interaction_analytics(days=30, limit=1000):
         day_timestamp = start + offset * 86400
         day = datetime.fromtimestamp(day_timestamp, UTC).strftime("%Y-%m-%d")
         daily.append({"date": day, "count": daily_counts.get(day, 0)})
+    service_names = {
+        int(row["id"]): str(row.get("name") or f"Service #{row['id']}")
+        for row in conn.services.find(
+            {"id": {"$in": list(service_click_totals)}}, {"id": 1, "name": 1}
+        )
+    } if service_click_totals else {}
+    service_click_daily = []
+    for day in sorted({key[0] for key in service_click_counts}):
+        rows = [
+            {
+                "service_id": service_id,
+                "name": service_names.get(service_id, f"Service #{service_id}"),
+                "count": count,
+            }
+            for (event_day, service_id), count in service_click_counts.items()
+            if event_day == day
+        ]
+        rows.sort(key=lambda row: (-row["count"], row["name"].lower()))
+        service_click_daily.append({
+            "date": day,
+            "total": sum(row["count"] for row in rows),
+            "services": rows,
+        })
+    service_click_services = [
+        {
+            "service_id": service_id,
+            "name": service_names.get(service_id, f"Service #{service_id}"),
+            "count": count,
+        }
+        for service_id, count in service_click_totals.items()
+    ]
+    service_click_services.sort(key=lambda row: (-row["count"], row["name"].lower()))
     return {
         "summary": {
             "total": conn.interaction_events.count_documents({}),
@@ -1053,6 +1094,11 @@ def interaction_analytics(days=30, limit=1000):
         },
         "daily": daily,
         "types": type_counts,
+        "service_clicks": {
+            "total": sum(service_click_totals.values()),
+            "services": service_click_services,
+            "daily": service_click_daily,
+        },
         "events": events,
     }
 

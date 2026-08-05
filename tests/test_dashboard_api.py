@@ -134,6 +134,14 @@ def test_dashboard_interactions_page_has_live_graphs_and_detail_table():
         "interactions": {
             "summary": {"total": 8, "today": 3, "active_today": 2, "live_users": 1},
             "daily": [{"date": "2026-07-26", "count": 3}],
+            "service_clicks": {
+                "total": 3,
+                "services": [{"service_id": 7, "name": "Streaming", "count": 3}],
+                "daily": [{
+                    "date": "2026-07-26", "total": 3,
+                    "services": [{"service_id": 7, "name": "Streaming", "count": 3}],
+                }],
+            },
             "types": {"button": 2, "message": 1},
             "events": [{
                 "created_at": 1785024000,
@@ -151,6 +159,9 @@ def test_dashboard_interactions_page_has_live_graphs_and_detail_table():
     assert 'href="/admin/interactions"' in page
     assert 'id="interactions" class="panel active"' in page
     assert 'id="interactions-daily-chart"' in page
+    assert 'id="service-clicks-daily"' in page
+    assert "Services consultés par jour" in page
+    assert "@media (max-width: 600px)" in page
     assert 'id="interactions-table"' in page
     assert "Interactions clients en direct" in page
     assert "__ACTIVE_" not in page
