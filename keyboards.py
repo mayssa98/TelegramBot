@@ -13,7 +13,7 @@ BUTTON_TEXT_KEYS = {
     "menu_catalog", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
     "menu_support", "menu_lang", "menu_admin", "btn_main_menu", "support_no_order",
     "catalog_request_button",
-    "topup_claim", "topup_verify_txid", "topup_bsc", "topup_polygon",
+    "topup_verify_txid", "topup_bsc", "topup_polygon",
     "topup_home_button",
     "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
@@ -214,16 +214,9 @@ def home_keyboard(lang, user_id):
 
 def topup_keyboard(lang):
     return InlineKeyboardMarkup([
-        [translated_button(lang, "topup_claim", callback_data="topup_claim", style="success")],
+        [translated_button(lang, "topup_verify_txid", callback_data="topup_txid", style="success")],
         [translated_button(lang, "topup_bsc", callback_data="topup_bsc")],
         [translated_button(lang, "topup_polygon", callback_data="topup_polygon")],
-        [translated_button(lang, "topup_home_button", callback_data="home")],
-    ])
-
-
-def topup_verifying_keyboard(lang):
-    return InlineKeyboardMarkup([
-        [translated_button(lang, "topup_verify_txid", callback_data="topup_txid")],
         [translated_button(lang, "topup_home_button", callback_data="home")],
     ])
 
@@ -350,7 +343,7 @@ def quantity_keyboard(lang, offer, page=0, page_size=20):
 
 def paid_keyboard(lang, order_id, binance_id="", total="", currency="USDT"):
     return InlineKeyboardMarkup([
-        [translated_button(lang, "btn_paid", callback_data=f"verify_auto:{order_id}")],
+        [translated_button(lang, "btn_verify_txid", callback_data=f"paid:{order_id}", style="success")],
         [
             translated_button(lang, "btn_cancel_short", callback_data=f"cancel_buy:{order_id}"),
             translated_button(lang, "btn_main_menu_short", callback_data="home"),

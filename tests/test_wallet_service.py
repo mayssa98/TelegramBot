@@ -96,22 +96,6 @@ def test_full_wallet_payment_confirms_and_delivers(mock_mongodb):
     assert db.get_order(order["id"])["verify_method"] == "wallet"
 
 
-def test_automatic_topup_credits_transfer_matched_by_optional_memo(mock_mongodb, monkeypatch):
-    monkeypatch.setattr(wallet_service, "verify_incoming_transfer_by_memo", lambda *_args, **_kwargs: {
-        "status": "confirmed",
-        "txid": "AUTO_MEMO_TX_123",
-        "amount": 7.5,
-        "currency": "USDT",
-    })
-
-    result = wallet_service.claim_transfer_by_memo(42, 1_700_000_000)
-
-    assert result["status"] == "confirmed"
-    assert result["amount"] == 7.5
-    assert wallet_service.balance_cents(42) == 750
-    assert mock_mongodb.wallet_topups.find_one({"txid": "AUTO_MEMO_TX_123"})["verification_method"] == "memo"
-
-
 def test_bulk_wallet_credit_is_applied_once_per_user(mock_mongodb):
     for user_id in (10, 20, 30):
         db.upsert_user(user_id, f"user{user_id}", f"User {user_id}")

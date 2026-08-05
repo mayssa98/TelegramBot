@@ -72,11 +72,10 @@ TRANSLATIONS = {
     "menu_account": {"fr": "👤 Mon compte", "en": "👤 My account", "ar": "👤 حسابي"},
     "menu_support": {"fr": "🛎️ Support", "en": "🛎️ Support", "ar": "🛎️ Support"},
     "topup_message": {
-        "fr": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay Top Up*\n\nSend the amount to our Binance Pay ID:\n`{binance_id}`\n\n⚡ *Optional — faster automatic detection*\nAdd your Telegram ID in the Notes / Memo field:\n`{telegram_id}`\n\nAfter transferring, tap *Verify Payment*. If the automatic scan does not find it, use *Verify with TXID*.",
-        "en": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay Top Up*\n\nSend the amount to our Binance Pay ID:\n`{binance_id}`\n\n⚡ *Optional — faster automatic detection*\nAdd your Telegram ID in the Notes / Memo field:\n`{telegram_id}`\n\nAfter transferring, tap *Verify Payment*. If the automatic scan does not find it, use *Verify with TXID*.",
-        "ar": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay Top Up*\n\nSend the amount to our Binance Pay ID:\n`{binance_id}`\n\n⚡ *Optional — faster automatic detection*\nAdd your Telegram ID in the Notes / Memo field:\n`{telegram_id}`\n\nAfter transferring, tap *Verify Payment*. If the automatic scan does not find it, use *Verify with TXID*.",
+        "fr": "✍️ *Envoyez le montant souhaité — minimum 1 USDT*\nLe même montant sera ajouté à votre portefeuille.\n\n🟡 *Rechargement Binance Pay*\n\nEnvoyez le paiement à notre identifiant Binance Pay :\n`{binance_id}`\n\nAprès le transfert, appuyez sur *Vérifier avec TXID* et envoyez l'identifiant de transaction ou l'Order ID affiché sur le reçu Binance.",
+        "en": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay Top Up*\n\nSend the payment to our Binance Pay ID:\n`{binance_id}`\n\nAfter transferring, tap *Verify with TXID* and send the Transaction ID or Order ID shown on your Binance receipt.",
+        "ar": "✍️ *أرسل أي مبلغ — الحد الأدنى 1 USDT*\nسيتم إضافة نفس المبلغ إلى محفظتك.\n\n🟡 *شحن Binance Pay*\n\nأرسل الدفع إلى معرف Binance Pay:\n`{binance_id}`\n\nبعد التحويل، اضغط *التحقق باستخدام TXID* وأرسل رقم المعاملة أو Order ID من إيصال Binance.",
     },
-    "topup_claim": {"fr": "✅ Verify Payment", "en": "✅ Verify Payment", "ar": "✅ Verify Payment"},
     "topup_verify_txid": {"fr": "🧾 Verify with TXID", "en": "🧾 Verify with TXID", "ar": "🧾 Verify with TXID"},
     "topup_bsc": {
         "fr": "🟨 Recharger via USDT BSC",
@@ -118,16 +117,6 @@ TRANSLATIONS = {
         "fr": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
         "en": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
         "ar": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
-    },
-    "topup_scanner": {
-        "fr": "💳 *TOP UP DETECTION*\n\n{frame}\n\n🔎 Looking for your recent transfer...\n⚡ A matching Telegram ID memo enables faster detection.\n\nYou can use *Verify with TXID* at any time.",
-        "en": "💳 *TOP UP DETECTION*\n\n{frame}\n\n🔎 Looking for your recent transfer...\n⚡ A matching Telegram ID memo enables faster detection.\n\nYou can use *Verify with TXID* at any time.",
-        "ar": "💳 *TOP UP DETECTION*\n\n{frame}\n\n🔎 Looking for your recent transfer...\n⚡ A matching Telegram ID memo enables faster detection.\n\nYou can use *Verify with TXID* at any time.",
-    },
-    "topup_auto_timeout": {
-        "fr": "⌛ *Automatic verification ended*\n\nYour transfer was not matched automatically. Use *Verify with TXID* to verify it manually.",
-        "en": "⌛ *Automatic verification ended*\n\nYour transfer was not matched automatically. Use *Verify with TXID* to verify it manually.",
-        "ar": "⌛ *Automatic verification ended*\n\nYour transfer was not matched automatically. Use *Verify with TXID* to verify it manually.",
     },
     "topup_success": {
         "fr": "✅ *Top up confirmed*\n\nAmount added: *{amount} USDT*\nNew balance: *{balance} USDT*",
@@ -390,8 +379,8 @@ TRANSLATIONS = {
     },
     # ---------------- Paiement ----------------
     "order_created": {
-        "fr": "🔥💳 *Binance Pay*\n--------------------\n\n🛍️ Produit : *{offer}*\n💫 Quantité : *{qty}*\n\n🚨 *ENVOYEZ EXACTEMENT : {total} {cur}*\n🧭 Binance ID : `{binance_id}`\n📝 Notes / Mémo obligatoire : `{telegram_id}`\n\nEffectuez complètement le paiement, puis appuyez sur *Vérifier le paiement* pour lancer la détection automatique.\n\nSi le paiement n'est pas détecté, utilisez ensuite *Vérifier avec TXID*.\n\n🎯 Commande : *#{oid}*",
-        "en": "🔥💳 *Binance Pay*\n--------------------\n\n🛍️ Product: *{offer}*\n💫 Quantity: *{qty}*\n\n🚨 *SEND EXACTLY: {total} {cur}*\n🧭 Binance ID: `{binance_id}`\n📝 Required Notes / Memo: `{telegram_id}`\n\nComplete the payment first, then tap *Verify Payment* to launch automatic detection.\n\nIf the payment is not detected, use *Verify with TXID*.\n\n🎯 Order: *#{oid}*",
+        "fr": "🔥💳 *Binance Pay*\n--------------------\n\n🛍️ Produit : *{offer}*\n💫 Quantité : *{qty}*\n\n🚨 *ENVOYEZ EXACTEMENT : {total} {cur}*\n🧭 Binance ID : `{binance_id}`\n\nAprès le paiement, appuyez sur *Vérifier avec TXID* et envoyez l'identifiant de transaction ou l'Order ID affiché sur votre reçu Binance.\n\n🎯 Commande : *#{oid}*",
+        "en": "🔥💳 *Binance Pay*\n--------------------\n\n🛍️ Product: *{offer}*\n💫 Quantity: *{qty}*\n\n🚨 *SEND EXACTLY: {total} {cur}*\n🧭 Binance ID: `{binance_id}`\n\nAfter paying, tap *Verify with TXID* and send the Transaction ID or Order ID shown on your Binance receipt.\n\n🎯 Order: *#{oid}*",
         "ar": "🧾 *تم إنشاء الطلب #{oid}*\n\nالخدمة: *{service}*\nالعرض: *{offer}*\nالكمية: *{qty}*\nالمبلغ الإجمالي: *{total} {cur}*\n\n💳 *الدفع عبر Binance Pay*\n\n1️⃣ أرسل *{total} {cur}* إلى معرّف Binance Pay:\n`{binance_id}`\n\n2️⃣ بعد الدفع، اضغط الزر أدناه وأرسل *رقم معاملة Binance*.",
     },
     "btn_paid": {
@@ -403,11 +392,6 @@ TRANSLATIONS = {
         "fr": "\u270d\ufe0f Veuillez envoyer l'*ID de transaction Binance* de votre paiement pour la commande #{oid}. Si cela \u00e9choue, contactez le support avec une capture du paiement :",
         "en": "\u270d\ufe0f Please send the *Binance transaction ID* for order #{oid}. If it fails, contact support with a payment screenshot:",
         "ar": "\u270d\ufe0f \u0627\u0644\u0631\u062c\u0627\u0621 \u0625\u0631\u0633\u0627\u0644 *\u0631\u0642\u0645 \u0645\u0639\u0627\u0645\u0644\u0629 Binance* \u0644\u0644\u0637\u0644\u0628 #{oid}. \u0625\u0630\u0627 \u0641\u0634\u0644 \u0627\u0644\u062a\u062d\u0642\u0642\u060c \u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u062f\u0639\u0645 \u0645\u0639 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0644\u0644\u062f\u0641\u0639:",
-    },
-    "auto_check_started": {
-        "fr": "\U0001f680 V\u00e9rification automatique lanc\u00e9e pendant *{seconds} secondes*... Le bot cherche un paiement avec le montant exact.",
-        "en": "\U0001f680 Automatic verification started for *{seconds} seconds*... The bot is looking for a payment with the exact amount.",
-        "ar": "\U0001f680 \u0628\u062f\u0623 \u0627\u0644\u062a\u062d\u0642\u0642 \u0627\u0644\u062a\u0644\u0642\u0627\u0626\u064a \u0644\u0645\u062f\u0629 *{seconds} \u062b\u0627\u0646\u064a\u0629*... \u064a\u0628\u062d\u062b \u0627\u0644\u0628\u0648\u062a \u0639\u0646 \u062f\u0641\u0639\u0629 \u0628\u0627\u0644\u0645\u0628\u0644\u063a \u0627\u0644\u0635\u062d\u064a\u062d.",
     },
     "btn_verify_txid": {
         "fr": "🧾 Vérifier avec TXID",
@@ -460,9 +444,9 @@ TRANSLATIONS = {
         "ar": "✨ *مرحبًا بك في عالم {shop}*\n\nخدمات رقمية مميزة وواضحة ومتاحة خلال ثوانٍ.\n\n`1/3`  اكتشف",
     },
     "onboarding_2": {
-        "fr": "💳 *Paiement simple et sécurisé*\n\n1️⃣ Choisissez votre produit\n2️⃣ Payez le montant exact via Binance Pay\n3️⃣ Le scanner confirme automatiquement\n\n`2/3`  Paiement",
-        "en": "💳 *Simple and secure payment*\n\n1️⃣ Choose your product\n2️⃣ Pay the exact amount with Binance Pay\n3️⃣ The scanner confirms automatically\n\n`2/3`  Payment",
-        "ar": "💳 *دفع بسيط وآمن*\n\n1️⃣ اختر المنتج\n2️⃣ ادفع المبلغ الدقيق عبر Binance Pay\n3️⃣ يؤكد الماسح الدفع تلقائيًا\n\n`2/3`  الدفع",
+        "fr": "💳 *Paiement simple et sécurisé*\n\n1️⃣ Choisissez votre produit\n2️⃣ Payez le montant exact via Binance Pay\n3️⃣ Envoyez le TXID de votre reçu\n\n`2/3`  Paiement",
+        "en": "💳 *Simple and secure payment*\n\n1️⃣ Choose your product\n2️⃣ Pay the exact amount with Binance Pay\n3️⃣ Send the TXID from your receipt\n\n`2/3`  Payment",
+        "ar": "💳 *دفع بسيط وآمن*\n\n1️⃣ اختر المنتج\n2️⃣ ادفع المبلغ الدقيق عبر Binance Pay\n3️⃣ أرسل TXID من الإيصال\n\n`2/3`  الدفع",
     },
     "onboarding_3": {
         "fr": "⚡ *Livraison et accompagnement*\n\n📦 Livraison rapide ou instantanée\n🛡️ Garantie indiquée sur chaque offre\n🎫 Support accessible depuis chaque étape\n\n`3/3`  Vous êtes prêt !",
@@ -486,35 +470,15 @@ TRANSLATIONS = {
         "en": "💜 Thank you! Your {score}/5 rating helps us improve the store.",
         "ar": "💜 شكرًا! تقييمك {score}/5 يساعدنا على تحسين المتجر.",
     },
-    "payment_scanner": {
-        "fr": "💳 *DÉTECTION BINANCE PAY*\n\n`{frame}`\n\n🔎 Signal de paiement en cours d’analyse\n✨ Scanner sécurisé actif\n🧾 Commande *#{oid}*",
-        "en": "💳 *BINANCE PAY DETECTION*\n\n`{frame}`\n\n🔎 Analyzing the payment signal\n✨ Secure scanner active\n🧾 Order *#{oid}*",
-        "ar": "💳 *فحص BINANCE PAY*\n\n`{frame}`\n\n🔎 جارٍ تحليل إشارة الدفع\n✨ الماسح الآمن نشط\n🧾 الطلب *#{oid}*",
-    },
-    "payment_scanner_success": {
-        "fr": "🟩🟩🟩💎🟩🟩🟩\n\n✅ *PAIEMENT DÉTECTÉ*\n📦 Préparation de la commande *#{oid}*…",
-        "en": "🟩🟩🟩💎🟩🟩🟩\n\n✅ *PAYMENT DETECTED*\n📦 Preparing order *#{oid}*…",
-        "ar": "🟩🟩🟩💎🟩🟩🟩\n\n✅ *تم اكتشاف الدفع*\n📦 جارٍ تجهيز الطلب *#{oid}*…",
-    },
-    "payment_scanner_timeout": {
-        "fr": "🟧🟧🟧⏳🟧🟧🟧\n\n⚠️ *PAIEMENT NON DÉTECTÉ*\nLa vérification manuelle reste disponible pour la commande *#{oid}*.",
-        "en": "🟧🟧🟧⏳🟧🟧🟧\n\n⚠️ *PAYMENT NOT DETECTED*\nManual verification remains available for order *#{oid}*.",
-        "ar": "🟧🟧🟧⏳🟧🟧🟧\n\n⚠️ *لم يتم اكتشاف الدفع*\nالتحقق اليدوي متاح للطلب *#{oid}*.",
-    },
-    "auto_check_timeout": {
-        "fr": "⌛ Vérification automatique terminée pour la commande #{oid}.\n\nUtilisez *Vérifier avec TXID* pour lancer la vérification manuelle.",
-        "en": "⌛ Automatic verification ended for order #{oid}.\n\nUse *Verify with TXID* to start manual verification.",
-        "ar": "⌛ انتهى التحقق التلقائي للطلب #{oid}.\n\nاستخدم *التحقق باستخدام TXID* لبدء التحقق اليدوي.",
-    },
     "payment_contact_admin": {
         "fr": "\U0001f4f8 Si la v\u00e9rification \u00e9choue encore, contactez le support et envoyez une capture du paiement pour la commande #{oid}.",
         "en": "\U0001f4f8 If verification still fails, contact support and send a payment screenshot for order #{oid}.",
         "ar": "\U0001f4f8 \u0625\u0630\u0627 \u0641\u0634\u0644 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649\u060c \u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u062f\u0639\u0645 \u0648\u0623\u0631\u0633\u0644 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0644\u0644\u062f\u0641\u0639 \u0644\u0644\u0637\u0644\u0628 #{oid}.",
     },
     "verifying": {
-        "fr": "🔎 Vérification automatique de votre paiement en cours... Merci de patienter quelques instants.",
-        "en": "🔎 Automatically verifying your payment... Please wait a moment.",
-        "ar": "🔎 جارٍ التحقق التلقائي من دفعتك... الرجاء الانتظار قليلاً.",
+        "fr": "🔎 Vérification de votre TXID Binance... Merci de patienter.",
+        "en": "🔎 Verifying your Binance TXID... Please wait.",
+        "ar": "🔎 جارٍ التحقق من TXID على Binance... الرجاء الانتظار.",
     },
     "verify_ok": {
         "fr": "✅ *Paiement confirmé !* Commande #{oid}\n\nVotre commande est en cours de préparation. Vous recevrez votre produit ici très bientôt. Merci pour votre achat ! 🎉",
@@ -522,9 +486,9 @@ TRANSLATIONS = {
         "ar": "✅ *تم تأكيد الدفع!* الطلب #{oid}\n\nيتم تجهيز طلبك. ستستلم منتجك هنا قريباً جداً. شكراً لشرائك! 🎉",
     },
     "verify_failed": {
-        "fr": "❌ Paiement non confirmé automatiquement pour la commande #{oid}. Vérifiez le TXID, le montant et la devise, puis appuyez de nouveau sur *J'ai payé* pour réessayer.",
-        "en": "❌ Payment was not automatically confirmed for order #{oid}. Check the TXID, amount and currency, then tap *I have paid* again to retry.",
-        "ar": "❌ لم يتم تأكيد دفع الطلب #{oid} تلقائياً. تحقق من رقم المعاملة والمبلغ والعملة ثم حاول مرة أخرى.",
+        "fr": "❌ Paiement non confirmé pour la commande #{oid}. Vérifiez le TXID, le montant et la devise, puis réessayez.",
+        "en": "❌ Payment was not confirmed for order #{oid}. Check the TXID, amount and currency, then try again.",
+        "ar": "❌ لم يتم تأكيد دفع الطلب #{oid}. تحقق من TXID والمبلغ والعملة ثم حاول مرة أخرى.",
     },
     "affiliate_payment_progress": {
         "fr": "👥 Un filleul a effectué son premier paiement. Progression : {count}/{target}.",
@@ -571,11 +535,6 @@ TRANSLATIONS = {
         "fr": "📦 *Vos commandes*",
         "en": "📦 *Your orders*",
         "ar": "📦 *طلباتك*",
-    },
-    "payment_wrong_memo": {
-        "fr": "❌ Le Notes / Mémo ne correspond pas à votre Telegram ID pour la commande #{oid}.",
-        "en": "❌ The Notes / Memo does not match your Telegram ID for order #{oid}.",
-        "ar": "❌ الملاحظات لا تطابق معرف تيليغرام للطلب #{oid}.",
     },
     "orders_choose_service": {
         "fr": "📋 *Mes commandes*\n\nSélectionnez un service pour consulter vos commandes :",
@@ -643,9 +602,9 @@ TRANSLATIONS = {
     },
     # ---------------- Aide ----------------
     "help_text": {
-        "fr": "ℹ️ *Aide {shop}*\n\n• Parcourez le *Catalogue*, choisissez un service puis une offre.\n• Payez via *Binance Pay* à l'ID indiqué.\n• Envoyez votre *ID de transaction* : le paiement est vérifié automatiquement.\n• Après confirmation, l'équipe vous livre votre produit ici.\n\nBesoin d'aide ? Contactez l'administrateur.",
-        "en": "ℹ️ *{shop} Help*\n\n• Browse the *Catalog*, pick a service then an offer.\n• Pay via *Binance Pay* to the shown ID.\n• Send your *transaction ID*: payment is verified automatically.\n• After confirmation, the team delivers your product here.\n\nNeed help? Contact the administrator.",
-        "ar": "ℹ️ *مساعدة {shop}*\n\n• تصفّح *الكتالوج*، اختر خدمة ثم عرضاً.\n• ادفع عبر *Binance Pay* إلى المعرّف الظاهر.\n• أرسل *رقم المعاملة*: يتم التحقق من الدفع تلقائياً.\n• بعد التأكيد، يقوم الفريق بتسليم منتجك هنا.\n\nتحتاج مساعدة؟ تواصل مع المشرف.",
+        "fr": "ℹ️ *Aide {shop}*\n\n• Parcourez le *Catalogue*, choisissez un service puis une offre.\n• Payez via *Binance Pay* à l'ID indiqué.\n• Envoyez le *TXID ou Order ID* affiché sur votre reçu Binance.\n• Après confirmation, l'équipe vous livre votre produit ici.\n\nBesoin d'aide ? Contactez l'administrateur.",
+        "en": "ℹ️ *{shop} Help*\n\n• Browse the *Catalog*, pick a service then an offer.\n• Pay via *Binance Pay* to the shown ID.\n• Send the *TXID or Order ID* shown on your Binance receipt.\n• After confirmation, the team delivers your product here.\n\nNeed help? Contact the administrator.",
+        "ar": "ℹ️ *مساعدة {shop}*\n\n• تصفّح *الكتالوج*، اختر خدمة ثم عرضاً.\n• ادفع عبر *Binance Pay* إلى المعرّف الظاهر.\n• أرسل *TXID أو Order ID* الظاهر في إيصال Binance.\n• بعد التأكيد، يقوم الفريق بتسليم منتجك هنا.\n\nتحتاج مساعدة؟ تواصل مع المشرف.",
     },
     "cancelled_msg": {
         "fr": "❌ Opération annulée.",

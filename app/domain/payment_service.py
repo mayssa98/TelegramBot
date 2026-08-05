@@ -1,6 +1,6 @@
 """Service métier pour les paiements.
 
-Centralise la validation du TXID, la vérification automatique, l'idempotence
+Centralise la validation du TXID, la vérification Binance, l'idempotence
 et le passage en revue manuelle.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ import database as db
 from app.constants import OrderStatus
 from app.domain import affiliate_service, inventory_service, loyalty_service, reseller_service
 from config import ADMIN_ID, CURRENCY, TEST_PAYMENT_ENABLED
-from payment_verifier import verify_payment, verify_payment_by_amount
+from payment_verifier import verify_payment
 
 log = logging.getLogger(__name__)
 
@@ -188,7 +188,7 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
     2. Vérifier l'unicité
     3. Vérifier la propriété de la commande
     4. Vérifier que la commande est dans un état acceptable
-    5. Lancer la vérification automatique
+    5. Vérifier le TXID avec Binance
     6. Livrer si confirmé, ou passer en revue manuelle
 
     Returns:
@@ -269,22 +269,20 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
     # 4. Enregistrer le TXID et passer en vérification
     db.update_order(order_id, txid=txid, status=OrderStatus.AWAITING_VERIFICATION)
 
-    # 5. Vérification automatique
-    # A submitted TXID is the fallback identifier, so match TXID + exact
-    # amount. The memo is required only by the first automatic amount scan.
+    # 5. Verify the submitted Binance receipt identifier and exact amount.
     verification = verify_payment(
         txid, order["total_price"], CURRENCY, order.get("created_at")
     )
 
     if verification["status"] == "confirmed":
-        result.update(_finalize_confirmed_payment(order_id, user_id, txid, "auto_txid"))
+        result.update(_finalize_confirmed_payment(order_id, user_id, txid, "txid"))
     elif verification["status"] == "manual_review":
-        reason = verification.get("reason", "Vérification automatique indisponible")
+        reason = verification.get("reason", "Vérification TXID indisponible")
         db.update_order(
             order_id,
             status=OrderStatus.PENDING_PAYMENT,
             txid="",
-            verify_method="auto_unavailable",
+            verify_method="txid_unavailable",
         )
         result["status"] = "failed"
         result["error_code"] = verification.get("code", "temporary_error")
@@ -301,7 +299,7 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
             order_id,
             status=OrderStatus.PENDING_PAYMENT,
             txid="",
-            verify_method="auto_failed",
+            verify_method="txid_failed",
         )
         result["error_code"] = verification.get("code", "verification_failed")
         result["error_message"] = reason
@@ -364,78 +362,6 @@ def submit_onchain_payment(order_id: int, txid: str, user_id: int) -> dict[str, 
     )
     mark_manual_review(order_id, f"USDT {network} — TXID: {txid}")
     return {"status": "manual_review", "order": db.get_order(order_id), "network": network}
-
-
-def auto_check_payment(order_id: int, user_id: int) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "status": "failed",
-        "order": None,
-        "delivered_content": None,
-        "error_code": None,
-        "error_message": None,
-        "affiliate": None,
-    }
-    order = db.get_order(order_id)
-    if not order:
-        result["error_code"] = "order_not_found"
-        result["error_message"] = "Commande introuvable."
-        return result
-    result["order"] = order
-    if order["user_id"] != user_id:
-        result["error_code"] = "not_owner"
-        result["error_message"] = "Cette commande ne vous appartient pas."
-        return result
-    if order["status"] in (OrderStatus.PAID, OrderStatus.PAYMENT_CONFIRMED, OrderStatus.DELIVERED):
-        result["status"] = "already_paid"
-        return result
-    if order["status"] not in (OrderStatus.PENDING_PAYMENT, OrderStatus.AWAITING_VERIFICATION, OrderStatus.VERIFICATION_FAILED):
-        result["error_code"] = "invalid_status"
-        result["error_message"] = f"La commande est en statut {order['status']} et ne peut pas recevoir de paiement."
-        return result
-    if order.get("expires_at") and order["expires_at"] < int(time.time()):
-        from app.domain.order_service import expire_order
-        expire_order(order_id)
-        result["error_code"] = "expired"
-        result["error_message"] = "Cette commande a expire. Veuillez en creer une nouvelle."
-        return result
-
-    used_txids = [
-        item.get("txid")
-        for item in db.get_conn().orders.find({"txid": {"$nin": ["", None]}, "id": {"$ne": order_id}}, {"txid": 1})
-    ]
-    competing_order = db.get_conn().orders.find_one({
-        "id": {"$ne": order_id},
-        "payment_method": "binance",
-        "total_price": order["total_price"],
-        "status": {"$in": [
-            OrderStatus.PENDING_PAYMENT,
-            OrderStatus.AWAITING_VERIFICATION,
-            OrderStatus.VERIFICATION_FAILED,
-        ]},
-    }, {"id": 1})
-    verification = verify_payment_by_amount(
-        order["total_price"], CURRENCY, order.get("created_at"),
-        used_txids=used_txids, expected_memo=user_id,
-        allow_missing_memo=competing_order is None,
-    )
-    if verification["status"] == "confirmed":
-        txid = verification.get("txid", "")
-        try:
-            if txid:
-                check_txid_uniqueness(txid, order_id)
-        except TxidValidationError as exc:
-            result["error_code"] = exc.code
-            result["error_message"] = exc.message
-            return result
-        result.update(_finalize_confirmed_payment(order_id, user_id, txid, "auto_amount"))
-    elif verification["status"] == "manual_review":
-        result["status"] = "failed"
-        result["error_code"] = verification.get("code", "temporary_error")
-        result["error_message"] = verification.get("reason", "Verification automatique indisponible")
-    else:
-        result["error_code"] = verification.get("code", "not_found")
-        result["error_message"] = verification.get("reason", "Aucun paiement exact recent detecte")
-    return result
 
 
 # ---------------------------------------------------------------------------

@@ -83,36 +83,6 @@ class PendingStates:
 
 
 PENDING = PendingStates()
-AUTO_PAYMENT_TASKS = {}
-AUTO_PAYMENT_MESSAGES = {}
-AUTO_TOPUP_TASKS = {}
-AUTO_TOPUP_MESSAGES = {}
-
-
-async def stop_auto_payment_check(order_id):
-    """Cancel a running scanner and remove its waiting message."""
-    task = AUTO_PAYMENT_TASKS.pop(int(order_id), None)
-    if task and not task.done():
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-    scanner = AUTO_PAYMENT_MESSAGES.pop(int(order_id), None)
-    if scanner:
-        with contextlib.suppress(Exception):
-            await scanner.delete()
-
-
-async def stop_auto_topup_check(user_id):
-    """Cancel a running top-up scan and remove its waiting message."""
-    task = AUTO_TOPUP_TASKS.pop(int(user_id), None)
-    if task and not task.done():
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-    scanner = AUTO_TOPUP_MESSAGES.pop(int(user_id), None)
-    if scanner:
-        with contextlib.suppress(Exception):
-            await scanner.delete()
 
 async def block_non_channel_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Prevent customers from bypassing the required channel via direct commands."""
@@ -152,10 +122,10 @@ def _interaction_button_name(query):
         "home": "Main menu", "catalog": "Catalog", "catalog_request": "Request a product",
         "orders": "My orders", "account": "My account", "affiliate": "Affiliate program",
         "affiliate_copy": "Copy referral link", "support": "Support", "language": "Language",
-        "topup": "Top up balance", "topup_claim": "Verify top-up",
+        "topup": "Top up balance",
         "topup_txid": "Verify top-up with TXID", "topup_bsc": "Top up with BSC",
         "topup_polygon": "Top up with Polygon", "verify_channel_join": "Verify membership",
-        "paid": "Verify payment with TXID", "verify_auto": "Verify payment automatically",
+        "paid": "Verify payment with TXID",
         "paid_chain": "Submit blockchain TXID", "continue_pay": "Continue payment",
         "confirm_buy": "Create new order", "cancel_buy": "Cancel order",
         "pay_wallet": "Pay with wallet", "pay_binance": "Pay with Binance Pay",
@@ -1021,7 +991,7 @@ async def show_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     lang = lang_of(uid)
     await update.effective_message.reply_text(
-        premium_customer_text(lang, "topup_message", binance_id=BINANCE_PAY_ID, telegram_id=uid),
+        premium_customer_text(lang, "topup_message", binance_id=BINANCE_PAY_ID),
         parse_mode=ParseMode.HTML,
         reply_markup=kb.topup_keyboard(lang),
     )
@@ -1251,25 +1221,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "topup":
         await show_topup(update, context)
         return
-    if data == "topup_claim":
-        await stop_auto_topup_check(uid)
-        started_at = int(datetime.now(UTC).timestamp())
-        task = context.application.create_task(
-            run_auto_topup_check(q.message, context, lang, uid, started_at),
-            update=update,
-            name=f"topup-scan-{uid}",
-        )
-        AUTO_TOPUP_TASKS[uid] = task
-
-        def cleanup_topup_scan(completed_task, user_id=uid):
-            if AUTO_TOPUP_TASKS.get(user_id) is completed_task:
-                AUTO_TOPUP_TASKS.pop(user_id, None)
-                AUTO_TOPUP_MESSAGES.pop(user_id, None)
-
-        task.add_done_callback(cleanup_topup_scan)
-        return
     if data in {"topup_bsc", "topup_polygon"}:
-        await stop_auto_topup_check(uid)
         network = "bsc" if data == "topup_bsc" else "polygon"
         network_label = "BSC (BEP20)" if network == "bsc" else "Polygon"
         PENDING[uid] = ("await_onchain_topup_amount", network)
@@ -1279,7 +1231,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     if data == "topup_txid":
-        await stop_auto_topup_check(uid)
         PENDING[uid] = ("await_topup_txid", 0)
         await q.message.reply_text(
             premium_customer_text(lang, "topup_ask_txid"),
@@ -1426,7 +1377,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("cancel_buy:"):
         order_id = int(data.split(":", 1)[1])
-        await stop_auto_payment_check(order_id)
         order = db.get_order(order_id)
         if order and order.get("user_id") == uid:
             order_service.cancel_order(order_id, reason="Cancelled by customer")
@@ -1455,7 +1405,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("paid:"):
         oid = int(data.split(":")[1])
-        await stop_auto_payment_check(oid)
         PENDING[uid] = ("await_txid", oid)
         await q.message.reply_text(t(lang, "ask_txid", oid=oid),
                                    parse_mode=ParseMode.MARKDOWN)
@@ -1477,45 +1426,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN,
         )
         return
-    if data.startswith("verify_auto:"):
-        oid = int(data.split(":", 1)[1])
-        order = db.get_order(oid)
-        if not order or order.get("user_id") != uid:
-            await q.answer(t(lang, "not_for_you"), show_alert=True)
-            return
-        await stop_auto_payment_check(oid)
-        # Await the Binance lookup inside this webhook request. Background
-        # tasks are not reliable on serverless hosts such as Vercel because
-        # the runtime may freeze as soon as the callback response completes.
-        scanner = await q.message.reply_text(
-            premium_customer_text(
-                lang, "payment_scanner", frame=payment_scanner_frame(0), oid=oid,
-            ),
-            parse_mode=ParseMode.HTML,
-        )
-        result = await asyncio.to_thread(payment_service.auto_check_payment, oid, uid)
-        if result["status"] in (
-            "delivered", "confirmed", "confirmed_no_delivery", "already_paid",
-        ):
-            with contextlib.suppress(Exception):
-                await scanner.edit_text(
-                    premium_customer_text(lang, "payment_scanner_success", oid=oid),
-                    parse_mode=ParseMode.HTML,
-                )
-            await send_payment_result(q.message, context, lang, oid, result, uid)
-        else:
-            with contextlib.suppress(Exception):
-                await scanner.edit_text(
-                    premium_customer_text(lang, "payment_scanner_timeout", oid=oid),
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=kb.txid_verify_keyboard(lang, oid),
-                )
-            await q.message.reply_text(
-                premium_customer_text(lang, "auto_check_timeout", oid=oid),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.txid_verify_keyboard(lang, oid),
-            )
-        return
     if data.startswith("continue_pay:"):
         oid = int(data.split(":")[1])
         order = db.get_order(oid)
@@ -1528,7 +1438,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     lang, "order_created", oid=oid, service=order["service_name"],
                     offer=order["offer_name"], qty=order["qty"],
                     total=f"{order['total_price']:.2f}", cur=CURRENCY,
-                    binance_id=BINANCE_PAY_ID, telegram_id=uid,
+                    binance_id=BINANCE_PAY_ID,
                 )
             )
             await q.message.reply_text(
@@ -1720,7 +1630,7 @@ async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
         lang, "order_created", oid=order["id"], service=order["service_name"],
         offer=order["offer_name"], qty=order["qty"],
         total=f"{order['total_price']:.2f}", cur=CURRENCY,
-        binance_id=BINANCE_PAY_ID, telegram_id=uid,
+        binance_id=BINANCE_PAY_ID,
     )
     await q.edit_message_text(text, parse_mode=ParseMode.HTML,
                               reply_markup=kb.paid_keyboard(
@@ -2362,7 +2272,6 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
         error_key = {
             "wrong_amount": "payment_wrong_amount",
             "wrong_currency": "payment_wrong_currency",
-            "wrong_memo": "payment_wrong_memo",
             "not_found": "payment_not_found",
             "already_used": "payment_txid_used",
         }.get(error_code, "verify_failed")
@@ -2370,106 +2279,6 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                                  parse_mode=ParseMode.HTML)
         PENDING[uid] = ("await_txid", order_id)
 
-
-def payment_scanner_frame(step: int, width: int = 9) -> str:
-    """Build a looping neon scanner; it represents activity, not fake progress."""
-    cycle = list(range(width)) + list(range(width - 2, 0, -1))
-    position = cycle[step % len(cycle)]
-    cells = ["⬛"] * width
-    cells[position] = "💠"
-    if position > 0:
-        cells[position - 1] = "🟦"
-    if position < width - 1:
-        cells[position + 1] = "🟪"
-    return "".join(cells)
-
-
-async def run_auto_payment_check(message, context, lang, order_id, uid):
-    scanner = await message.reply_text(
-        premium_customer_text(lang, "payment_scanner", frame=payment_scanner_frame(0), oid=order_id),
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb.txid_verify_keyboard(lang, order_id),
-    )
-    deadline = asyncio.get_running_loop().time() + 120
-    step = 0
-    while asyncio.get_running_loop().time() < deadline:
-        current_order = db.get_order(order_id)
-        if not current_order or current_order.get("status") in {"cancelled", "expired", "refunded"}:
-            with contextlib.suppress(Exception):
-                await scanner.delete()
-            return
-        result = await asyncio.to_thread(payment_service.auto_check_payment, order_id, uid)
-        if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery", "already_paid"):
-            with contextlib.suppress(Exception):
-                await scanner.edit_text(
-                    premium_customer_text(lang, "payment_scanner_success", oid=order_id),
-                    parse_mode=ParseMode.HTML,
-                )
-            await send_payment_result(message, context, lang, order_id, result, uid)
-            return
-        step += 1
-        with contextlib.suppress(Exception):
-            await scanner.edit_text(
-                premium_customer_text(lang, "payment_scanner", frame=payment_scanner_frame(step), oid=order_id),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.txid_verify_keyboard(lang, order_id),
-            )
-        await asyncio.sleep(2)
-    with contextlib.suppress(Exception):
-        await scanner.edit_text(
-            premium_customer_text(lang, "payment_scanner_timeout", oid=order_id),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.txid_verify_keyboard(lang, order_id),
-        )
-    await message.reply_text(
-        premium_customer_text(lang, "auto_check_timeout", oid=order_id),
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb.txid_verify_keyboard(lang, order_id),
-    )
-    AUTO_PAYMENT_MESSAGES[order_id] = scanner
-
-
-async def run_auto_topup_check(message, context, lang, uid, started_at):
-    """Scan recent transfers by optional Telegram-ID memo, with TXID fallback."""
-    scanner = await message.reply_text(
-        premium_customer_text(lang, "topup_scanner", frame=payment_scanner_frame(0)),
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb.topup_verifying_keyboard(lang),
-    )
-    AUTO_TOPUP_MESSAGES[uid] = scanner
-    deadline = asyncio.get_running_loop().time() + 120
-    step = 0
-    while asyncio.get_running_loop().time() < deadline:
-        result = await asyncio.to_thread(wallet_service.claim_transfer_by_memo, uid, started_at)
-        if result.get("status") == "confirmed":
-            AUTO_TOPUP_MESSAGES.pop(uid, None)
-            with contextlib.suppress(Exception):
-                await scanner.edit_text(
-                    premium_customer_text(
-                        lang,
-                        "topup_success",
-                        amount=f"{result['amount']:.2f}",
-                        balance=f"{result['balance']:.2f}",
-                    ),
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=kb.home_keyboard(lang, uid),
-                )
-            return
-        step += 1
-        with contextlib.suppress(Exception):
-            await scanner.edit_text(
-                premium_customer_text(lang, "topup_scanner", frame=payment_scanner_frame(step)),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.topup_verifying_keyboard(lang),
-            )
-        await asyncio.sleep(2)
-    with contextlib.suppress(Exception):
-        await scanner.edit_text(
-            premium_customer_text(lang, "topup_auto_timeout"),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.topup_verifying_keyboard(lang),
-        )
-    AUTO_TOPUP_MESSAGES[uid] = scanner
 
 def premium_customer_text(lang: str, key: str, **kwargs) -> str:
     """Render selected customer texts as HTML with their Premium emoji."""
@@ -2481,7 +2290,7 @@ def premium_customer_text(lang: str, key: str, **kwargs) -> str:
             if raw_value.startswith("[[HTML]]"):
                 format_kwargs = {name: html.escape(str(value)) for name, value in kwargs.items()}
                 if key == "order_created":
-                    for name in ("total", "binance_id", "telegram_id"):
+                    for name in ("total", "binance_id"):
                         if name in format_kwargs:
                             format_kwargs[name] = f"<code>{format_kwargs[name]}</code>"
             with contextlib.suppress(KeyError, IndexError, ValueError):
@@ -2489,11 +2298,11 @@ def premium_customer_text(lang: str, key: str, **kwargs) -> str:
     else:
         raw_value = t(lang, key, **kwargs)
     if key == "order_created" and not raw_value.startswith("[[HTML]]"):
-        # Keep the three payment values individually copyable in Telegram,
+        # Keep the payment values individually copyable in Telegram,
         # even when the admin's customized template uses plain placeholders.
         copyable_values = {
             name: str(kwargs[name])
-            for name in ("total", "binance_id", "telegram_id")
+            for name in ("total", "binance_id")
             if name in kwargs
         }
         if copyable_values:

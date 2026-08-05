@@ -12,9 +12,6 @@ import database as db
 import keyboards as kb
 from app.domain import affiliate_service
 from bot import (
-    AUTO_PAYMENT_MESSAGES,
-    AUTO_PAYMENT_TASKS,
-    AUTO_TOPUP_TASKS,
     PENDING,
     announce_channel_purchase,
     announce_channel_restock,
@@ -36,11 +33,9 @@ from bot import (
     on_text_menu,
     order_service_groups,
     orders_text_export,
-    payment_scanner_frame,
     premium_customer_text,
     rich_text_from_message,
     send_main_menu,
-    stop_auto_payment_check,
     text_with_custom_emoji_tokens,
     text_without_custom_emojis,
 )
@@ -671,7 +666,7 @@ def test_plain_offer_description_does_not_treat_stars_or_underscores_as_markup(m
 def test_payment_keyboard_prioritizes_verification():
     keyboard = kb.paid_keyboard("fr", order_id=17, binance_id="454813844", total="5.00")
 
-    assert keyboard.inline_keyboard[0][0].callback_data == "verify_auto:17"
+    assert keyboard.inline_keyboard[0][0].callback_data == "paid:17"
     assert all(
         button.copy_text is None
         for row in keyboard.inline_keyboard
@@ -679,84 +674,6 @@ def test_payment_keyboard_prioritizes_verification():
     )
     assert kb.txid_verify_keyboard("fr", 17).inline_keyboard[0][0].callback_data == "paid:17"
     assert kb.txid_verify_keyboard("fr", 17).inline_keyboard[1][0].callback_data == "cancel_buy:17"
-
-
-def test_payment_verification_is_awaited_inside_webhook(monkeypatch, mock_mongodb):
-    mock_mongodb.orders.insert_one({
-        "id": 17, "user_id": 42, "status": "pending_payment", "total_price": 2.8,
-    })
-    scanner = SimpleNamespace(edit_text=AsyncMock())
-    message = SimpleNamespace(reply_text=AsyncMock(return_value=scanner))
-    query = SimpleNamespace(
-        data="verify_auto:17",
-        from_user=SimpleNamespace(id=42),
-        message=message,
-        answer=AsyncMock(),
-    )
-    result = {
-        "status": "confirmed", "order": {"id": 17},
-        "delivered_content": None, "affiliate": None,
-    }
-    check = Mock(return_value=result)
-    send_result = AsyncMock()
-    monkeypatch.setattr("bot.payment_service.auto_check_payment", check)
-    monkeypatch.setattr("bot.send_payment_result", send_result)
-    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
-
-    # Deliberately omit context.application: a serverless verification must
-    # not depend on a detached background task.
-    context = SimpleNamespace(bot=SimpleNamespace())
-    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), context))
-
-    check.assert_called_once_with(17, 42)
-    scanner.edit_text.assert_awaited_once()
-    send_result.assert_awaited_once_with(message, context, "en", 17, result, 42)
-    assert 17 not in AUTO_PAYMENT_TASKS
-
-
-def test_payment_verification_failure_keeps_txid_fallback_visible(monkeypatch, mock_mongodb):
-    mock_mongodb.orders.insert_one({
-        "id": 18, "user_id": 42, "status": "pending_payment", "total_price": 2.8,
-    })
-    scanner = SimpleNamespace(edit_text=AsyncMock())
-    message = SimpleNamespace(reply_text=AsyncMock(return_value=scanner))
-    query = SimpleNamespace(
-        data="verify_auto:18",
-        from_user=SimpleNamespace(id=42),
-        message=message,
-        answer=AsyncMock(),
-    )
-    monkeypatch.setattr("bot.payment_service.auto_check_payment", Mock(return_value={
-        "status": "failed", "error_code": "not_found",
-    }))
-    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
-
-    asyncio.run(cb_navigation(
-        SimpleNamespace(callback_query=query),
-        SimpleNamespace(bot=SimpleNamespace()),
-    ))
-
-    assert message.reply_text.await_count == 2
-    fallback = message.reply_text.await_args_list[-1]
-    assert "TXID" in fallback.args[0]
-    assert fallback.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "paid:18"
-
-
-def test_txid_verification_stops_scanner_and_deletes_waiting_message():
-    async def scenario():
-        scanner = SimpleNamespace(delete=AsyncMock())
-        task = asyncio.create_task(asyncio.sleep(60))
-        AUTO_PAYMENT_TASKS[17] = task
-        AUTO_PAYMENT_MESSAGES[17] = scanner
-
-        await stop_auto_payment_check(17)
-
-        assert task.cancelled()
-        scanner.delete.assert_awaited_once()
-        assert 17 not in AUTO_PAYMENT_TASKS
-        assert 17 not in AUTO_PAYMENT_MESSAGES
-
-    asyncio.run(scenario())
 
 
 def test_support_flow_always_offers_a_home_action():
@@ -796,58 +713,30 @@ def test_referrer_receives_progress_and_wallet_success_messages(mock_mongodb, mo
     assert context.bot.send_message.await_count == 2
 
 
-def test_payment_scanner_moves_without_fake_percentage():
-    first = payment_scanner_frame(0)
-    second = payment_scanner_frame(1)
-
-    assert first != second
-    assert first.count("💠") == 1
-    assert "%" not in first + second
-
-
-def test_payment_text_uses_exact_admin_premium_emoji_and_html():
-    db.set_text_override(
-        "payment_scanner",
-        "en",
-        "*BINANCE PAY DETECTION*\n`{frame}`\nOrder #{oid}",
-        "premium-scanner-emoji-id",
-    )
-
-    rendered = premium_customer_text("en", "payment_scanner", frame="SCAN", oid=18)
-
-    assert rendered.startswith(
-        '<tg-emoji emoji-id="premium-scanner-emoji-id">⭐</tg-emoji> '
-    )
-    assert "<b>BINANCE PAY DETECTION</b>" in rendered
-    assert "<code>SCAN</code>" in rendered
-    assert "Order #18" in rendered
-
-
 def test_order_payment_values_are_individually_copyable():
     db.set_text_override(
         "order_created",
         "en",
-        "SEND EXACTLY: {total} {cur}\nBinance ID: {binance_id}\nMemo: {telegram_id}",
+        "SEND EXACTLY: {total} {cur}\nBinance ID: {binance_id}",
     )
 
     rendered = premium_customer_text(
         "en", "order_created", total="10.00", cur="USDT",
-        binance_id="454813844", telegram_id="5141968904",
+        binance_id="454813844",
     )
 
     assert "<code>10.00</code> USDT" in rendered
     assert "Binance ID: <code>454813844</code>" in rendered
-    assert "Memo: <code>5141968904</code>" in rendered
+    assert "Memo" not in rendered
 
 
 @pytest.mark.parametrize("key", [
-    "order_created", "payment_scanner", "payment_scanner_success",
-    "payment_scanner_timeout", "auto_check_timeout", "verifying", "verify_ok",
+    "order_created", "verifying", "verify_ok",
     "already_paid", "txid_too_short", "payment_wrong_amount",
-    "payment_wrong_currency", "payment_wrong_memo", "payment_not_found",
+    "payment_wrong_currency", "payment_not_found",
     "payment_txid_used", "verify_failed", "delivery_received",
     "loyalty_activated", "affiliate_rewarded",
-    "topup_message", "topup_ask_txid", "topup_scanner", "topup_auto_timeout",
+    "topup_message", "topup_ask_txid",
     "topup_success", "topup_already_confirmed", "topup_failed",
     "flash_sale_announcement",
     "affiliate_referral_success", "affiliate_ten_success", "channel_affiliate_reward",
@@ -1173,13 +1062,6 @@ def test_catalog_request_is_saved_and_sent_to_admin(monkeypatch, mock_mongodb):
     assert PENDING.get(42) is None
     assert "Request sent" in message.reply_text.await_args.args[0]
 
-def test_topup_verification_keyboard_offers_txid_fallback(mock_mongodb):
-    keyboard = kb.topup_verifying_keyboard("en")
-    callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
-
-    assert callbacks == ["topup_txid", "home"]
-
-
 def test_topup_keyboard_offers_bsc_and_polygon(mock_mongodb):
     callbacks = [
         button.callback_data
@@ -1187,54 +1069,17 @@ def test_topup_keyboard_offers_bsc_and_polygon(mock_mongodb):
         for button in row
     ]
 
-    assert callbacks == ["topup_claim", "topup_bsc", "topup_polygon", "home"]
+    assert callbacks == ["topup_txid", "topup_bsc", "topup_polygon", "home"]
 
 
-def test_topup_claim_starts_automatic_scan(monkeypatch, mock_mongodb):
-    created = {}
+def test_topup_instructions_are_txid_only(mock_mongodb):
+    message = t("en", "topup_message", binance_id="123")
 
-    class FakeTask:
-        def add_done_callback(self, callback):
-            created["callback"] = callback
-
-        def done(self):
-            return False
-
-        def cancel(self):
-            return None
-
-    def create_task(coro, **kwargs):
-        coro.close()
-        created["kwargs"] = kwargs
-        return FakeTask()
-
-    query = SimpleNamespace(
-        data="topup_claim",
-        from_user=SimpleNamespace(id=42),
-        message=SimpleNamespace(),
-        answer=AsyncMock(),
-    )
-    context = SimpleNamespace(application=SimpleNamespace(create_task=create_task))
-    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
-
-    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), context))
-
-    assert 42 in AUTO_TOPUP_TASKS
-    assert created["kwargs"]["name"] == "topup-scan-42"
-    AUTO_TOPUP_TASKS.pop(42, None)
-
-
-def test_topup_copy_marks_memo_optional_and_starts_without_txid(mock_mongodb):
-    message = t("en", "topup_message", binance_id="123", telegram_id=42)
-
-    assert "Optional" in message
-    assert "Verify Payment" in message
+    assert "Memo" not in message
     assert "Verify with TXID" in message
-    assert t("en", "topup_claim") == "✅ Verify Payment"
 
 def test_every_topup_button_supports_exact_premium_emoji(mock_mongodb):
     overrides = {
-        "topup_claim": ("Verify Payment", "premium-topup-verify"),
         "topup_verify_txid": ("Verify with TXID", "premium-topup-txid"),
         "topup_home_button": ("Home", "premium-topup-home"),
     }
@@ -1242,18 +1087,15 @@ def test_every_topup_button_supports_exact_premium_emoji(mock_mongodb):
         db.set_text_override(key, "en", label, emoji_id)
 
     initial = kb.topup_keyboard("en")
-    scanning = kb.topup_verifying_keyboard("en")
     buttons = {
         button.callback_data: button
-        for keyboard in (initial, scanning)
+        for keyboard in (initial,)
         for row in keyboard.inline_keyboard
         for button in row
     }
 
-    assert buttons["topup_claim"].icon_custom_emoji_id == "premium-topup-verify"
     assert buttons["topup_txid"].icon_custom_emoji_id == "premium-topup-txid"
     assert buttons["home"].icon_custom_emoji_id == "premium-topup-home"
-    assert buttons["topup_claim"].text == "Verify Payment"
     assert buttons["topup_txid"].text == "Verify with TXID"
 
 

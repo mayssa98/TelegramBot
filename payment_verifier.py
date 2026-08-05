@@ -81,14 +81,6 @@ def binance_healthcheck():
         }
 
 
-def _transaction_memo(transaction):
-    for key in ("note", "memo", "remark", "comments", "reference"):
-        value = transaction.get(key)
-        if value is not None:
-            return str(value).strip()
-    return ""
-
-
 def _transaction_identifiers(transaction):
     """Return every Binance identifier a customer may see on a receipt.
 
@@ -103,12 +95,12 @@ def _transaction_identifiers(transaction):
     } - {""}
 
 
-def verify_payment(txid, amount, currency=None, created_at=None, expected_memo=None):
+def verify_payment(txid, amount, currency=None, created_at=None):
     txid = (txid or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
         return {"status": "failed", "code": "invalid_format", "reason": "Format de transaction invalide"}
     if not BINANCE_API_KEY or not BINANCE_API_SECRET:
-        return {"status": "failed", "code": "not_configured", "reason": "Vérification automatique non configurée"}
+        return {"status": "failed", "code": "not_configured", "reason": "Vérification TXID non configurée"}
 
     # Inclure une marge de 10 minutes avant la création de la commande.
     start_ms = ((created_at or int(time.time()) - 3600) * 1000) - 600_000
@@ -128,8 +120,6 @@ def verify_payment(txid, amount, currency=None, created_at=None, expected_memo=N
                 return {"status": "failed", "code": "wrong_currency", "reason": f"Devise reçue: {asset}, attendue: {PAY_CURRENCY}"}
             if received != expected:
                 return {"status": "failed", "code": "wrong_amount", "reason": f"Montant reçu: {received}, attendu: {expected}"}
-            if expected_memo is not None and _transaction_memo(transaction) != str(expected_memo):
-                return {"status": "failed", "code": "wrong_memo", "reason": "Notes / Memo incorrect ou absent"}
             return {"status": "confirmed", "code": "confirmed", "reason": "Transaction Binance Pay confirmée"}
         return {"status": "failed", "code": "not_found", "reason": "Transaction absente de l'historique Binance Pay"}
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
@@ -142,7 +132,7 @@ def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
     if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
         return {"status": "failed", "code": "invalid_format", "reason": "Format de transaction invalide"}
     if not BINANCE_API_KEY or not BINANCE_API_SECRET:
-        return {"status": "failed", "code": "not_configured", "reason": "Vérification automatique non configurée"}
+        return {"status": "failed", "code": "not_configured", "reason": "Vérification TXID non configurée"}
     start_ms = ((created_at or int(time.time()) - 86400) * 1000) - 600_000
     try:
         minimum = Decimal(str(minimum_amount))
@@ -163,108 +153,5 @@ def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
                 "reason": "Transfert entrant confirmé",
             }
         return {"status": "failed", "code": "not_found", "reason": "Transaction absente de l'historique Binance Pay"}
-    except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
-        return {"status": "failed", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
-
-
-def verify_incoming_transfer_by_memo(user_id, minimum_amount=1, created_at=None, used_txids=None):
-    """Find a recent incoming transfer using the optional Telegram-ID memo."""
-    if not BINANCE_API_KEY or not BINANCE_API_SECRET:
-        return {"status": "failed", "code": "not_configured", "reason": "Automatic verification is not configured"}
-    created_at = int(created_at or time.time())
-    start_ms = (created_at * 1000) - 30_000
-    used_txids = {str(item).strip() for item in (used_txids or []) if item}
-    try:
-        minimum = Decimal(str(minimum_amount))
-        for transaction in _fetch_pay_transactions(start_ms):
-            txid = str(transaction.get("transactionId", "")).strip()
-            if not txid or txid in used_txids:
-                continue
-            transaction_ms = _transaction_time_ms(transaction)
-            if transaction_ms is not None and transaction_ms < start_ms:
-                continue
-            amount = Decimal(str(transaction.get("amount", "0")))
-            asset = str(transaction.get("currency", "")).upper()
-            if amount < minimum or asset != PAY_CURRENCY:
-                continue
-            if _transaction_memo(transaction) != str(user_id):
-                continue
-            return {
-                "status": "confirmed",
-                "code": "confirmed",
-                "txid": txid,
-                "amount": float(amount),
-                "currency": asset,
-                "reason": "Incoming transfer confirmed by Telegram-ID memo",
-            }
-        return {"status": "failed", "code": "not_found", "reason": "No recent transfer with this memo was detected"}
-    except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
-        return {"status": "failed", "code": "temporary_error", "reason": f"Binance API unavailable: {exc}"}
-
-def _transaction_time_ms(transaction):
-    for key in ("transactionTime", "createTime", "time", "insertTime", "timestamp"):
-        value = transaction.get(key)
-        if value is None:
-            continue
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            continue
-        return value if value > 10_000_000_000 else value * 1000
-    return None
-
-
-def verify_payment_by_amount(
-    amount,
-    currency=None,
-    created_at=None,
-    used_txids=None,
-    expected_memo=None,
-    allow_missing_memo=False,
-):
-    if not BINANCE_API_KEY or not BINANCE_API_SECRET:
-        return {"status": "failed", "code": "not_configured", "reason": "Vérification automatique non configurée"}
-
-    created_at = int(created_at or time.time())
-    start_ms = (created_at * 1000) - 30_000
-    used_txids = {str(item).strip() for item in (used_txids or []) if item}
-    try:
-        expected = Decimal(str(amount)).quantize(Decimal("0.00000001"))
-        expected_asset = str(currency or PAY_CURRENCY).upper()
-        transactions = _fetch_pay_transactions(start_ms)
-        memo_less_matches = []
-        for transaction in transactions:
-            txid = str(transaction.get("transactionId", "")).strip()
-            if not txid or txid in used_txids:
-                continue
-            transaction_ms = _transaction_time_ms(transaction)
-            if transaction_ms is not None and transaction_ms < start_ms:
-                continue
-            received = Decimal(str(transaction.get("amount", "0"))).quantize(
-                Decimal("0.00000001")
-            )
-            asset = str(transaction.get("currency", "")).upper()
-            if received <= 0 or asset != expected_asset:
-                continue
-            if received == expected:
-                memo = _transaction_memo(transaction)
-                if expected_memo is not None and memo != str(expected_memo):
-                    if allow_missing_memo and not memo:
-                        memo_less_matches.append(txid)
-                    continue
-                return {
-                    "status": "confirmed",
-                    "code": "confirmed",
-                    "txid": txid,
-                    "reason": "Paiement Binance Pay confirmé par montant exact",
-                }
-        if len(memo_less_matches) == 1:
-            return {
-                "status": "confirmed",
-                "code": "confirmed",
-                "txid": memo_less_matches[0],
-                "reason": "Paiement Binance Pay sans memo confirme par correspondance unique",
-            }
-        return {"status": "failed", "code": "not_found", "reason": "Aucun paiement exact récent détecté"}
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
         return {"status": "failed", "code": "temporary_error", "reason": f"API Binance indisponible: {exc}"}
