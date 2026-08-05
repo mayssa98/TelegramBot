@@ -676,6 +676,25 @@ def test_payment_keyboard_prioritizes_verification():
     assert kb.txid_verify_keyboard("fr", 17).inline_keyboard[1][0].callback_data == "cancel_buy:17"
 
 
+@pytest.mark.parametrize("callback", ["paid:17", "verify_auto:17"])
+def test_payment_buttons_route_to_txid_entry(callback, monkeypatch, mock_mongodb):
+    message = SimpleNamespace(reply_text=AsyncMock())
+    query = SimpleNamespace(
+        data=callback,
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+    )
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(
+        SimpleNamespace(callback_query=query), SimpleNamespace(),
+    ))
+
+    assert PENDING.get(42) == ("await_txid", 17)
+    assert "transaction ID" in message.reply_text.await_args.args[0]
+
+
 def test_support_flow_always_offers_a_home_action():
     keyboard = kb.support_category_keyboard("fr")
 

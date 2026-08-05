@@ -1230,7 +1230,9 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN,
         )
         return
-    if data == "topup_txid":
+    if data in {"topup_txid", "topup_claim"}:
+        # Older messages used topup_claim for the removed automatic scan.
+        # Keep them useful by routing directly to TXID entry.
         PENDING[uid] = ("await_topup_txid", 0)
         await q.message.reply_text(
             premium_customer_text(lang, "topup_ask_txid"),
@@ -1403,7 +1405,9 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.MARKDOWN,
             )
         return
-    if data.startswith("paid:"):
+    if data.startswith(("paid:", "verify_auto:")):
+        # Older order messages may still contain verify_auto. Automatic
+        # matching is gone; route that legacy button to TXID entry instead.
         oid = int(data.split(":")[1])
         PENDING[uid] = ("await_txid", oid)
         await q.message.reply_text(t(lang, "ask_txid", oid=oid),
