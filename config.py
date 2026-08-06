@@ -68,6 +68,14 @@ VEX_API_BASE: str = os.environ.get(
     "HP_VEX_API_BASE",
     "https://eismrrkygprctnwxmkbw.supabase.co/functions/v1/reseller-api",
 ).rstrip("/")
+
+# ---------------------------------------------------------------------------
+# Fournisseur revendeur Canboso
+# ---------------------------------------------------------------------------
+CANBOSO_API_KEY: str = os.environ.get("HP_CANBOSO_API_KEY", "").strip()
+CANBOSO_API_BASE: str = os.environ.get(
+    "HP_CANBOSO_API_BASE", "https://canboso.com/api/v2/telegram-buyer"
+).rstrip("/")
 _BINANCE_OFFICIAL_BASES = (
     "https://api.binance.com",
     "https://api-gcp.binance.com",

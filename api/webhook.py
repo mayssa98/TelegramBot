@@ -27,9 +27,17 @@ from telegram import Update
 from telegram.constants import ParseMode
 
 import database as db
+from api.buyer_api_docs import openapi_document, swagger_html
 from api.dashboard import render_dashboard
 from app import __version__
-from app.domain import inventory_service, order_service, reseller_service, support_service, wallet_service
+from app.domain import (
+    buyer_api_service,
+    inventory_service,
+    order_service,
+    reseller_service,
+    support_service,
+    wallet_service,
+)
 from app.web import dashboard_api
 from bot import announce_api_flash_sale, announce_channel_restock, build_app
 from config import ADMIN_ID, BOT_TOKEN, CURRENCY, DASHBOARD_PASSWORD
@@ -224,11 +232,13 @@ def _application():
 
 
 class handler(BaseHTTPRequestHandler):
-    def _reply(self, status: int, payload: dict):
+    def _reply(self, status: int, payload: dict, headers: dict[str, str] | None = None):
         body = json.dumps(payload, default=self._json_default).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -252,6 +262,42 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
         path = url.path.rstrip("/")
+
+        if path == "/api/openapi.json":
+            self._reply(200, openapi_document())
+            return
+
+        if path == "/api/swagger":
+            body = swagger_html().encode("utf-8")
+            self._reply_bytes(200, body, "text/html; charset=utf-8")
+            return
+
+        if path in {
+            "/api/v2/telegram-buyer/products",
+            "/api/v2/telegram-buyer/balance",
+        }:
+            endpoint = "products" if path.endswith("/products") else "balance"
+            try:
+                params = parse_qs(url.query)
+                key = buyer_api_service.authenticate(
+                    params.get("key", [""])[0], self._client_ip(), endpoint
+                )
+                payload = (
+                    buyer_api_service.products(key)
+                    if endpoint == "products"
+                    else buyer_api_service.balance(key)
+                )
+                self._reply(200, payload)
+            except buyer_api_service.BuyerApiError as exc:
+                self._reply_buyer_error(exc)
+            except Exception:
+                log.exception("Buyer API %s request failed", endpoint)
+                self._reply(500, {
+                    "success": False,
+                    "code": "INTERNAL_ERROR",
+                    "message": "The buyer API is temporarily unavailable.",
+                })
+            return
 
         if path == "/api/cron/restock":
             expected = os.environ.get("CRON_SECRET", "").strip()
@@ -429,12 +475,26 @@ class handler(BaseHTTPRequestHandler):
                 )[0]
                 self._reply(200, reseller_service.catalog(provider))
             except reseller_service.ResellerApiError as exc:
+                summary = next(
+                    (
+                        item for item in reseller_service.provider_summaries()
+                        if item["id"] == provider
+                    ),
+                    {"id": provider, "configured": False},
+                )
                 self._reply(503, {
                     "ok": False,
-                    "configured": bool(reseller_service.MAILREADER_API_KEY),
-                    "provider": reseller_service.PROVIDER,
+                    "configured": bool(summary["configured"]),
+                    "provider": summary["id"],
                     "error": str(exc),
                 })
+            return
+
+        elif path == "/admin/api/buyer-keys":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, {"ok": True, "keys": buyer_api_service.list_keys()})
             return
 
         elif path == "/admin/api/ticket-messages":
@@ -536,8 +596,92 @@ class handler(BaseHTTPRequestHandler):
         except Exception:
             return False
 
+    def _client_ip(self) -> str:
+        forwarded = self.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+        return forwarded or str(self.client_address[0])
+
+    def _reply_buyer_error(self, exc: buyer_api_service.BuyerApiError) -> None:
+        headers = (
+            {"Retry-After": str(exc.retry_after)}
+            if exc.retry_after is not None
+            else None
+        )
+        self._reply(exc.status, exc.payload(), headers=headers)
+
+    def _read_json_body(self, *, max_bytes: int = 64_000) -> dict:
+        content_type = self.headers.get("Content-Type", "").partition(";")[0].strip().lower()
+        if content_type != "application/json":
+            raise buyer_api_service.BuyerApiError(
+                415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json."
+            )
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise buyer_api_service.BuyerApiError(400, "INVALID_BODY", "Invalid request body.") from exc
+        if length <= 0 or length > max_bytes:
+            raise buyer_api_service.BuyerApiError(413, "INVALID_BODY_SIZE", "Invalid request body size.")
+        try:
+            payload = json.loads(self.rfile.read(length))
+        except json.JSONDecodeError as exc:
+            raise buyer_api_service.BuyerApiError(400, "INVALID_JSON", "Invalid JSON body.") from exc
+        if not isinstance(payload, dict):
+            raise buyer_api_service.BuyerApiError(400, "INVALID_BODY", "JSON body must be an object.")
+        return payload
+
     def do_POST(self):
         path = urlsplit(self.path).path.rstrip("/")
+        if path == "/api/v2/telegram-buyer/purchase":
+            try:
+                payload = self._read_json_body()
+                key = buyer_api_service.authenticate(
+                    payload.get("key", ""), self._client_ip(), "purchase"
+                )
+                try:
+                    quantity = int(payload.get("quantity", 1))
+                except (TypeError, ValueError) as exc:
+                    raise buyer_api_service.BuyerApiError(
+                        400, "INVALID_QUANTITY", "quantity must be an integer."
+                    ) from exc
+                status, result, replayed = buyer_api_service.purchase(
+                    key,
+                    product_id=payload.get("product_id", ""),
+                    quantity=quantity,
+                    idempotency_key=self.headers.get("Idempotency-Key", ""),
+                )
+                self._reply(status, result, headers={"Idempotent-Replayed": str(replayed).lower()})
+            except buyer_api_service.BuyerApiError as exc:
+                self._reply_buyer_error(exc)
+            except Exception:
+                log.exception("Buyer API purchase failed")
+                self._reply(500, {
+                    "success": False,
+                    "code": "INTERNAL_ERROR",
+                    "message": "The buyer API is temporarily unavailable.",
+                })
+            return
+
+        if path == "/admin/api/buyer-keys":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                payload = self._read_json_body()
+                action = str(payload.get("action") or "create").lower()
+                if action == "create":
+                    issued = buyer_api_service.create_key(
+                        int(payload.get("user_id")), label=str(payload.get("label") or "Buyer API")
+                    )
+                    self._reply(201, {"ok": True, "key": issued})
+                elif action == "revoke":
+                    revoked = buyer_api_service.revoke_key(int(payload.get("key_id")))
+                    self._reply(200 if revoked else 404, {"ok": revoked})
+                else:
+                    self._reply(400, {"ok": False, "error": "invalid_action"})
+            except (TypeError, ValueError) as exc:
+                self._reply(400, {"ok": False, "error": str(exc)})
+            except buyer_api_service.BuyerApiError as exc:
+                self._reply_buyer_error(exc)
+            return
         if path == "/admin":
             self._dashboard_action()
             return

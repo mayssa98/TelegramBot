@@ -15,7 +15,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def get_conn():
@@ -81,6 +81,15 @@ def init_db():
     db.wallet_topups.create_index("txid", unique=True)
     db.wallet_topups.create_index("id", unique=True, sparse=True)
     db.bulk_wallet_credits.create_index("operation_id", unique=True)
+    db.buyer_api_keys.create_index("id", unique=True)
+    db.buyer_api_keys.create_index("key_hash", unique=True)
+    db.buyer_api_purchases.create_index(
+        [("buyer_key_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True,
+    )
+    db.buyer_api_rate_limits.create_index(
+        [("bucket", ASCENDING), ("window", ASCENDING)], unique=True,
+    )
+    db.buyer_api_rate_limits.create_index("expire_at", expireAfterSeconds=0)
     db.affiliate_rewards.create_index([("referrer_id", ASCENDING), ("milestone", ASCENDING)], unique=True)
     db.loyalty.create_index("user_id", unique=True)
     db.pending_states.create_index("user_id", unique=True)

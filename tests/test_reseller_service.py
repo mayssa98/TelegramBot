@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from urllib.parse import parse_qs, urlsplit
+
 import pytest
 
 import database as db
@@ -73,6 +76,58 @@ def test_api_key_is_required_without_exposing_a_secret(monkeypatch):
 
     with pytest.raises(reseller_service.ResellerApiError, match="HP_MAILREADER_API_KEY"):
         reseller_service._request_json("/api/reseller/products")
+
+
+def test_canboso_key_and_idempotency_are_sent_in_documented_fields(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode()
+
+    def fake_urlopen(request, timeout):
+        requests.append((request, timeout))
+        return FakeResponse({"success": True})
+
+    monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "test-buyer-key")
+    monkeypatch.setattr(
+        reseller_service,
+        "CANBOSO_API_BASE",
+        "https://supplier.example/api/v2/telegram-buyer",
+    )
+    monkeypatch.setattr(reseller_service, "urlopen", fake_urlopen)
+
+    reseller_service._canboso_request_json("/products")
+    reseller_service._canboso_request_json(
+        "/purchase",
+        method="POST",
+        body={"product_id": "sku-1", "quantity": 2},
+        idempotency_key="BM-123",
+    )
+
+    get_request, get_timeout = requests[0]
+    assert get_timeout == 20
+    assert parse_qs(urlsplit(get_request.full_url).query) == {"key": ["test-buyer-key"]}
+    assert get_request.data is None
+
+    post_request, post_timeout = requests[1]
+    assert post_timeout == 20
+    assert urlsplit(post_request.full_url).query == ""
+    assert post_request.get_header("Idempotency-key") == "BM-123"
+    assert json.loads(post_request.data) == {
+        "key": "test-buyer-key",
+        "product_id": "sku-1",
+        "quantity": 2,
+    }
 
 
 def test_publish_product_creates_native_bot_service_and_offer(monkeypatch, mock_mongodb):
@@ -399,6 +454,101 @@ def test_vex_order_is_delivered_and_replayed_without_double_charge(monkeypatch, 
     }]
     fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 94})
     assert fulfillment["supplier_order_id"] == "VEX-12345678"
+
+
+def test_canboso_catalog_maps_wallet_products_and_slot_delivery(monkeypatch, mock_mongodb):
+    def fake_request(path, **_kwargs):
+        if path == "/balance":
+            return {
+                "success": True,
+                "walletCurrency": "VND",
+                "balance": 250000,
+                "usdtBalance": 0,
+            }
+        return {
+            "success": True,
+            "products": [{
+                "_id": "canboso-1",
+                "product_name": "ChatGPT Plus",
+                "description": "Instant account",
+                "usdPricing": 1.85,
+                "requiresCustomerEmail": False,
+                "stats": {"available": 60},
+            }, {
+                "_id": "canboso-slot",
+                "product_name": "Business Slot",
+                "usdPricing": 3.5,
+                "requiresCustomerEmail": True,
+                "stats": {"available": 10},
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_canboso_request_json", fake_request)
+
+    result = reseller_service.catalog("canboso")
+
+    assert result["provider"] == "canboso"
+    assert result["supplier_name"] == "Canboso"
+    assert result["balance"] == 250000
+    assert result["currency"] == "VND"
+    assert result["products"][0]["id"] == "canboso-1"
+    assert result["products"][0]["name"] == "ChatGPT Plus"
+    assert result["products"][0]["wholesale_price"] == 1.85
+    assert result["products"][0]["currency"] == "USDT"
+    assert result["products"][0]["stock"] == 60
+    assert result["products"][0]["manual_delivery"] is False
+    assert result["products"][1]["manual_delivery"] is True
+
+
+def test_canboso_purchase_uses_stable_idempotency_key(monkeypatch, mock_mongodb):
+    calls = []
+
+    def fake_request(path, **kwargs):
+        calls.append((path, kwargs))
+        return {
+            "success": True,
+            "orderCode": "ORDER1A2B3C4D5E",
+            "deliveredAccounts": [{
+                "user": "account@example.com",
+                "password": "supplier-secret",
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_canboso_request_json", fake_request)
+    service_id = db.add_service("Canboso", "📦")
+    offer_id = db.add_offer(
+        service_id,
+        "Canboso Account",
+        3.0,
+        5,
+        supplier_provider="canboso",
+        supplier_product_id="canboso-1",
+    )
+    mock_mongodb.orders.insert_one({
+        "id": 95,
+        "user_id": 123,
+        "offer_id": offer_id,
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+
+    first = reseller_service.fulfill_paid_order(95)
+    second = reseller_service.fulfill_paid_order(95)
+
+    assert first == second
+    assert len(first) == 1
+    assert "supplier-secret" in first[0]
+    assert calls == [(
+        "/purchase",
+        {
+            "method": "POST",
+            "body": {"product_id": "canboso-1", "quantity": 1},
+            "idempotency_key": "BM-95",
+        },
+    )]
+    fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 95})
+    assert fulfillment["supplier_order_id"] == "ORDER1A2B3C4D5E"
+    assert "supplier-secret" not in str(fulfillment)
 def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mock_mongodb):
     offer_id = db.add_offer(
         service_id=db.add_service("API stock", "📦"),
@@ -437,6 +587,7 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
     monkeypatch.setattr(reseller_service, "SHAMEKH_API_KEY", "")
     monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "catalog", fake_catalog)
 
     assert reseller_service.detect_restock_events()["events"] == []
@@ -478,6 +629,7 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     monkeypatch.setattr(reseller_service, "SHAMEKH_API_KEY", "")
     monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
     monkeypatch.setattr(
         reseller_service,
         "catalog",

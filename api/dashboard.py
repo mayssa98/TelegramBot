@@ -2195,6 +2195,12 @@ def render_dashboard(
                         <button class="btn btn-primary" onclick="selectApiProvider('vex')">Voir ses produits</button>
                     </div>
                     <div class="api-action-card">
+                        <span class="badge badge-paid">API active</span>
+                        <h3>Canboso</h3>
+                        <p>Catalogue, solde wallet et achats protégés contre les doublons.</p>
+                        <button class="btn btn-primary" onclick="selectApiProvider('canboso')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
                         <span>↻</span>
                         <h3>Synchronisation</h3>
                         <p>Actualisez le solde, les prix grossistes et les stocks.</p>
@@ -2211,6 +2217,23 @@ def render_dashboard(
                         <h3>Documentation</h3>
                         <p>Consultez les endpoints et les règles de MailReader.</p>
                         <a class="btn btn-secondary" href="https://api.mailreader.tech/docs" target="_blank" rel="noopener">Ouvrir la documentation</a>
+                    </div>
+                    <div class="api-action-card" style="grid-column:1/-1;">
+                        <span class="badge badge-paid">Votre API revendeur</span>
+                        <h3>Clés Buyer API</h3>
+                        <p>Créez une clé liée au portefeuille Telegram d’un acheteur. La clé complète ne sera affichée qu’une fois.</p>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+                            <label style="flex:1;min-width:180px;">Telegram user ID
+                                <input id="buyer-api-user-id" type="number" min="1" placeholder="123456789">
+                            </label>
+                            <label style="flex:1;min-width:180px;">Nom de la clé
+                                <input id="buyer-api-label" maxlength="80" value="Reseller API">
+                            </label>
+                            <button class="btn btn-primary" onclick="createBuyerApiKey()">Créer la clé</button>
+                            <a class="btn btn-secondary" href="/api/swagger" target="_blank" rel="noopener">Swagger</a>
+                        </div>
+                        <div id="buyer-api-created-key" class="alert alert-success" style="display:none;margin-top:12px;word-break:break-all;"></div>
+                        <div id="buyer-api-key-list" style="margin-top:12px;"></div>
                     </div>
                 </div>
             </div>
@@ -2694,6 +2717,7 @@ def render_dashboard(
             }
             if (document.getElementById("api-products")?.classList.contains("active")) {
                 loadApiProducts();
+                loadBuyerApiKeys();
             }
             setInterval(() => {
                 const panel = document.getElementById("interactions");
@@ -2721,7 +2745,10 @@ def render_dashboard(
                 panel.style.display = "block";
                 title.textContent = btn.dataset.title || btn.textContent.trim();
                 location.hash = tabId;
-                if (tabId === "api-products") loadApiProducts();
+                if (tabId === "api-products") {
+                    loadApiProducts();
+                    loadBuyerApiKeys();
+                }
                 if (tabId === "overview") loadOverviewSupplier();
                 document.querySelector("main").scrollIntoView({ behavior: "smooth", block: "start" });
             }
@@ -3060,6 +3087,80 @@ def render_dashboard(
             resellerCatalog = null;
             await loadApiProducts(true, provider);
             if (resellerCatalog) showApiWorkspaceStep("catalog");
+        }
+
+        async function loadBuyerApiKeys() {
+            const list = document.getElementById("buyer-api-key-list");
+            if (!list) return;
+            try {
+                const response = await fetch("/admin/api/buyer-keys", {
+                    credentials: "same-origin",
+                    headers: {"Accept": "application/json"},
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || "Chargement impossible");
+                const keys = payload.keys || [];
+                list.innerHTML = keys.length ? keys.map(item => `
+                    <div class="supplier-summary" style="margin-top:8px;">
+                        <div class="supplier-stat"><span>Clé</span><strong>${escapeHtml(item.prefix)}••••</strong></div>
+                        <div class="supplier-stat"><span>Utilisateur</span><strong>${item.user_id}</strong></div>
+                        <div class="supplier-stat"><span>Nom</span><strong>${escapeHtml(item.label || "Buyer API")}</strong></div>
+                        <div class="supplier-stat"><span>État</span><strong>${item.active ? "Active" : "Révoquée"}</strong></div>
+                        ${item.active ? `<button class="btn btn-danger" onclick="revokeBuyerApiKey(${item.id})">Révoquer</button>` : ""}
+                    </div>`).join("") : '<div class="empty-state">Aucune clé Buyer API.</div>';
+            } catch (error) {
+                list.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function createBuyerApiKey() {
+            const userId = Number(document.getElementById("buyer-api-user-id").value);
+            const label = document.getElementById("buyer-api-label").value.trim();
+            if (!Number.isInteger(userId) || userId <= 0) {
+                showToast("Telegram user ID invalide", "error");
+                return;
+            }
+            try {
+                const response = await fetch("/admin/api/buyer-keys", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Dashboard-Write-Token": dashboardWriteToken,
+                    },
+                    body: JSON.stringify({action: "create", user_id: userId, label}),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || "Création impossible");
+                const output = document.getElementById("buyer-api-created-key");
+                output.style.display = "block";
+                output.innerHTML = `<strong>Copiez cette clé maintenant :</strong><br><code>${escapeHtml(payload.key.key)}</code>`;
+                await loadBuyerApiKeys();
+                showToast("Clé Buyer API créée");
+            } catch (error) {
+                showToast(error.message, "error");
+            }
+        }
+
+        async function revokeBuyerApiKey(keyId) {
+            if (!window.confirm("Révoquer immédiatement cette clé API ?")) return;
+            try {
+                const response = await fetch("/admin/api/buyer-keys", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Dashboard-Write-Token": dashboardWriteToken,
+                    },
+                    body: JSON.stringify({action: "revoke", key_id: keyId}),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || "Révocation impossible");
+                await loadBuyerApiKeys();
+                showToast("Clé révoquée");
+            } catch (error) {
+                showToast(error.message, "error");
+            }
         }
 
         async function loadApiProducts(force = false, provider = activeApiProvider) {
