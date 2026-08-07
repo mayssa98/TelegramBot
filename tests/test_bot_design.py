@@ -36,6 +36,7 @@ from bot import (
     premium_customer_text,
     rich_text_from_message,
     send_main_menu,
+    send_payment_result,
     text_with_custom_emoji_tokens,
     text_without_custom_emojis,
 )
@@ -1139,3 +1140,114 @@ def test_empty_wallet_click_always_returns_a_visible_message(monkeypatch):
     query.message.reply_text.assert_awaited_once_with(
         "Insufficient balance: 0.00 USDT available."
     )
+
+
+def test_otp_numbers_catalog_is_always_one_dollar_and_manual(mock_mongodb):
+    service_id = db.add_service("OTP numbers", "OTP")
+    offer_id = db.add_offer(service_id, "One OTP code", 9.99, 0)
+
+    raw = mock_mongodb.offers.find_one({"id": offer_id})
+    offer = db.get_offer(offer_id)
+
+    assert raw["price"] == 1.0
+    assert raw["unlimited_stock"] is True
+    assert raw["manual_stock"] is True
+    assert raw["auto_delivery"] is False
+    assert offer["price"] == 1.0
+    assert db.offer_has_stock(offer, 50) is True
+
+    db.update_offer(offer_id, price=25.0, auto_delivery=True, unlimited_stock=False)
+    updated = mock_mongodb.offers.find_one({"id": offer_id})
+    assert updated["price"] == 1.0
+    assert updated["auto_delivery"] is False
+    assert updated["unlimited_stock"] is True
+
+
+def test_paid_otp_order_asks_for_service_before_admin_handoff(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 501,
+        "user_id": 42,
+        "service_name": "OTP numbers",
+        "offer_name": "OTP code",
+        "qty": 2,
+        "status": "payment_confirmed",
+    })
+    message = SimpleNamespace(reply_text=AsyncMock())
+
+    asyncio.run(send_payment_result(
+        message,
+        SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock())),
+        "en",
+        501,
+        {
+            "status": "confirmed_no_delivery",
+            "affiliate": None,
+            "loyalty": None,
+            "delivered_content": None,
+        },
+        42,
+    ))
+
+    assert PENDING.get(42) == ("otp_service", {"order_id": 501})
+    assert "What's the service?" in message.reply_text.await_args.args[0]
+    assert mock_mongodb.orders.find_one({"id": 501})["otp_workflow_status"] == "awaiting_service"
+
+
+def test_otp_answers_notify_admin_and_redirect_customer(monkeypatch, mock_mongodb):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    mock_mongodb.orders.insert_one({
+        "id": 502,
+        "user_id": 42,
+        "service_name": "OTP numbers",
+        "offer_name": "OTP code",
+        "qty": 3,
+        "wallet_amount": 3.0,
+        "total_price": 0.0,
+        "payment_method": "wallet",
+        "verify_method": "wallet",
+        "txid": "",
+        "status": "payment_confirmed",
+    })
+    PENDING[42] = ("otp_service", {"order_id": 502})
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+    context = SimpleNamespace(bot=bot_client)
+    user = SimpleNamespace(id=42, username="otpbuyer", full_name="OTP Buyer")
+
+    service_message = SimpleNamespace(text="WhatsApp", reply_text=AsyncMock())
+    asyncio.run(handle_pending_input(
+        SimpleNamespace(effective_user=user, message=service_message),
+        context,
+        "en",
+    ))
+
+    assert PENDING.get(42) == (
+        "otp_country", {"order_id": 502, "service": "WhatsApp"},
+    )
+    assert "What's the country?" in service_message.reply_text.await_args.args[0]
+
+    country_message = SimpleNamespace(text="Nigeria", reply_text=AsyncMock())
+    asyncio.run(handle_pending_input(
+        SimpleNamespace(effective_user=user, message=country_message),
+        context,
+        "en",
+    ))
+
+    assert PENDING.get(42) is None
+    order = mock_mongodb.orders.find_one({"id": 502})
+    assert order["otp_service"] == "WhatsApp"
+    assert order["otp_country"] == "Nigeria"
+    assert order["otp_workflow_status"] == "sent_to_admin"
+    admin_call = bot_client.send_message.await_args
+    assert admin_call.args[0] == 999
+    assert "New paid OTP request" in admin_call.args[1]
+    assert "WhatsApp" in admin_call.args[1]
+    assert "Nigeria" in admin_call.args[1]
+    assert "3 OTP code(s)" in admin_call.args[1]
+    assert "3.00 USDT" in admin_call.args[1]
+    assert mock_mongodb.support_tickets.find_one({
+        "user_id": 42, "order_id": 502, "category": "otp_order",
+    })
+    customer_call = country_message.reply_text.await_args
+    assert "@Anwer\\_07" in customer_call.args[0]
+    button = customer_call.kwargs["reply_markup"].inline_keyboard[0][0]
+    assert button.url.startswith("https://t.me/Anwer_07?text=")

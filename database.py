@@ -15,7 +15,39 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
+
+
+def is_otp_service_name(value):
+    """Return whether a catalogue service is the special OTP-numbers flow."""
+    normalized = " ".join(re.sub(r"[^a-z0-9]+", " ", str(value or "").casefold()).split())
+    return "otp" in normalized.split() and any(
+        token in {"number", "numbers"} for token in normalized.split()
+    )
+
+
+def _otp_offer_values():
+    return {
+        "price": 1.0,
+        "currency": "USDT",
+        "unlimited_stock": True,
+        "manual_stock": True,
+        "auto_delivery": False,
+        "delivery_delay": "After admin confirmation",
+    }
+
+
+def _enforce_otp_catalog_rules(conn):
+    service_ids = [
+        row["id"]
+        for row in conn.services.find({}, {"id": 1, "name": 1})
+        if is_otp_service_name(row.get("name"))
+    ]
+    if service_ids:
+        conn.offers.update_many(
+            {"service_id": {"$in": service_ids}},
+            {"$set": _otp_offer_values()},
+        )
 
 
 def get_conn():
@@ -51,6 +83,7 @@ def init_db():
         return
     db = get_conn()
     db.command("ping")
+    _enforce_otp_catalog_rules(db)
     schema = db.schema_meta.find_one({"_id": "schema"}, {"version": 1})
     if schema and schema.get("version") == SCHEMA_VERSION:
         _schema_initialized = True
@@ -267,11 +300,23 @@ def list_offers(service_id, active_only=True):
     query = {"service_id": service_id}
     if active_only:
         query["active"] = 1
-    return [_resolve_flash_sale(_public(x)) for x in get_conn().offers.find(query).sort("id", ASCENDING)]
+    offers = [_resolve_flash_sale(_public(x)) for x in get_conn().offers.find(query).sort("id", ASCENDING)]
+    service = get_service(service_id)
+    if service and is_otp_service_name(service.get("name")):
+        values = _otp_offer_values()
+        for offer in offers:
+            offer.update(values)
+    return offers
 
 
 def get_offer(offer_id):
-    return _resolve_flash_sale(_public(get_conn().offers.find_one({"id": offer_id})))
+    offer = _resolve_flash_sale(_public(get_conn().offers.find_one({"id": offer_id})))
+    if not offer:
+        return None
+    service = get_service(offer.get("service_id"))
+    if service and is_otp_service_name(service.get("name")):
+        offer.update(_otp_offer_values())
+    return offer
 
 
 def _resolve_flash_sale(offer):
@@ -400,6 +445,10 @@ def update_offer(
         }.items()
         if value is not None
     }
+    existing = get_conn().offers.find_one({"id": offer_id}, {"service_id": 1}) or {}
+    service = get_service(existing.get("service_id")) if existing else None
+    if service and is_otp_service_name(service.get("name")):
+        values.update(_otp_offer_values())
     if values:
         get_conn().offers.update_one({"id": offer_id}, {"$set": values})
 
@@ -430,7 +479,12 @@ def update_service(service_id, name=None, emoji=None, active=None, custom_emoji_
         }.items()
         if v is not None
     }
-    return bool(values and get_conn().services.update_one({"id": service_id}, {"$set": values}).matched_count)
+    updated = bool(values and get_conn().services.update_one({"id": service_id}, {"$set": values}).matched_count)
+    if updated and is_otp_service_name(name):
+        get_conn().offers.update_many(
+            {"service_id": service_id}, {"$set": _otp_offer_values()},
+        )
+    return updated
 
 
 def archive_service(service_id):
@@ -464,6 +518,8 @@ def add_offer(
 ):
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
+    service = get_service(service_id) or {}
+    special_values = _otp_offer_values() if is_otp_service_name(service.get("name")) else {}
     get_conn().offers.insert_one({
         "id": oid,
         "service_id": service_id,
@@ -485,6 +541,7 @@ def add_offer(
         "supplier_product_id": str(supplier_product_id or ""),
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
+        **special_values,
     })
     return oid
 

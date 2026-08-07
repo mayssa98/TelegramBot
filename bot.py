@@ -24,6 +24,7 @@ from telegram.ext import (
     TypeHandler,
     filters,
 )
+from telegram.helpers import escape_markdown
 
 import admin
 import database as db
@@ -39,6 +40,7 @@ from app.domain import (
 )
 from config import (
     ADMIN_ID,
+    ADMIN_USERNAME,
     BINANCE_PAY_ID,
     BOT_TOKEN,
     CURRENCY,
@@ -1096,6 +1098,8 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_topup_txid",
         "await_onchain_topup_amount",
         "await_onchain_topup_txid",
+        "otp_service",
+        "otp_country",
         "await_quantity",
         "catalog_request",
         "adm_setprice",
@@ -1666,6 +1670,113 @@ async def handle_pending_input(update, context, lang):
         await send_buy_confirmation(update.message.reply_text, uid, int(ref), qty, lang)
         return
 
+    if kind == "otp_service":
+        order_id = int(ref["order_id"] if isinstance(ref, dict) else ref)
+        order = db.get_order(order_id)
+        if not order or order.get("user_id") != uid or order.get("status") not in {
+            "paid", "payment_confirmed", "delivered",
+        }:
+            PENDING.pop(uid, None)
+            await update.message.reply_text(t(lang, "otp_order_unavailable"))
+            return
+        service_name = " ".join(text.split())[:120]
+        if not service_name:
+            await update.message.reply_text(t(lang, "otp_ask_service"))
+            return
+        db.get_conn().orders.update_one(
+            {"id": order_id},
+            {"$set": {
+                "otp_service": service_name,
+                "otp_workflow_status": "awaiting_country",
+                "updated_at": int(time.time()),
+            }},
+        )
+        PENDING[uid] = (
+            "otp_country",
+            {"order_id": order_id, "service": service_name},
+        )
+        await update.message.reply_text(
+            t(lang, "otp_ask_country", service=escape_markdown(service_name)),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if kind == "otp_country":
+        order_id = int(ref["order_id"])
+        service_name = str(ref["service"])
+        order = db.get_order(order_id)
+        if not order or order.get("user_id") != uid or order.get("status") not in {
+            "paid", "payment_confirmed", "delivered",
+        }:
+            PENDING.pop(uid, None)
+            await update.message.reply_text(t(lang, "otp_order_unavailable"))
+            return
+        country = " ".join(text.split())[:80]
+        if not country:
+            await update.message.reply_text(
+                t(lang, "otp_ask_country", service=escape_markdown(service_name)),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+        now = int(time.time())
+        db.get_conn().orders.update_one(
+            {"id": order_id},
+            {"$set": {
+                "otp_service": service_name,
+                "otp_country": country,
+                "otp_workflow_status": "sent_to_admin",
+                "otp_requested_at": now,
+                "updated_at": now,
+            }},
+        )
+        PENDING.pop(uid, None)
+        user = update.effective_user
+        username = f"@{user.username}" if getattr(user, "username", None) else "?"
+        display_name = getattr(user, "full_name", None) or username or str(uid)
+        request_details = f"Service: {service_name}\nCountry: {country}"
+        ticket = support_service.create_ticket(
+            uid,
+            request_details,
+            category="otp_order",
+            order_id=order_id,
+        )
+        admin_text = (
+            "<b>New paid OTP request</b>\n\n"
+            f"Order: <b>#{order_id}</b>\n"
+            f"Client: <b>{html.escape(str(display_name))}</b>\n"
+            f"Username: <b>{html.escape(username)}</b>\n"
+            f"Telegram ID: <code>{uid}</code>\n"
+            f"Quantity: <b>{int(order.get('qty') or 1)} OTP code(s)</b>\n"
+            f"Total paid: <b>{float(order.get('wallet_amount') or order.get('total_price') or 0):.2f} {CURRENCY}</b>\n"
+            f"Payment: <b>{html.escape(str(order.get('verify_method') or order.get('payment_method') or 'confirmed'))}</b>\n"
+            f"TXID: <code>{html.escape(str(order.get('txid') or 'wallet payment'))}</code>\n"
+            f"Requested service: <b>{html.escape(service_name)}</b>\n"
+            f"Country: <b>{html.escape(country)}</b>\n"
+            f"Support ticket: <b>#{ticket['id']}</b>"
+        )
+        try:
+            await context.bot.send_message(
+                ADMIN_ID,
+                admin_text,
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as exc:
+            log.warning("OTP order #%s admin notification failed: %s", order_id, exc)
+        await update.message.reply_text(
+            t(
+                lang,
+                "otp_redirect_admin",
+                oid=order_id,
+                service=escape_markdown(service_name),
+                country=escape_markdown(country),
+                admin=escape_markdown(ADMIN_USERNAME),
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.otp_admin_handoff_keyboard(
+                lang, order_id, service_name, country,
+            ),
+        )
+        return
     if kind == "catalog_request":
         request_text = rich_text_from_message(update.message).strip()
         if not request_text:
@@ -2206,6 +2317,49 @@ async def handle_pending_input(update, context, lang):
         return
 
 
+def is_otp_order(order):
+    return bool(order and db.is_otp_service_name(order.get("service_name")))
+
+
+async def begin_otp_order_questions(message, lang, order_id, uid):
+    """Start or recover the paid OTP service/country questionnaire."""
+    order = db.get_order(order_id)
+    if not is_otp_order(order):
+        return False
+    workflow = str(order.get("otp_workflow_status") or "")
+    if workflow == "sent_to_admin":
+        return True
+    pending = PENDING.get(uid)
+    if workflow == "awaiting_country" and order.get("otp_service"):
+        PENDING[uid] = (
+            "otp_country",
+            {"order_id": order_id, "service": order["otp_service"]},
+        )
+        if not pending or pending[0] != "otp_country":
+            await message.reply_text(
+                t(
+                    lang,
+                    "otp_ask_country",
+                    service=escape_markdown(str(order["otp_service"])),
+                ),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        return True
+    PENDING[uid] = ("otp_service", {"order_id": order_id})
+    db.get_conn().orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "otp_workflow_status": "awaiting_service",
+            "updated_at": int(time.time()),
+        }},
+    )
+    if not pending or pending[0] != "otp_service":
+        await message.reply_text(
+            t(lang, "otp_payment_confirmed_ask_service", oid=order_id),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    return True
+
 # ---------------- Traitement de paiement ----------------
 async def send_payment_result(message, context, lang, order_id, result, uid):
     if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery"):
@@ -2246,6 +2400,9 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                 ),
                 parse_mode=ParseMode.HTML,
             )
+        paid_order = db.get_order(order_id)
+        if is_otp_order(paid_order) and await begin_otp_order_questions(message, lang, order_id, uid):
+            return
         if result["delivered_content"]:
             content = numbered_delivery_content(result["delivered_content"])
             paid_order = db.get_order(order_id)

@@ -26,7 +26,7 @@ def text_category_for_key(key):
         ("channel", ("channel_", "btn_channel_", "btn_join_channel", "btn_verify_join")),
         ("payments", ("payment_", "topup_", "wallet_", "ask_txid", "verifying", "copy_", "order_created", "btn_paid", "btn_pay_")),
         ("catalog", ("catalog_", "service_", "offer_", "stock_", "choose_quantity", "quantity_", "confirm_purchase", "price_", "out_of_stock", "cat_")),
-        ("orders", ("orders_", "order_", "delivery_", "status_", "duplicate_order", "already_paid", "cancelled_")),
+        ("orders", ("orders_", "order_", "delivery_", "status_", "otp_", "duplicate_order", "already_paid", "cancelled_")),
         ("support", ("support_", "ticket_", "rating_")),
         ("affiliate", ("affiliate_", "loyalty_")),
         ("account", ("profile_", "terms_", "privacy_", "help_", "welcome", "onboarding_", "lang_", "channel_")),

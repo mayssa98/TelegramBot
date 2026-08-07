@@ -421,6 +421,23 @@ def duplicate_order_keyboard(lang, existing_order_id, offer_id, qty=1):
     ])
 
 
+def otp_admin_handoff_keyboard(lang, order_id, service, country):
+    """Open a prefilled Telegram chat with the configured OTP administrator."""
+    username = ADMIN_USERNAME.lstrip("@")
+    draft = quote(t(
+        lang,
+        "otp_admin_draft",
+        oid=order_id,
+        service=service,
+        country=country,
+    ))
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            f"Contact @{username}"[:64],
+            url=f"https://t.me/{username}?text={draft}",
+        ),
+    ]])
+
 def post_delivery_keyboard(lang, order_id):
     """Offer direct admin contact for account collection after every delivery."""
     username = ADMIN_USERNAME.lstrip("@")

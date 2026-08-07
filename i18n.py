@@ -480,6 +480,36 @@ TRANSLATIONS = {
         "en": "🔎 Verifying your Binance TXID... Please wait.",
         "ar": "🔎 جارٍ التحقق من TXID على Binance... الرجاء الانتظار.",
     },
+    "otp_payment_confirmed_ask_service": {
+        "fr": "*Paiement confirme - commande #{oid}*\n\nQuel est le service pour lequel vous avez besoin du code OTP ?",
+        "en": "*Payment confirmed - order #{oid}*\n\nWhat's the service?",
+        "ar": "*Payment confirmed - order #{oid}*\n\nWhat's the service?",
+    },
+    "otp_ask_service": {
+        "fr": "Quel est le service ?",
+        "en": "What's the service?",
+        "ar": "What's the service?",
+    },
+    "otp_ask_country": {
+        "fr": "Service : *{service}*\n\nQuel est le pays ?",
+        "en": "Service: *{service}*\n\nWhat's the country?",
+        "ar": "Service: *{service}*\n\nWhat's the country?",
+    },
+    "otp_redirect_admin": {
+        "fr": "*Demande OTP envoyee*\n\nCommande : *#{oid}*\nService : *{service}*\nPays : *{country}*\n\nContactez maintenant l'administrateur {admin} avec le bouton ci-dessous. Toutes les informations de votre commande lui ont deja ete envoyees.",
+        "en": "*OTP request sent*\n\nOrder: *#{oid}*\nService: *{service}*\nCountry: *{country}*\n\nNow contact the administrator {admin} using the button below. All your order information has already been sent to the admin.",
+        "ar": "*OTP request sent*\n\nOrder: *#{oid}*\nService: *{service}*\nCountry: *{country}*\n\nNow contact the administrator {admin} using the button below. All your order information has already been sent to the admin.",
+    },
+    "otp_admin_draft": {
+        "fr": "Bonjour, ma commande OTP #{oid} est payee. Service : {service}. Pays : {country}.",
+        "en": "Hello, my OTP order #{oid} is paid. Service: {service}. Country: {country}.",
+        "ar": "Hello, my OTP order #{oid} is paid. Service: {service}. Country: {country}.",
+    },
+    "otp_order_unavailable": {
+        "fr": "Cette commande OTP n'est plus disponible. Contactez @Anwer_07.",
+        "en": "This OTP order is no longer available. Contact @Anwer_07.",
+        "ar": "This OTP order is no longer available. Contact @Anwer_07.",
+    },
     "verify_ok": {
         "fr": "✅ *Paiement confirmé !* Commande #{oid}\n\nVotre commande est en cours de préparation. Vous recevrez votre produit ici très bientôt. Merci pour votre achat ! 🎉",
         "en": "✅ *Payment confirmed!* Order #{oid}\n\nYour order is being prepared. You'll receive your product here very soon. Thank you for your purchase! 🎉",
