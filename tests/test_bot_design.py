@@ -1144,7 +1144,9 @@ def test_empty_wallet_click_always_returns_a_visible_message(monkeypatch):
 
 def test_otp_numbers_catalog_is_always_one_dollar_and_manual(mock_mongodb):
     service_id = db.add_service("OTP numbers", "OTP")
-    offer_id = db.add_offer(service_id, "One OTP code", 9.99, 0)
+    offers = db.list_offers(service_id)
+    assert len(offers) == 1
+    offer_id = offers[0]["id"]
 
     raw = mock_mongodb.offers.find_one({"id": offer_id})
     offer = db.get_offer(offer_id)
@@ -1161,6 +1163,27 @@ def test_otp_numbers_catalog_is_always_one_dollar_and_manual(mock_mongodb):
     assert updated["price"] == 1.0
     assert updated["auto_delivery"] is False
     assert updated["unlimited_stock"] is True
+
+
+def test_existing_otp_service_without_offers_self_heals(mock_mongodb):
+    mock_mongodb.services.insert_one({
+        "id": 77,
+        "name": "OTP Numbers",
+        "emoji": "OTP",
+        "sort_order": 1,
+        "active": 1,
+    })
+
+    first = db.list_offers(77)
+    second = db.list_offers(77)
+
+    assert len(first) == 1
+    assert len(second) == 1
+    assert first[0]["name"] == "OTP code"
+    assert first[0]["price"] == 1.0
+    assert first[0]["unlimited_stock"] is True
+    assert first[0]["manual_stock"] is True
+    assert mock_mongodb.offers.count_documents({"service_id": 77}) == 1
 
 
 def test_paid_otp_order_asks_for_service_before_admin_handoff(mock_mongodb):

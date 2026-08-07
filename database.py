@@ -15,7 +15,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def is_otp_service_name(value):
@@ -37,17 +37,56 @@ def _otp_offer_values():
     }
 
 
-def _enforce_otp_catalog_rules(conn):
-    service_ids = [
-        row["id"]
-        for row in conn.services.find({}, {"id": 1, "name": 1})
-        if is_otp_service_name(row.get("name"))
-    ]
-    if service_ids:
-        conn.offers.update_many(
-            {"service_id": {"$in": service_ids}},
-            {"$set": _otp_offer_values()},
+def _ensure_otp_service_offer(conn, service_id):
+    """Enforce fixed OTP pricing and create a default offer when none is active."""
+    conn.offers.update_many(
+        {"service_id": service_id},
+        {"$set": _otp_offer_values()},
+    )
+    if conn.offers.count_documents(
+        {"service_id": service_id, "active": 1},
+        limit=1,
+    ):
+        return
+    last = conn.offers.find_one(
+        {"service_id": service_id},
+        sort=[("sort_order", DESCENDING)],
+    )
+    insert_values = {
+        "id": _next_id("offers"),
+        "service_id": service_id,
+        "name": "OTP code",
+        "description": "One OTP code for your selected service and country.",
+        "stock": 0,
+        "note": "Contact the administrator after payment.",
+        "low_stock_threshold": 0,
+        "custom_emoji_id": "",
+        "photo_file_id": "",
+        "instructions": "",
+        "supplier_provider": "",
+        "supplier_product_id": "",
+        "sort_order": int((last or {}).get("sort_order", 0)) + 1,
+    }
+    try:
+        conn.offers.update_one(
+            {"service_id": service_id, "otp_default": True},
+            {
+                "$set": {**_otp_offer_values(), "active": 1},
+                "$setOnInsert": {**insert_values, "otp_default": True},
+            },
+            upsert=True,
         )
+    except DuplicateKeyError:
+        conn.offers.update_one(
+            {"service_id": service_id, "otp_default": True},
+            {"$set": {**_otp_offer_values(), "active": 1}},
+        )
+
+
+def _enforce_otp_catalog_rules(conn):
+    for row in conn.services.find({}, {"id": 1, "name": 1}):
+        if is_otp_service_name(row.get("name")):
+            _ensure_otp_service_offer(conn, row["id"])
 
 
 def get_conn():
@@ -83,6 +122,11 @@ def init_db():
         return
     db = get_conn()
     db.command("ping")
+    db.offers.create_index(
+        [("service_id", ASCENDING), ("otp_default", ASCENDING)],
+        unique=True,
+        partialFilterExpression={"otp_default": True},
+    )
     _enforce_otp_catalog_rules(db)
     schema = db.schema_meta.find_one({"_id": "schema"}, {"version": 1})
     if schema and schema.get("version") == SCHEMA_VERSION:
@@ -297,11 +341,13 @@ def get_service(service_id):
 
 
 def list_offers(service_id, active_only=True):
+    service = get_service(service_id)
+    if service and is_otp_service_name(service.get("name")):
+        _ensure_otp_service_offer(get_conn(), service_id)
     query = {"service_id": service_id}
     if active_only:
         query["active"] = 1
     offers = [_resolve_flash_sale(_public(x)) for x in get_conn().offers.find(query).sort("id", ASCENDING)]
-    service = get_service(service_id)
     if service and is_otp_service_name(service.get("name")):
         values = _otp_offer_values()
         for offer in offers:
@@ -465,6 +511,8 @@ def add_service(name, emoji="", custom_emoji_id=""):
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
     })
+    if is_otp_service_name(name):
+        _ensure_otp_service_offer(db, sid)
     return sid
 
 
@@ -481,9 +529,7 @@ def update_service(service_id, name=None, emoji=None, active=None, custom_emoji_
     }
     updated = bool(values and get_conn().services.update_one({"id": service_id}, {"$set": values}).matched_count)
     if updated and is_otp_service_name(name):
-        get_conn().offers.update_many(
-            {"service_id": service_id}, {"$set": _otp_offer_values()},
-        )
+        _ensure_otp_service_offer(get_conn(), service_id)
     return updated
 
 
