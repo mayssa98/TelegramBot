@@ -106,6 +106,7 @@ def test_unlimited_offer_displays_infinity_and_remains_buyable():
         for button in row
     ]
     assert "buy:9" in callbacks
+    assert "catalog" in callbacks
 
 
 def test_stock_label_is_listed_in_catalog_admin_category():
@@ -407,3 +408,18 @@ def test_admin_text_browser_exposes_every_translation_key():
         )
     assert {value.split(":", 1)[1] for value in callbacks} == set(TRANSLATIONS)
     assert "adm_text_key:order_created" in callbacks
+
+
+def test_flat_catalog_keyboard_contains_only_offer_callbacks(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [
+        {"id": 11, "name": "ChatGPT Plus", "price": 5.0, "stock": 8},
+        {"id": 12, "name": "Netflix Premium", "price": 4.0, "stock": 3},
+    ])
+
+    keyboard = kb.catalog_offers_keyboard("en")
+    product_callbacks = [
+        row[0].callback_data for row in keyboard.inline_keyboard[:-2]
+    ]
+
+    assert product_callbacks == ["off:11", "off:12"]
+    assert all(not callback.startswith("svc:") for callback in product_callbacks)

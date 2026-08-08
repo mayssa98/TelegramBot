@@ -278,6 +278,37 @@ def services_keyboard(lang):
     return InlineKeyboardMarkup(buttons)
 
 
+def catalog_offers_keyboard(lang):
+    """Show every active offer directly, without the service/category layer."""
+    buttons = []
+    for offer in db.list_catalog_offers():
+        safe_offer = dict(offer)
+        safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
+        buttons.append([InlineKeyboardButton(
+            offer_button_label(lang, safe_offer),
+            callback_data=f"off:{offer['id']}",
+            style=(
+                "success"
+                if offer.get("unlimited_stock")
+                else stock_button_style(offer.get("stock"))
+            ),
+            icon_custom_emoji_id=(
+                db.get_text_override_icon("stock_label", lang)
+                or offer.get("custom_emoji_id")
+                or offer.get("service_custom_emoji_id")
+                or None
+            ),
+        )])
+    buttons.append([
+        translated_button(lang, "catalog_request_button", callback_data="catalog_request"),
+    ])
+    buttons.append([
+        translated_button(lang, "btn_refresh_short", callback_data="catalog"),
+        translated_button(lang, "btn_main_menu_short", callback_data="home"),
+    ])
+    return InlineKeyboardMarkup(buttons)
+
+
 def onboarding_keyboard(lang, step):
     if step < 3:
         return InlineKeyboardMarkup([[
@@ -311,7 +342,7 @@ def offer_detail_keyboard(lang, offer):
     buttons = []
     if offer["price"] is not None and db.offer_has_stock(offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
-    buttons.append([translated_button(lang, "btn_back", callback_data=f"svc:{offer['service_id']}")])
+    buttons.append([translated_button(lang, "btn_back", callback_data="catalog")])
     return InlineKeyboardMarkup(buttons)
 
 

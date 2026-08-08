@@ -1162,10 +1162,10 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------------- Catalogue (client) ----------------
 async def show_catalog(update, context, lang):
-    text = t(lang, "catalog_title", shop=SHOP_NAME)
+    text = t(lang, "catalog_flat_title", shop=SHOP_NAME)
     msg = update.message or update.callback_query.message
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN,
-                         reply_markup=kb.services_keyboard(lang))
+                         reply_markup=kb.catalog_offers_keyboard(lang))
 
 
 async def show_callback_screen(query, text, *, reply_markup, parse_mode=ParseMode.MARKDOWN):
@@ -1208,8 +1208,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "catalog":
         await show_callback_screen(
             q,
-            t(lang, "catalog_title", shop=SHOP_NAME),
-            reply_markup=kb.services_keyboard(lang),
+            t(lang, "catalog_flat_title", shop=SHOP_NAME),
+            reply_markup=kb.catalog_offers_keyboard(lang),
         )
         return
     if data == "catalog_request":
@@ -1291,19 +1291,10 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     if data.startswith("svc:"):
-        sid = int(data.split(":")[1])
-        svc = db.get_service(sid)
-        offers = db.list_offers(sid)
-        if not offers:
-            await show_callback_screen(
-                q, t(lang, "no_offers"), reply_markup=kb.services_keyboard(lang),
-            )
-            return
         await show_callback_screen(
             q,
-            t(lang, "service_title", emoji=svc["emoji"], name=svc["name"]),
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.offers_keyboard(lang, sid),
+            t(lang, "catalog_flat_title", shop=SHOP_NAME),
+            reply_markup=kb.catalog_offers_keyboard(lang),
         )
         return
     if data.startswith("off:"):
@@ -1315,7 +1306,6 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.HTML,
             )
             return
-        svc = db.get_service(off["service_id"])
         detail_text = compact_offer_text(off, lang)
         photo_file_id = off.get("photo_file_id")
         if photo_file_id:

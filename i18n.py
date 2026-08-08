@@ -250,6 +250,11 @@ TRANSLATIONS = {
         "ar": "🎉 *ANOTHER SUCCESSFUL PURCHASE*\n\n✅ A customer just secured:\n🛍 *{service} — {offer}*\n📦 Quantity: *{qty}*\n💎 Order value: *{total} {cur}*\n🔥 Remaining stock: *{stock} account(s)*\n\nTrusted delivery. Real products. Join the next drop before it sells out!",
     },
     "btn_channel_buy_now": {"fr": "🛒 Buy now", "en": "🛒 Buy now", "ar": "🛒 Buy now"},
+    "catalog_flat_title": {
+        "fr": "*CATALOGUE {shop}*\n\nChoisissez une offre :",
+        "en": "*{shop} CATALOG*\n\nChoose an offer:",
+        "ar": "*{shop} CATALOG*\n\nChoose an offer:",
+    },
     "catalog_title": {
         "fr": "🛍️ *CATALOGUE {shop}*\n\n🟢 Boutique opérationnelle\n⚡ Livraison rapide ou instantanée\n🛡️ Produits vérifiés et support inclus\n\nChoisissez votre univers :",
         "en": "🛍️ *{shop} CATALOG*\n\n🟢 Store operational\n⚡ Fast or instant delivery\n🛡️ Verified products with support\n\nChoose your category:",

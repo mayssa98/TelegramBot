@@ -355,6 +355,35 @@ def list_offers(service_id, active_only=True):
     return offers
 
 
+def list_catalog_offers():
+    """Return all active offers across active services for the flat customer catalog."""
+    services = list_services()
+    service_by_id = {service["id"]: service for service in services}
+    for service in services:
+        if is_otp_service_name(service.get("name")):
+            _ensure_otp_service_offer(get_conn(), service["id"])
+    service_ids = list(service_by_id)
+    if not service_ids:
+        return []
+    offers = []
+    for row in get_conn().offers.find({
+        "service_id": {"$in": service_ids},
+        "active": 1,
+    }):
+        offer = _resolve_flash_sale(_public(row))
+        service = service_by_id[offer["service_id"]]
+        if is_otp_service_name(service.get("name")):
+            offer.update(_otp_offer_values())
+        offer["service_name"] = service.get("name", "")
+        offer["service_emoji"] = service.get("emoji", "")
+        offer["service_custom_emoji_id"] = service.get("custom_emoji_id", "")
+        offers.append(offer)
+    offers.sort(key=lambda offer: (
+        int(service_by_id[offer["service_id"]].get("sort_order", 0)),
+        int(offer.get("sort_order", 0)),
+        int(offer["id"]),
+    ))
+    return offers
 def get_offer(offer_id):
     offer = _resolve_flash_sale(_public(get_conn().offers.find_one({"id": offer_id})))
     if not offer:
