@@ -21,7 +21,6 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
-    TypeHandler,
     filters,
 )
 from telegram.helpers import escape_markdown
@@ -43,6 +42,7 @@ from config import (
     ADMIN_USERNAME,
     BINANCE_PAY_ID,
     BOT_TOKEN,
+    CLICK_REPORT_CHAT_ID,
     CURRENCY,
     DEFAULT_LANG,
     REQUIRED_CHANNEL,
@@ -142,9 +142,9 @@ def _interaction_button_name(query):
 
 
 async def notify_admin_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send the admin a professional, detailed customer activity card."""
+    """Send customer button clicks to the private click-report channel."""
     user = update.effective_user
-    if not user or user.id == ADMIN_ID:
+    if not user or user.id == ADMIN_ID or not update.callback_query:
         return
 
     raw_name = user.full_name or user.first_name or "Unknown user"
@@ -153,7 +153,7 @@ async def notify_admin_interaction(update: Update, context: ContextTypes.DEFAULT
     username = f"@{html.escape(raw_username)}" if raw_username else "Not provided"
     profile = f'<a href="tg://user?id={user.id}">{display_name}</a>'
     header = (
-        "<b>CUSTOMER ACTIVITY</b>\n"
+        "<b>CUSTOMER CLICK</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>Customer:</b> {profile}\n"
         f"<b>Username:</b> {username}\n"
@@ -239,7 +239,7 @@ async def notify_admin_interaction(update: Update, context: ContextTypes.DEFAULT
 
     try:
         await context.bot.send_message(
-            ADMIN_ID,
+            CLICK_REPORT_CHAT_ID,
             f"{header}{details}",
             parse_mode=ParseMode.HTML,
             link_preview_options=LinkPreviewOptions(is_disabled=True),
@@ -3019,8 +3019,8 @@ def build_app():
     from telegram.request import HTTPXRequest
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     app = Application.builder().token(BOT_TOKEN).request(request).build()
-    # Observe every customer update without consuming it, then apply global gates.
-    app.add_handler(TypeHandler(Update, notify_admin_interaction), group=-5)
+    # Report customer button clicks without consuming them, then apply global gates.
+    app.add_handler(CallbackQueryHandler(notify_admin_interaction), group=-5)
     app.add_handler(MessageHandler(filters.ALL, block_maintenance_users), group=-4)
     app.add_handler(CallbackQueryHandler(block_maintenance_users), group=-4)
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-3)

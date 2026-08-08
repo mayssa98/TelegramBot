@@ -211,8 +211,9 @@ def test_full_maintenance_never_blocks_admin(monkeypatch):
     update.effective_message.reply_text.assert_not_awaited()
 
 
-def test_customer_button_click_is_reported_to_admin(monkeypatch, mock_mongodb):
+def test_customer_button_click_is_reported_to_private_channel(monkeypatch, mock_mongodb):
     monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.CLICK_REPORT_CHAT_ID", -1004349965359)
     bot_client = SimpleNamespace(send_message=AsyncMock())
     message = SimpleNamespace(
         text="Offer screen",
@@ -238,15 +239,31 @@ def test_customer_button_click_is_reported_to_admin(monkeypatch, mock_mongodb):
 
     bot_client.send_message.assert_awaited_once()
     call = bot_client.send_message.await_args
-    assert call.args[0] == 999
+    assert call.args[0] == -1004349965359
     assert "buy:17" in call.args[1]
     assert "Buy Premium now" in call.args[1]
-    assert "CUSTOMER ACTIVITY" in call.args[1]
+    assert "CUSTOMER CLICK" in call.args[1]
     assert "Test Buyer" in call.args[1]
     assert "42" in call.args[1]
     event = mock_mongodb.interaction_events.find_one({"user_id": 42})
     assert event["interaction_type"] == "button"
     assert event["action"] == "buy:17"
+
+
+def test_customer_message_is_not_sent_to_click_channel(mock_mongodb):
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        callback_query=None,
+        effective_message=SimpleNamespace(text="support message"),
+    )
+
+    asyncio.run(
+        notify_admin_interaction(update, SimpleNamespace(bot=bot_client))
+    )
+
+    bot_client.send_message.assert_not_awaited()
+    assert mock_mongodb.interaction_events.count_documents({}) == 0
 
 
 def test_admin_interaction_does_not_notify_itself(monkeypatch):
