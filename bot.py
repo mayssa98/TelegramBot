@@ -252,7 +252,7 @@ async def notify_admin_interaction(update: Update, context: ContextTypes.DEFAULT
             message_id = getattr(media_message, "message_id", None)
             if chat_id and message_id:
                 await context.bot.copy_message(
-                    chat_id=ADMIN_ID,
+                    chat_id=CLICK_REPORT_CHAT_ID,
                     from_chat_id=chat_id,
                     message_id=message_id,
                 )
@@ -1821,24 +1821,19 @@ async def handle_pending_input(update, context, lang):
             return
         ticket = support_service.create_ticket(uid, request_text, category="catalog_request")
         PENDING.pop(uid, None)
-        user = update.effective_user
-        display_name = getattr(user, "full_name", None) or getattr(user, "username", None) or str(uid)
-        await context.bot.send_message(
-            ADMIN_ID,
-            premium_customer_text(
-                lang,
-                "catalog_request_admin",
-                user=display_name,
-                user_id=uid,
-                request=update.message.text[:2000],
-            ),
-            parse_mode=ParseMode.HTML,
+        await support_bridge.send_client_text(
+            context,
+            ticket,
+            update.effective_user,
+            request_text,
+            event="New catalog request",
         )
         await update.message.reply_text(
             premium_customer_text(lang, "catalog_request_sent"),
             parse_mode=ParseMode.HTML,
             reply_markup=kb.home_keyboard(lang, uid),
         )
+        await delete_customer_support_message(update.message)
         log.info("Catalog request ticket %s created by user %s", ticket["id"], uid)
         return
 
@@ -2456,7 +2451,8 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
             await message.reply_text(premium_customer_text(lang, "verify_ok", oid=order_id),
                                      parse_mode=ParseMode.HTML,
                                      reply_markup=kb.post_delivery_keyboard(lang, order_id))
-            await admin.notify_new_order(context, db.get_order(order_id))
+        with contextlib.suppress(Exception):
+            await admin.notify_new_order(context, paid_order)
     elif result["status"] == "already_paid":
         await message.reply_text(premium_customer_text(lang, "already_paid", oid=order_id),
                                  parse_mode=ParseMode.HTML)

@@ -1077,16 +1077,23 @@ def test_catalog_request_button_prompts_for_customer_need(monkeypatch, mock_mong
     PENDING.pop(42, None)
 
 
-def test_catalog_request_is_saved_and_sent_to_admin(monkeypatch, mock_mongodb):
-    create_ticket = Mock(return_value={"id": 17})
+def test_catalog_request_is_saved_and_sent_to_support_channel(monkeypatch, mock_mongodb):
+    create_ticket = Mock(return_value={
+        "id": 17,
+        "user_id": 42,
+        "category": "catalog_request",
+    })
     monkeypatch.setattr("bot.support_service.create_ticket", create_ticket)
-    bot_client = SimpleNamespace(send_message=AsyncMock())
+    bot_client = SimpleNamespace(
+        send_message=AsyncMock(return_value=SimpleNamespace(message_id=801)),
+    )
     message = SimpleNamespace(
         text="I need Microsoft 365 for one year",
         text_html=None,
         caption_html=None,
         entities=[],
         reply_text=AsyncMock(),
+        delete=AsyncMock(),
     )
     user = SimpleNamespace(id=42, full_name="Test Customer", username="buyer")
     update = SimpleNamespace(effective_user=user, message=message)
@@ -1098,11 +1105,13 @@ def test_catalog_request_is_saved_and_sent_to_admin(monkeypatch, mock_mongodb):
         42, "I need Microsoft 365 for one year", category="catalog_request"
     )
     bot_client.send_message.assert_awaited_once()
-    admin_message = bot_client.send_message.await_args.args[1]
-    assert "New catalog request" in admin_message
-    assert "Microsoft 365" in admin_message
+    channel_call = bot_client.send_message.await_args
+    assert channel_call.args[0] == -1004326329551
+    assert "New catalog request" in channel_call.args[1]
+    assert "Microsoft 365" in channel_call.args[1]
     assert PENDING.get(42) is None
     assert "Request sent" in message.reply_text.await_args.args[0]
+    message.delete.assert_awaited_once()
 
 def test_topup_keyboard_offers_bsc_and_polygon(mock_mongodb):
     callbacks = [
@@ -1206,6 +1215,39 @@ def test_existing_otp_service_without_offers_self_heals(mock_mongodb):
     assert first[0]["unlimited_stock"] is True
     assert first[0]["manual_stock"] is True
     assert mock_mongodb.offers.count_documents({"service_id": 77}) == 1
+
+
+def test_automatically_delivered_paid_order_is_notified_to_admin(
+    monkeypatch, mock_mongodb,
+):
+    mock_mongodb.orders.insert_one({
+        "id": 500,
+        "user_id": 42,
+        "service_name": "Canva",
+        "offer_name": "Canva Pro",
+        "qty": 1,
+        "status": "delivered",
+    })
+    notify_new_order = AsyncMock()
+    monkeypatch.setattr("bot.admin.notify_new_order", notify_new_order)
+    message = SimpleNamespace(reply_text=AsyncMock())
+
+    asyncio.run(send_payment_result(
+        message,
+        SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock())),
+        "en",
+        500,
+        {
+            "status": "delivered",
+            "affiliate": None,
+            "loyalty": None,
+            "delivered_content": ["account@example.com"],
+        },
+        42,
+    ))
+
+    notify_new_order.assert_awaited_once()
+    assert notify_new_order.await_args.args[1]["id"] == 500
 
 
 def test_paid_otp_order_asks_for_service_before_admin_handoff(mock_mongodb):
