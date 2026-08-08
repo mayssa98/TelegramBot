@@ -141,6 +141,22 @@ def get_ticket(ticket_id: int) -> dict | None:
     return db._public(db.get_conn().support_tickets.find_one({"id": ticket_id}))
 
 
+
+def link_channel_message(ticket_id: int, channel_message_id: int) -> bool:
+    """Associate a support-channel post with its ticket for reply routing."""
+    result = db.get_conn().support_tickets.update_one(
+        {"id": int(ticket_id)},
+        {"$addToSet": {"channel_message_ids": int(channel_message_id)}},
+    )
+    return bool(result.matched_count)
+
+
+def get_ticket_by_channel_message(channel_message_id: int) -> dict | None:
+    """Resolve the ticket linked to a support-channel post."""
+    return db._public(db.get_conn().support_tickets.find_one({
+        "channel_message_ids": int(channel_message_id),
+    }))
+
 def list_tickets(
     status: str | None = None,
     user_id: int | None = None,

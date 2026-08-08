@@ -10,7 +10,7 @@ from telegram.constants import ParseMode
 
 import database as db
 import keyboards as kb
-from app.domain import affiliate_service
+from app.domain import affiliate_service, support_service
 from bot import (
     PENDING,
     announce_channel_purchase,
@@ -27,6 +27,7 @@ from bot import (
     custom_emojis_from_message,
     handle_buy_confirmed,
     handle_pending_input,
+    handle_ticket_attachment,
     notify_admin_interaction,
     notify_successful_referral,
     numbered_delivery_content,
@@ -916,7 +917,7 @@ def test_offer_back_button_from_photo_opens_service_without_editing_photo(monkey
     query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
 
 
-def test_support_button_from_photo_sends_valid_html_contact(monkeypatch):
+def test_support_button_from_photo_opens_ticket_categories(monkeypatch):
     message = SimpleNamespace(text=None, reply_text=AsyncMock())
     query = SimpleNamespace(
         data="support",
@@ -935,8 +936,12 @@ def test_support_button_from_photo_sends_valid_html_contact(monkeypatch):
 
     message.reply_text.assert_awaited_once()
     call = message.reply_text.await_args
-    assert "@Anwer_07" in call.args[0]
-    assert call.kwargs["parse_mode"] == ParseMode.HTML
+    assert "Choose the category" in call.args[0]
+    callbacks = [
+        button.callback_data for row in call.kwargs["reply_markup"].inline_keyboard
+        for button in row
+    ]
+    assert "support_cat:other" in callbacks
 
 
 def test_admin_from_photo_caption_sends_a_new_text_panel(monkeypatch):
@@ -1291,3 +1296,69 @@ def test_otp_answers_notify_admin_and_redirect_customer(monkeypatch, mock_mongod
     assert "@Anwer\\_07" in customer_call.args[0]
     button = customer_call.kwargs["reply_markup"].inline_keyboard[0][0]
     assert button.url.startswith("https://t.me/Anwer_07?text=")
+
+
+def test_customer_can_close_active_support_ticket(monkeypatch, mock_mongodb):
+    ticket = support_service.create_ticket(42, "Help", category="other")
+    PENDING[42] = ("ticket_message", ticket["id"])
+    close_notice = AsyncMock()
+    monkeypatch.setattr("bot.support_bridge.send_ticket_closed", close_notice)
+    query = SimpleNamespace(
+        data=f"ticket_close:{ticket['id']}",
+        from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(),
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+    )
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(
+        SimpleNamespace(callback_query=query),
+        SimpleNamespace(bot=SimpleNamespace()),
+    ))
+
+    assert support_service.get_ticket(ticket["id"])["status"] == "closed"
+    assert PENDING.get(42) is None
+    query.edit_message_text.assert_awaited_once()
+    close_notice.assert_awaited_once()
+
+
+def test_attachment_can_create_the_first_ticket_message(mock_mongodb):
+    PENDING[42] = ("support", "other")
+    user = SimpleNamespace(
+        id=42,
+        full_name="Media Client",
+        first_name="Media",
+        username="media42",
+    )
+    message = SimpleNamespace(
+        message_id=61,
+        chat_id=42,
+        chat=SimpleNamespace(id=42),
+        caption="See screenshot",
+        photo=[SimpleNamespace(file_id="photo")],
+        document=None,
+        video=None,
+        animation=None,
+        audio=None,
+        voice=None,
+        video_note=None,
+        sticker=None,
+        reply_text=AsyncMock(),
+    )
+    bot_client = SimpleNamespace(
+        send_message=AsyncMock(return_value=SimpleNamespace(message_id=801)),
+        copy_message=AsyncMock(return_value=SimpleNamespace(message_id=802)),
+    )
+
+    handled = asyncio.run(handle_ticket_attachment(
+        SimpleNamespace(effective_user=user, effective_message=message),
+        SimpleNamespace(bot=bot_client),
+    ))
+
+    assert handled is True
+    ticket = mock_mongodb.support_tickets.find_one({"user_id": 42})
+    assert ticket["category"] == "other"
+    assert PENDING.get(42) == ("ticket_message", ticket["id"])
+    message.reply_text.assert_awaited_once()
+    bot_client.copy_message.assert_awaited_once()

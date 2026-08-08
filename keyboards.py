@@ -157,6 +157,22 @@ def support_keyboard(lang):
     ])
 
 
+
+
+def ticket_conversation_keyboard(lang, ticket_id):
+    close_label = {
+        "fr": "Close Ticket",
+        "en": "Close Ticket",
+        "ar": "Close Ticket",
+    }.get(lang, "Close Ticket")
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            close_label,
+            callback_data=f"ticket_close:{int(ticket_id)}",
+            style="danger",
+        )],
+        [translated_button(lang, "btn_main_menu", callback_data="home")],
+    ])
 def main_menu_keyboard(lang, user_id):
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     candidates = [

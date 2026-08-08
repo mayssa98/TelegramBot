@@ -423,3 +423,11 @@ def test_flat_catalog_keyboard_contains_only_offer_callbacks(monkeypatch):
 
     assert product_callbacks == ["off:11", "off:12"]
     assert all(not callback.startswith("svc:") for callback in product_callbacks)
+
+
+def test_ticket_conversation_keyboard_can_close_or_go_home():
+    keyboard = kb.ticket_conversation_keyboard("en", 17)
+
+    assert keyboard.inline_keyboard[0][0].callback_data == "ticket_close:17"
+    assert keyboard.inline_keyboard[0][0].style == "danger"
+    assert keyboard.inline_keyboard[1][0].callback_data == "home"

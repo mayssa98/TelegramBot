@@ -28,6 +28,7 @@ from telegram.helpers import escape_markdown
 import admin
 import database as db
 import keyboards as kb
+from app import support_bridge
 from app.domain import (
     affiliate_service,
     inventory_service,
@@ -48,6 +49,7 @@ from config import (
     REQUIRED_CHANNEL,
     REQUIRED_GROUP,
     SHOP_NAME,
+    SUPPORT_TICKET_CHANNEL_ID,
     USDT_EVM_ADDRESS,
     configuration_issues,
 )
@@ -976,12 +978,29 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def ticket_conversation_text(ticket):
+    category = str(ticket.get("category") or "other").replace("_", " ").title()
+    return (
+        f"<b>Support Ticket {support_bridge.ticket_reference(ticket['id'])}</b>\n\n"
+        f"<blockquote>Category: <b>{html.escape(category)}</b>\n"
+        "Status: <b>Open</b></blockquote>\n\n"
+        "Send any message or attachment here. It goes directly to our support team."
+    )
+
+
+async def send_ticket_conversation(message, lang, ticket):
+    await message.reply_text(
+        ticket_conversation_text(ticket),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.ticket_conversation_keyboard(lang, ticket["id"]),
+    )
+
+
 async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(update.effective_user.id)
     await update.effective_message.reply_text(
-        t(lang, "support_admin_contact", admin="@Anwer_07"),
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb.orders_keyboard(lang),
+        t(lang, "support_choose_category"),
+        reply_markup=kb.support_category_keyboard(lang),
     )
 
 
@@ -1488,6 +1507,25 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.audit_event("order.rated", actor_id=uid, details={"order_id": int(order_id), "score": int(score)})
         await q.edit_message_text(t(lang, "rating_thanks", score=score))
         return
+    if data.startswith("ticket_close:"):
+        ticket_id = int(data.split(":", 1)[1])
+        ticket = support_service.get_ticket(ticket_id)
+        if not ticket or int(ticket.get("user_id") or 0) != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        support_service.close_ticket(ticket_id)
+        pending = PENDING.get(uid)
+        if pending and pending[0] == "ticket_message" and int(pending[1]) == ticket_id:
+            PENDING.pop(uid, None)
+        await q.edit_message_text(
+            f"<b>Support Ticket {support_bridge.ticket_reference(ticket_id)}</b>\n\n"
+            "Status: <b>Closed</b>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.home_keyboard(lang, uid),
+        )
+        await support_bridge.send_ticket_closed(context, ticket, q.from_user)
+        return
+
     if data.startswith("support_cat:"):
         category = data.split(":", 1)[1]
         PENDING[uid] = ("support_category", category)
@@ -2242,11 +2280,9 @@ async def handle_pending_input(update, context, lang):
     if kind == "support":
         ticket = support_service.create_ticket(uid, text, category=str(ref or "other"))
         PENDING[uid] = ("ticket_message", ticket["id"])
-        await update.message.reply_text(t(lang, "ticket_created", tid=ticket["id"]))
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"🎫 Nouveau ticket #{ticket['id']}\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
-            parse_mode=ParseMode.HTML,
+        await send_ticket_conversation(update.message, lang, ticket)
+        await support_bridge.send_client_text(
+            context, ticket, update.effective_user, text,
         )
         return
 
@@ -2258,13 +2294,13 @@ async def handle_pending_input(update, context, lang):
             if not order or order.get("user_id") != uid:
                 await update.message.reply_text(t(lang, "not_for_you"))
                 return
-        ticket = support_service.create_ticket(uid, text, category=category, order_id=order_id)
+        ticket = support_service.create_ticket(
+            uid, text, category=category, order_id=order_id,
+        )
         PENDING[uid] = ("ticket_message", ticket["id"])
-        await update.message.reply_text(t(lang, "ticket_created", tid=ticket["id"]))
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"🎫 Nouveau ticket #{ticket['id']} ({html.escape(category)})\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
-            parse_mode=ParseMode.HTML,
+        await send_ticket_conversation(update.message, lang, ticket)
+        await support_bridge.send_client_text(
+            context, ticket, update.effective_user, text,
         )
         return
 
@@ -2277,11 +2313,9 @@ async def handle_pending_input(update, context, lang):
             priority="high",
         )
         PENDING[uid] = ("ticket_message", ticket["id"])
-        await update.message.reply_text(t(lang, "ticket_created", tid=ticket["id"]))
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"⚠️ Ticket livraison #{ticket['id']} — commande #{ref}\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
-            parse_mode=ParseMode.HTML,
+        await send_ticket_conversation(update.message, lang, ticket)
+        await support_bridge.send_client_text(
+            context, ticket, update.effective_user, text,
         )
         return
 
@@ -2292,11 +2326,16 @@ async def handle_pending_input(update, context, lang):
             await update.message.reply_text(t(lang, "ticket_unavailable"))
             return
         support_service.add_message(int(ref), uid, text, sender_type="client")
-        await update.message.reply_text(t(lang, "ticket_message_added", tid=ref))
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"💬 Réponse client — ticket #{ref}\nUtilisateur: <code>{uid}</code>\n\n{html.escape(text[:2000])}",
-            parse_mode=ParseMode.HTML,
+        await update.message.reply_text(
+            f"Message sent to {support_bridge.ticket_reference(ref)}.",
+            reply_markup=kb.ticket_conversation_keyboard(lang, ref),
+        )
+        await support_bridge.send_client_text(
+            context,
+            ticket,
+            update.effective_user,
+            text,
+            event="Customer reply",
         )
         return
 
@@ -2495,8 +2534,89 @@ async def show_my_orders(update, context, lang):
     )
 
 
+async def handle_ticket_attachment(update, context):
+    """Create or continue a support ticket with a customer attachment."""
+    user = update.effective_user
+    message = update.effective_message
+    if not user or not message:
+        return False
+    pending = PENDING.get(user.id)
+    if not pending or pending[0] not in {
+        "support", "support_guided", "support_order", "ticket_message",
+    }:
+        return False
+
+    label = support_bridge.media_label(message)
+    caption = str(getattr(message, "caption", None) or "").strip()
+    content = f"[{label}]" + (f" {caption}" if caption else "")
+    kind, ref = pending
+    is_new = kind != "ticket_message"
+
+    if kind == "support":
+        ticket = support_service.create_ticket(
+            user.id, content, category=str(ref or "other"),
+        )
+    elif kind == "support_guided":
+        category, order_id_text = str(ref).split("|", 1)
+        order_id = int(order_id_text) or None
+        if order_id:
+            order = db.get_order(order_id)
+            if not order or order.get("user_id") != user.id:
+                await message.reply_text(t(lang_of(user.id), "not_for_you"))
+                return True
+        ticket = support_service.create_ticket(
+            user.id, content, category=category, order_id=order_id,
+        )
+    elif kind == "support_order":
+        ticket = support_service.create_ticket(
+            user.id,
+            content,
+            category="delivery",
+            order_id=int(ref),
+            priority="high",
+        )
+    else:
+        ticket = support_service.get_ticket(int(ref))
+        if (
+            not ticket
+            or ticket.get("user_id") != user.id
+            or ticket.get("status") == "closed"
+        ):
+            PENDING.pop(user.id, None)
+            await message.reply_text(t(lang_of(user.id), "ticket_unavailable"))
+            return True
+        support_service.add_message(
+            int(ref), user.id, content, sender_type="client",
+        )
+
+    ticket_id = int(ticket["id"])
+    PENDING[user.id] = ("ticket_message", ticket_id)
+    lang = lang_of(user.id)
+    if is_new:
+        await send_ticket_conversation(message, lang, ticket)
+    else:
+        await message.reply_text(
+            f"Attachment sent to {support_bridge.ticket_reference(ticket_id)}.",
+            reply_markup=kb.ticket_conversation_keyboard(lang, ticket_id),
+        )
+    await support_bridge.send_client_media(
+        context,
+        ticket,
+        user,
+        message,
+        event="New support ticket" if is_new else "Customer attachment",
+    )
+    return True
+
+
+async def handle_pending_attachment(update, context):
+    await handle_ticket_attachment(update, context)
+
+
 async def handle_pending_photo(update, context):
     """Capture the advertising image during the guided offer creation flow."""
+    if await handle_ticket_attachment(update, context):
+        return
     uid = update.effective_user.id
     pending = PENDING.get(uid)
     if uid != ADMIN_ID or not pending or pending[0] not in {"adm_addoff_image", "adm_offimage"}:
@@ -3025,6 +3145,11 @@ def build_app():
     app.add_handler(CallbackQueryHandler(block_maintenance_users), group=-4)
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-3)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-3)
+    app.add_handler(MessageHandler(
+        filters.UpdateType.CHANNEL_POST
+        & filters.Chat(SUPPORT_TICKET_CHANNEL_ID),
+        support_bridge.handle_admin_channel_post,
+    ))
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", lambda u, c: send_main_menu(u, c, lang_of(u.effective_user.id))))
     app.add_handler(CommandHandler("catalog", cmd_catalog))
@@ -3040,6 +3165,7 @@ def build_app():
     app.add_handler(CallbackQueryHandler(cb_admin, pattern=r"^adm_"))
     app.add_handler(CallbackQueryHandler(cb_navigation))  # reste
     app.add_handler(MessageHandler(filters.PHOTO, handle_pending_photo))
+    app.add_handler(MessageHandler(filters.ATTACHMENT, handle_pending_attachment))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text_menu))
     app.add_error_handler(on_error)
     return app

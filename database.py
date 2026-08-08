@@ -15,7 +15,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def is_otp_service_name(value):
@@ -194,6 +194,7 @@ def init_db():
     db.support_tickets.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
     db.support_tickets.create_index("user_id")
     db.ticket_messages.create_index([("ticket_id", ASCENDING), ("created_at", ASCENDING)])
+    db.support_tickets.create_index("channel_message_ids")
     if os.environ.get("HP_SEED_DEFAULT_CATALOG", "").strip().lower() in {"1", "true", "yes"}:
         _seed_catalog()
     db.schema_meta.update_one(
