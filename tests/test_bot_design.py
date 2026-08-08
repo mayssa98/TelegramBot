@@ -1298,6 +1298,34 @@ def test_otp_answers_notify_admin_and_redirect_customer(monkeypatch, mock_mongod
     assert button.url.startswith("https://t.me/Anwer_07?text=")
 
 
+def test_customer_support_text_is_deleted_after_channel_delivery(mock_mongodb):
+    PENDING[42] = ("support", "other")
+    user = SimpleNamespace(
+        id=42,
+        full_name="Support Client",
+        first_name="Support",
+        username="client42",
+    )
+    message = SimpleNamespace(
+        text="I need help",
+        reply_text=AsyncMock(),
+        delete=AsyncMock(),
+    )
+    bot_client = SimpleNamespace(
+        send_message=AsyncMock(return_value=SimpleNamespace(message_id=800)),
+    )
+
+    asyncio.run(handle_pending_input(
+        SimpleNamespace(effective_user=user, message=message),
+        SimpleNamespace(bot=bot_client),
+        "en",
+    ))
+
+    message.delete.assert_awaited_once()
+    assert bot_client.send_message.await_args.args[0] == -1004326329551
+    assert "I need help" in bot_client.send_message.await_args.args[1]
+
+
 def test_customer_can_close_active_support_ticket(monkeypatch, mock_mongodb):
     ticket = support_service.create_ticket(42, "Help", category="other")
     PENDING[42] = ("ticket_message", ticket["id"])
@@ -1345,6 +1373,7 @@ def test_attachment_can_create_the_first_ticket_message(mock_mongodb):
         video_note=None,
         sticker=None,
         reply_text=AsyncMock(),
+        delete=AsyncMock(),
     )
     bot_client = SimpleNamespace(
         send_message=AsyncMock(return_value=SimpleNamespace(message_id=801)),
@@ -1361,4 +1390,5 @@ def test_attachment_can_create_the_first_ticket_message(mock_mongodb):
     assert ticket["category"] == "other"
     assert PENDING.get(42) == ("ticket_message", ticket["id"])
     message.reply_text.assert_awaited_once()
+    message.delete.assert_awaited_once()
     bot_client.copy_message.assert_awaited_once()

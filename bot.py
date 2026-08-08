@@ -996,6 +996,12 @@ async def send_ticket_conversation(message, lang, ticket):
     )
 
 
+async def delete_customer_support_message(message):
+    """Remove a customer's original message after it reaches support."""
+    with contextlib.suppress(Exception):
+        await message.delete()
+
+
 async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = lang_of(update.effective_user.id)
     await update.effective_message.reply_text(
@@ -2284,6 +2290,7 @@ async def handle_pending_input(update, context, lang):
         await support_bridge.send_client_text(
             context, ticket, update.effective_user, text,
         )
+        await delete_customer_support_message(update.message)
         return
 
     if kind == "support_guided":
@@ -2302,6 +2309,7 @@ async def handle_pending_input(update, context, lang):
         await support_bridge.send_client_text(
             context, ticket, update.effective_user, text,
         )
+        await delete_customer_support_message(update.message)
         return
 
     if kind == "support_order":
@@ -2317,6 +2325,7 @@ async def handle_pending_input(update, context, lang):
         await support_bridge.send_client_text(
             context, ticket, update.effective_user, text,
         )
+        await delete_customer_support_message(update.message)
         return
 
     if kind == "ticket_message":
@@ -2337,6 +2346,7 @@ async def handle_pending_input(update, context, lang):
             text,
             event="Customer reply",
         )
+        await delete_customer_support_message(update.message)
         return
 
     # --- Admin : livraison ---
@@ -2606,6 +2616,7 @@ async def handle_ticket_attachment(update, context):
         message,
         event="New support ticket" if is_new else "Customer attachment",
     )
+    await delete_customer_support_message(message)
     return True
 
 
