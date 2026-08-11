@@ -339,7 +339,7 @@ def test_delivery_accounts_use_numeric_labels_without_hash_delimiters():
         "1.\nfirst@example.com:pass\n\n2.\nsecond@example.com:pass\n\n3.\nthird@example.com:pass"
     )
 
-def test_start_allows_access_without_channel_or_group_membership(monkeypatch):
+def test_start_requires_official_channel_membership(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     user = SimpleNamespace(id=42, username="buyer", first_name="Buyer")
     bot_client = SimpleNamespace(
@@ -354,9 +354,11 @@ def test_start_allows_access_without_channel_or_group_membership(monkeypatch):
 
     message.reply_text.assert_awaited_once()
     call = message.reply_text.await_args
-    assert "WELCOME TO" in call.args[0]
+    assert "MEMBERS-ONLY ACCESS" in call.args[0]
     assert call.kwargs["reply_markup"] is not None
-    bot_client.get_chat_member.assert_not_awaited()
+    assert call.kwargs["reply_markup"].inline_keyboard[0][0].url.endswith("/blackmarketBotChannel")
+    bot_client.get_chat_member.assert_awaited_once_with("@blackmarketBotChannel", 42)
+    assert PENDING.get(42) == ("await_channel_join", 0)
 
 
 def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
@@ -384,10 +386,10 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     assert "1 USDT" in rendered
     assert "12% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
-    bot_client.get_chat_member.assert_not_awaited()
+    bot_client.get_chat_member.assert_awaited_once_with("@blackmarketBotChannel", 42)
 
 
-def test_group_membership_is_also_required(monkeypatch):
+def test_only_official_channel_membership_is_required(monkeypatch):
     from bot import is_required_channel_member
 
     bot_client = SimpleNamespace(get_chat_member=AsyncMock(side_effect=[
@@ -396,11 +398,10 @@ def test_group_membership_is_also_required(monkeypatch):
     ]))
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
-    monkeypatch.setattr("bot.REQUIRED_GROUP", "@Blackmarketgrp")
 
-    assert asyncio.run(is_required_channel_member(bot_client, 42)) is False
+    assert asyncio.run(is_required_channel_member(bot_client, 42)) is True
     assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
-        "@channel", "@Blackmarketgrp",
+        "@channel",
     ]
 
 
@@ -410,36 +411,31 @@ def test_membership_check_accepts_links_and_numeric_chat_ids(monkeypatch):
     bot_client = SimpleNamespace(get_chat_member=AsyncMock(return_value=SimpleNamespace(status="member")))
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "https://t.me/blackmarketBotChannel")
-    monkeypatch.setattr("bot.REQUIRED_GROUP", "-1001234567890")
 
     assert asyncio.run(is_required_channel_member(bot_client, 42)) is True
-    assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
-        "@blackmarketBotChannel", -1001234567890,
-    ]
+    bot_client.get_chat_member.assert_awaited_once_with("@blackmarketBotChannel", 42)
 
 
 def test_membership_check_resolves_usernames_to_numeric_chat_ids(monkeypatch):
     from bot import required_membership_status
 
     bot_client = SimpleNamespace(
-        get_chat=AsyncMock(side_effect=[
-            SimpleNamespace(id=-100111, title="Black Market Channel"),
-            SimpleNamespace(id=-100222, title="Black Market Group"),
-        ]),
+        get_chat=AsyncMock(return_value=SimpleNamespace(
+            id=-100111, title="Black Market Channel",
+        )),
         get_chat_member=AsyncMock(return_value=SimpleNamespace(status="member")),
     )
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@blackmarketBotChannel")
-    monkeypatch.setattr("bot.REQUIRED_GROUP", "@Blackmarketgrp")
 
     allowed, details = asyncio.run(required_membership_status(bot_client, 42))
 
     assert allowed is True
     assert [call.args[0] for call in bot_client.get_chat_member.await_args_list] == [
-        -100111, -100222,
+        -100111,
     ]
     assert [detail["title"] for detail in details] == [
-        "Black Market Channel", "Black Market Group",
+        "Black Market Channel",
     ]
 
 
@@ -449,7 +445,6 @@ def test_membership_check_accepts_owner_status(monkeypatch):
     bot_client = SimpleNamespace(get_chat_member=AsyncMock(return_value=SimpleNamespace(status="owner")))
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
-    monkeypatch.setattr("bot.REQUIRED_GROUP", "@group")
 
     assert asyncio.run(is_required_channel_member(bot_client, 42)) is True
 
@@ -457,24 +452,21 @@ def test_membership_check_accepts_owner_status(monkeypatch):
 def test_membership_status_reports_failed_chat(monkeypatch):
     from bot import required_membership_status
 
-    bot_client = SimpleNamespace(get_chat_member=AsyncMock(side_effect=[
-        SimpleNamespace(status="member"),
-        SimpleNamespace(status="left"),
-    ]))
+    bot_client = SimpleNamespace(
+        get_chat_member=AsyncMock(return_value=SimpleNamespace(status="left")),
+    )
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
-    monkeypatch.setattr("bot.REQUIRED_GROUP", "@group")
 
     allowed, details = asyncio.run(required_membership_status(bot_client, 42))
 
     assert allowed is False
     assert details == [
-        {"chat": "@channel", "ok": True, "status": "member"},
-        {"chat": "@group", "ok": False, "status": "left"},
+        {"chat": "@channel", "ok": False, "status": "left"},
     ]
 
 
-def test_legacy_verify_button_unlocks_without_membership(monkeypatch):
+def test_verify_button_refuses_access_without_membership(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     query = SimpleNamespace(
         data="verify_channel_join",
@@ -490,14 +482,13 @@ def test_legacy_verify_button_unlocks_without_membership(monkeypatch):
     )
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@channel")
-    monkeypatch.setattr("bot.REQUIRED_GROUP", "@group")
 
     asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace(bot=bot_client)))
 
-    bot_client.get_chat_member.assert_not_awaited()
+    bot_client.get_chat_member.assert_awaited_once_with("@channel", 42)
     bot_client.send_message.assert_not_awaited()
     query.edit_message_text.assert_awaited_once()
-    assert "WELCOME TO" in query.edit_message_text.await_args.args[0]
+    assert "MEMBERSHIP NOT DETECTED" in query.edit_message_text.await_args.args[0]
 
 @pytest.mark.parametrize(
     ("key", "incoming_text", "emoji_id"),

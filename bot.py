@@ -46,7 +46,6 @@ from config import (
     CURRENCY,
     DEFAULT_LANG,
     REQUIRED_CHANNEL,
-    REQUIRED_GROUP,
     SHOP_NAME,
     SUPPORT_TICKET_CHANNEL_ID,
     USDT_EVM_ADDRESS,
@@ -524,7 +523,7 @@ def _normalize_required_chat(chat):
 
 
 async def is_required_channel_member(bot, user_id):
-    """Return whether a customer belongs to both the required channel and group."""
+    """Return whether a customer belongs to the required official channel."""
     allowed, _details = await required_membership_status(bot, user_id)
     return allowed
 
@@ -535,7 +534,7 @@ async def required_membership_status(bot, user_id):
         return True, []
     required_chats = [
         normalized
-        for chat in (REQUIRED_CHANNEL, REQUIRED_GROUP)
+        for chat in (REQUIRED_CHANNEL,)
         if (normalized := _normalize_required_chat(chat))
     ]
     if not required_chats:
@@ -903,8 +902,15 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with contextlib.suppress(ValueError, TypeError):
             referrer_id = int(context.args[0][4:])
 
-    # Membership in the community channel/group is optional. Clear any
-    # verification state left by older deployments without blocking access.
+    if u.id != ADMIN_ID and not await is_required_channel_member(context.bot, u.id):
+        PENDING[u.id] = ("await_channel_join", referrer_id)
+        await update.message.reply_text(
+            premium_customer_text(lang, "channel_join_required"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.channel_join_keyboard(lang),
+        )
+        return
+
     if pending and pending[0] == "await_channel_join":
         PENDING.pop(u.id, None)
     await register_start_referral(context, u.id, referrer_id)
@@ -1210,8 +1216,15 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if data == "verify_channel_join":
-        # Compatibility for join prompts sent by older deployments: unlock
-        # immediately because community membership is now optional.
+        allowed, details = await required_membership_status(context.bot, uid)
+        if not allowed:
+            log.info("%s", _format_membership_diagnostics(uid, details))
+            await q.edit_message_text(
+                premium_customer_text(lang, "channel_join_not_verified"),
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.channel_join_keyboard(lang),
+            )
+            return
         pending = PENDING.pop(uid, None)
         referrer_id = pending[1] if pending and pending[0] == "await_channel_join" else 0
         db.set_user_lang(uid, DEFAULT_LANG)
@@ -3152,6 +3165,8 @@ def build_app():
     app.add_handler(CallbackQueryHandler(block_maintenance_users), group=-4)
     app.add_handler(MessageHandler(filters.ALL, block_banned_users), group=-3)
     app.add_handler(CallbackQueryHandler(block_banned_users), group=-3)
+    app.add_handler(MessageHandler(filters.ALL, block_non_channel_members), group=-2)
+    app.add_handler(CallbackQueryHandler(block_non_channel_members), group=-2)
     app.add_handler(MessageHandler(
         filters.UpdateType.CHANNEL_POST
         & filters.Chat(SUPPORT_TICKET_CHANNEL_ID),

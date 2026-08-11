@@ -119,12 +119,10 @@ def channel_offer_keyboard(lang, bot_username, offer_id):
     ]])
 
 def channel_join_keyboard(lang):
-    """Offer both required membership links before unlocking the customer menu."""
+    """Offer the required channel link before unlocking the customer menu."""
     channel_url = f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"
-    group_url = f"https://t.me/{REQUIRED_GROUP.lstrip('@')}"
     return InlineKeyboardMarkup([
         [translated_button(lang, "btn_join_channel", url=channel_url, style="primary")],
-        [translated_button(lang, "btn_join_group", url=group_url, style="primary")],
         [translated_button(lang, "btn_verify_join", callback_data="verify_channel_join", style="success")],
     ])
 
