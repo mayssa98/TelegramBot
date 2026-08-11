@@ -196,6 +196,16 @@ def order_detail_keyboard(o):
     return InlineKeyboardMarkup(rows)
 
 
+def manual_delivery_request_keyboard(order_id):
+    """Let the administrator answer a paid customer directly through the bot."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "💬 Répondre au client (compte ou message)",
+            callback_data=f"adm_deliver:{int(order_id)}",
+        ),
+    ]])
+
+
 def catalog_admin_keyboard():
     rows = [[InlineKeyboardButton(
         s.get("name") or f"Service #{s['id']}",
@@ -266,4 +276,17 @@ async def notify_new_order(context, order):
     await context.bot.send_message(
         ADMIN_ID, order_detail_text(order), parse_mode="Markdown",
         reply_markup=order_detail_keyboard(order),
+    )
+
+
+async def notify_manual_delivery_request(context, order):
+    """Request the manual delivery in the private administrator bot chat."""
+    await context.bot.send_message(
+        ADMIN_ID,
+        "📦 *Livraison manuelle demandée*\n\n"
+        f"{order_detail_text(order)}\n\n"
+        "Appuyez ci-dessous, puis envoyez le compte, le code, les instructions "
+        "ou tout autre message à transmettre directement au client.",
+        parse_mode="Markdown",
+        reply_markup=manual_delivery_request_keyboard(order["id"]),
     )

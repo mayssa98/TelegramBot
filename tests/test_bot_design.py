@@ -1250,6 +1250,43 @@ def test_automatically_delivered_paid_order_is_notified_to_admin(
     assert notify_new_order.await_args.args[1]["id"] == 500
 
 
+def test_manual_delivery_sends_admin_an_in_bot_reply_request(
+    monkeypatch, mock_mongodb,
+):
+    mock_mongodb.orders.insert_one({
+        "id": 503,
+        "user_id": 42,
+        "service_name": "Manual service",
+        "offer_name": "Manual account",
+        "qty": 1,
+        "status": "paid",
+    })
+    notify_manual = AsyncMock()
+    notify_new_order = AsyncMock()
+    monkeypatch.setattr("bot.admin.notify_manual_delivery_request", notify_manual)
+    monkeypatch.setattr("bot.admin.notify_new_order", notify_new_order)
+    message = SimpleNamespace(reply_text=AsyncMock())
+
+    asyncio.run(send_payment_result(
+        message,
+        SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock())),
+        "en",
+        503,
+        {
+            "status": "confirmed_no_delivery",
+            "affiliate": None,
+            "loyalty": None,
+            "delivered_content": None,
+        },
+        42,
+    ))
+
+    notify_manual.assert_awaited_once()
+    notify_new_order.assert_not_awaited()
+    customer_keyboard = message.reply_text.await_args.kwargs["reply_markup"]
+    assert customer_keyboard.inline_keyboard[0][0].callback_data == "catalog"
+
+
 def test_paid_otp_order_asks_for_service_before_admin_handoff(mock_mongodb):
     mock_mongodb.orders.insert_one({
         "id": 501,
@@ -1335,9 +1372,9 @@ def test_otp_answers_notify_admin_and_redirect_customer(monkeypatch, mock_mongod
         "user_id": 42, "order_id": 502, "category": "otp_order",
     })
     customer_call = country_message.reply_text.await_args
-    assert "@Anwer\\_07" in customer_call.args[0]
-    button = customer_call.kwargs["reply_markup"].inline_keyboard[0][0]
-    assert button.url.startswith("https://t.me/Anwer_07?text=")
+    assert "directly in this bot" in customer_call.args[0]
+    assert customer_call.kwargs["reply_markup"].inline_keyboard[0][0].url is None
+    assert admin_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "adm_deliver:502"
 
 
 def test_customer_support_text_is_deleted_after_channel_delivery(mock_mongodb):

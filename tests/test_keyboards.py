@@ -20,15 +20,12 @@ def test_quantity_keyboard_uses_stock_as_maximum():
     assert "buyq:9:8" not in callbacks
 
 
-def test_delivery_offers_admin_account_collection_with_order_id(monkeypatch):
-    monkeypatch.setattr("keyboards.ADMIN_USERNAME", "@Anwer_07")
-
+def test_delivery_keeps_customer_inside_bot_without_admin_contact():
     keyboard = kb.post_delivery_keyboard("en", 6074)
     button = keyboard.inline_keyboard[0][0]
 
-    assert "@Anwer_07" in button.text
-    assert button.url.startswith("https://t.me/Anwer_07?text=")
-    assert "6074" in button.url
+    assert button.callback_data == "catalog"
+    assert button.url is None
 
 
 def test_quantity_confirmation_keeps_selected_quantity():

@@ -1,12 +1,10 @@
 """Constructeurs de claviers inline et reply."""
 import html
 import re
-from urllib.parse import quote
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 import database as db
-from config import ADMIN_ID, ADMIN_USERNAME, REQUIRED_CHANNEL, REQUIRED_GROUP
+from config import ADMIN_ID, REQUIRED_CHANNEL, REQUIRED_GROUP
 from i18n import t
 
 BUTTON_TEXT_KEYS = {
@@ -22,7 +20,6 @@ BUTTON_TEXT_KEYS = {
     "btn_cancel", "btn_continue_payment", "btn_new_order",
     "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_join_group",
     "btn_verify_join", "btn_channel_buy_now",
-    "btn_receive_accounts_admin",
 }
 
 
@@ -468,35 +465,9 @@ def duplicate_order_keyboard(lang, existing_order_id, offer_id, qty=1):
     ])
 
 
-def otp_admin_handoff_keyboard(lang, order_id, service, country):
-    """Open a prefilled Telegram chat with the configured OTP administrator."""
-    username = ADMIN_USERNAME.lstrip("@")
-    draft = quote(t(
-        lang,
-        "otp_admin_draft",
-        oid=order_id,
-        service=service,
-        country=country,
-    ))
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton(
-            f"Contact @{username}"[:64],
-            url=f"https://t.me/{username}?text={draft}",
-        ),
-    ]])
-
 def post_delivery_keyboard(lang, order_id):
-    """Offer direct admin contact for account collection after every delivery."""
-    username = ADMIN_USERNAME.lstrip("@")
-    draft = quote(t(lang, "receive_accounts_admin_draft", oid=order_id))
+    """Keep customers inside the bot after delivery."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(
-            f"{clean_translated_button_text(t(lang, 'btn_receive_accounts_admin'))} @{username}"[:64],
-            url=f"https://t.me/{username}?text={draft}",
-            icon_custom_emoji_id=db.get_text_override_icon(
-                "btn_receive_accounts_admin", lang,
-            ) or None,
-        )],
         [translated_button(lang, "menu_catalog", callback_data="catalog")],
     ])
 
@@ -514,4 +485,3 @@ def affiliate_keyboard(lang, referral_link, share_text):
         [translated_button(lang, "affiliate_share", switch_inline_query=share_text)],
         [translated_button(lang, "btn_main_menu_short", callback_data="home")],
     ])
-

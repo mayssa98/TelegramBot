@@ -40,7 +40,6 @@ from app.domain import (
 )
 from config import (
     ADMIN_ID,
-    ADMIN_USERNAME,
     BINANCE_PAY_ID,
     BOT_TOKEN,
     CLICK_REPORT_CHAT_ID,
@@ -1793,6 +1792,7 @@ async def handle_pending_input(update, context, lang):
                 ADMIN_ID,
                 admin_text,
                 parse_mode=ParseMode.HTML,
+                reply_markup=admin.manual_delivery_request_keyboard(order_id),
             )
         except Exception as exc:
             log.warning("OTP order #%s admin notification failed: %s", order_id, exc)
@@ -1803,12 +1803,9 @@ async def handle_pending_input(update, context, lang):
                 oid=order_id,
                 service=escape_markdown(service_name),
                 country=escape_markdown(country),
-                admin=escape_markdown(ADMIN_USERNAME),
             ),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.otp_admin_handoff_keyboard(
-                lang, order_id, service_name, country,
-            ),
+            reply_markup=kb.home_keyboard(lang, uid),
         )
         return
     if kind == "catalog_request":
@@ -2273,7 +2270,7 @@ async def handle_pending_input(update, context, lang):
             f"✅ Stock manuel activé : {stock}\n"
             "📦 Ce nombre est maintenant visible publiquement.\n"
             f"📣 Publicité privée envoyée à {sent} utilisateur(s).\n"
-            "👤 Après paiement, le client devra contacter l’admin avec son numéro de commande.",
+            "🤖 Après paiement, le bot vous demandera de répondre directement au client.",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
         return
@@ -2452,7 +2449,10 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                                      parse_mode=ParseMode.HTML,
                                      reply_markup=kb.post_delivery_keyboard(lang, order_id))
         with contextlib.suppress(Exception):
-            await admin.notify_new_order(context, paid_order)
+            if result["status"] == "confirmed_no_delivery":
+                await admin.notify_manual_delivery_request(context, paid_order)
+            else:
+                await admin.notify_new_order(context, paid_order)
     elif result["status"] == "already_paid":
         await message.reply_text(premium_customer_text(lang, "already_paid", oid=order_id),
                                  parse_mode=ParseMode.HTML)

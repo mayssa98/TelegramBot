@@ -501,19 +501,14 @@ TRANSLATIONS = {
         "ar": "Service: *{service}*\n\nWhat's the country?",
     },
     "otp_redirect_admin": {
-        "fr": "*Demande OTP envoyee*\n\nCommande : *#{oid}*\nService : *{service}*\nPays : *{country}*\n\nContactez maintenant l'administrateur {admin} avec le bouton ci-dessous. Toutes les informations de votre commande lui ont deja ete envoyees.",
-        "en": "*OTP request sent*\n\nOrder: *#{oid}*\nService: *{service}*\nCountry: *{country}*\n\nNow contact the administrator {admin} using the button below. All your order information has already been sent to the admin.",
-        "ar": "*OTP request sent*\n\nOrder: *#{oid}*\nService: *{service}*\nCountry: *{country}*\n\nNow contact the administrator {admin} using the button below. All your order information has already been sent to the admin.",
-    },
-    "otp_admin_draft": {
-        "fr": "Bonjour, ma commande OTP #{oid} est payee. Service : {service}. Pays : {country}.",
-        "en": "Hello, my OTP order #{oid} is paid. Service: {service}. Country: {country}.",
-        "ar": "Hello, my OTP order #{oid} is paid. Service: {service}. Country: {country}.",
+        "fr": "*Demande OTP envoyée*\n\nCommande : *#{oid}*\nService : *{service}*\nPays : *{country}*\n\nVotre demande a été transmise. Vous recevrez le code ou la réponse directement dans ce bot.",
+        "en": "*OTP request sent*\n\nOrder: *#{oid}*\nService: *{service}*\nCountry: *{country}*\n\nYour request was sent. You will receive the code or reply directly in this bot.",
+        "ar": "*تم إرسال طلب OTP*\n\nالطلب: *#{oid}*\nالخدمة: *{service}*\nالبلد: *{country}*\n\nتم إرسال طلبك. ستتلقى الرمز أو الرد مباشرة في هذا البوت.",
     },
     "otp_order_unavailable": {
-        "fr": "Cette commande OTP n'est plus disponible. Contactez @Anwer_07.",
-        "en": "This OTP order is no longer available. Contact @Anwer_07.",
-        "ar": "This OTP order is no longer available. Contact @Anwer_07.",
+        "fr": "Cette commande OTP n'est plus disponible. Utilisez le menu Support si vous avez besoin d'aide.",
+        "en": "This OTP order is no longer available. Use the Support menu if you need help.",
+        "ar": "طلب OTP هذا لم يعد متاحاً. استخدم قائمة الدعم إذا كنت بحاجة إلى المساعدة.",
     },
     "verify_ok": {
         "fr": "✅ *Paiement confirmé !* Commande #{oid}\n\nVotre commande est en cours de préparation. Vous recevrez votre produit ici très bientôt. Merci pour votre achat ! 🎉",
@@ -621,19 +616,9 @@ TRANSLATIONS = {
     "status_verification_failed": {"fr": "❌ Échec de vérification", "en": "❌ Verification failed", "ar": "❌ فشل التحقق"},
     # ---------------- Livraison ----------------
     "delivery_received": {
-        "fr": "🎁 *Votre commande #{oid} est livrée !*\n\nService : *{service}* — {offer}\n\n{content}\n\nPour recevoir vos comptes via l'administrateur, appuyez sur le bouton ci-dessous et envoyez votre numéro de commande *#{oid}*.\n\nMerci pour votre confiance ! 💜",
-        "en": "🎁 *Your order #{oid} has been delivered!*\n\nService: *{service}* — {offer}\n\n{content}\n\nTo receive your accounts from the admin, use the button below and send your order ID *#{oid}*.\n\nThank you for your trust! 💜",
-        "ar": "🎁 *تم تسليم طلبك #{oid}!*\n\nالخدمة: *{service}* — {offer}\n\n{content}\n\nلاستلام حساباتك من المشرف، استخدم الزر أدناه وأرسل رقم الطلب *#{oid}*.\n\nشكراً لثقتك! 💜",
-    },
-    "btn_receive_accounts_admin": {
-        "fr": "👤 Contacter l’admin pour recevoir les comptes",
-        "en": "👤 Contact admin to receive accounts",
-        "ar": "👤 تواصل مع المشرف لاستلام الحسابات",
-    },
-    "receive_accounts_admin_draft": {
-        "fr": "Bonjour, je souhaite recevoir les comptes de ma commande #{oid}.",
-        "en": "Hello, I want to receive the accounts for order #{oid}.",
-        "ar": "مرحباً، أريد استلام حسابات الطلب #{oid}.",
+        "fr": "🎁 *Votre commande #{oid} est livrée !*\n\nService : *{service}* — {offer}\n\n{content}\n\nMerci pour votre confiance ! 💜",
+        "en": "🎁 *Your order #{oid} has been delivered!*\n\nService: *{service}* — {offer}\n\n{content}\n\nThank you for your trust! 💜",
+        "ar": "🎁 *تم تسليم طلبك #{oid}!*\n\nالخدمة: *{service}* — {offer}\n\n{content}\n\nشكراً لثقتك! 💜",
     },
     # ---------------- Aide ----------------
     "help_text": {
