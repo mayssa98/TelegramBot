@@ -1978,9 +1978,437 @@ def render_dashboard(
                 transition-duration: .01ms !important;
             }
         }
+
+        /* ═══════════════════════════════════════════════════════ */
+        /*  PREMIUM VISUAL ENHANCEMENTS                          */
+        /* ═══════════════════════════════════════════════════════ */
+
+        /* Animated ambient light orbs */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
+                radial-gradient(circle at 20% 50%, rgba(157,114,255,.035) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(85,217,146,.025) 0%, transparent 50%),
+                radial-gradient(circle at 50% 80%, rgba(255,126,182,.02) 0%, transparent 50%);
+            animation: orbFloat 25s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes orbFloat {
+            0%,100% { transform: translate(0,0) rotate(0deg); }
+            33%     { transform: translate(2%,-1%) rotate(1deg); }
+            66%     { transform: translate(-1%,2%) rotate(-1deg); }
+        }
+
+        aside, main { position: relative; z-index: 1; }
+
+        /* ── Glassmorphism KPI cards ── */
+        .kpi-card {
+            background: rgba(17,17,22,.6) !important;
+            backdrop-filter: blur(24px) saturate(1.2);
+            -webkit-backdrop-filter: blur(24px) saturate(1.2);
+            border: 1px solid rgba(157,114,255,.1) !important;
+            transition: transform .28s cubic-bezier(.34,1.56,.64,1),
+                        border-color .28s ease, box-shadow .28s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(157,114,255,.35) !important;
+            box-shadow: 0 16px 48px rgba(157,114,255,.08),
+                        0 0 0 1px rgba(157,114,255,.08);
+        }
+
+        .kpi-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--violet), transparent);
+            opacity: 0;
+            transition: opacity .3s ease;
+        }
+
+        .kpi-card:hover::after { opacity: 1; }
+        .kpi-card:nth-child(2)::after { background: linear-gradient(90deg, var(--success), transparent); }
+        .kpi-card:nth-child(3)::after { background: linear-gradient(90deg, var(--warning), transparent); }
+        .kpi-card:nth-child(4)::after { background: linear-gradient(90deg, var(--pink), transparent); }
+
+        /* ── Glow button effects ── */
+        .btn-primary {
+            position: relative;
+            overflow: hidden;
+            transition: all .3s ease, box-shadow .3s ease !important;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 22px rgba(157,114,255,.35),
+                        0 0 60px rgba(157,114,255,.08) !important;
+        }
+
+        .btn-primary::after {
+            content: '';
+            position: absolute; inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,.12), transparent 60%);
+            opacity: 0;
+            transition: opacity .3s ease;
+            pointer-events: none;
+        }
+
+        .btn-primary:hover::after { opacity: 1; }
+
+        /* Ripple on all buttons */
+        .btn { position: relative; overflow: hidden; }
+
+        @keyframes btnRipple {
+            to { transform: scale(2.5); opacity: 0; }
+        }
+
+        .btn .ripple-circle {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,.18);
+            transform: scale(0);
+            animation: btnRipple .55s ease-out;
+            pointer-events: none;
+        }
+
+        /* ── Skeleton shimmer ── */
+        @keyframes skeletonShimmer {
+            0%   { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, #1a1a22 25%, #28283a 50%, #1a1a22 75%);
+            background-size: 200px 100%;
+            animation: skeletonShimmer 1.4s infinite linear;
+            border-radius: 8px;
+        }
+
+        .skeleton-kpi {
+            min-height: 142px;
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 20px;
+        }
+
+        .skeleton-line {
+            height: 14px; margin-bottom: 10px; border-radius: 6px;
+        }
+
+        .skeleton-line.w60 { width: 60%; }
+        .skeleton-line.w40 { width: 40%; }
+        .skeleton-line.w80 { width: 80%; }
+        .skeleton-line.lg  { height: 30px; width: 45%; margin: 14px 0; }
+
+        /* ── Global progress bar ── */
+        .global-progress {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 3px;
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .2s ease;
+        }
+
+        .global-progress.active { opacity: 1; }
+
+        .global-progress-bar {
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, var(--violet), #ff7eb6, var(--violet));
+            background-size: 200% 100%;
+            animation: progressGlow 1.2s ease infinite;
+            border-radius: 0 2px 2px 0;
+            transition: width .4s ease;
+        }
+
+        @keyframes progressGlow {
+            0%,100% { background-position: 0% 0; }
+            50%     { background-position: 100% 0; }
+        }
+
+        /* ── Scroll-to-top button ── */
+        .scroll-to-top {
+            position: fixed;
+            bottom: 28px; right: 80px;
+            width: 44px; height: 44px;
+            display: grid; place-items: center;
+            border: 1px solid var(--border-color);
+            border-radius: 13px;
+            background: rgba(17,17,22,.88);
+            backdrop-filter: blur(14px);
+            color: var(--text-main);
+            cursor: pointer;
+            opacity: 0; transform: translateY(12px);
+            transition: opacity .35s ease, transform .35s ease,
+                        border-color .25s ease, box-shadow .25s ease;
+            z-index: 90;
+            font-size: 16px;
+        }
+
+        .scroll-to-top.visible {
+            opacity: 1; transform: translateY(0);
+        }
+
+        .scroll-to-top:hover {
+            border-color: var(--violet);
+            box-shadow: 0 0 18px rgba(157,114,255,.2);
+        }
+
+        /* ── Live pulse ── */
+        @keyframes livePulse {
+            0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(85,217,146,.4); }
+            50%     { opacity: .75; box-shadow: 0 0 0 7px rgba(85,217,146,0); }
+        }
+
+        .live-dot,
+        .system-status-dot,
+        .realtime-dot { animation: livePulse 2s ease-in-out infinite; }
+
+        /* ── Sticky table headers ── */
+        .table-wrap { max-height: 72vh; overflow-y: auto; }
+
+        .table-wrap thead th {
+            position: sticky; top: 0; z-index: 5;
+            background: #14141a;
+            box-shadow: 0 1px 0 var(--border-color);
+        }
+
+        /* ── Row entrance animation ── */
+        @keyframes rowSlideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+
+        tbody tr { animation: rowSlideIn .3s ease both; }
+        tbody tr:nth-child(1)  { animation-delay: .02s; }
+        tbody tr:nth-child(2)  { animation-delay: .04s; }
+        tbody tr:nth-child(3)  { animation-delay: .06s; }
+        tbody tr:nth-child(4)  { animation-delay: .08s; }
+        tbody tr:nth-child(5)  { animation-delay: .1s;  }
+        tbody tr:nth-child(6)  { animation-delay: .12s; }
+        tbody tr:nth-child(7)  { animation-delay: .14s; }
+        tbody tr:nth-child(8)  { animation-delay: .16s; }
+        tbody tr:nth-child(9)  { animation-delay: .18s; }
+        tbody tr:nth-child(10) { animation-delay: .2s;  }
+
+        tbody tr {
+            transition: background .2s ease, transform .15s ease;
+        }
+
+        tbody tr:hover {
+            background: rgba(157,114,255,.035) !important;
+        }
+
+        /* ── Enhanced merchant action cards ── */
+        .merchant-action {
+            backdrop-filter: blur(8px);
+            transition: transform .3s cubic-bezier(.34,1.56,.64,1),
+                        border-color .25s ease, box-shadow .25s ease !important;
+        }
+
+        .merchant-action:hover {
+            transform: translateY(-5px) scale(1.02) !important;
+            box-shadow: 0 10px 35px rgba(157,114,255,.1) !important;
+        }
+
+        /* ── Card glassmorphism ── */
+        .service-card, .merchant-card, .chart-card {
+            backdrop-filter: blur(12px);
+            transition: border-color .3s ease, box-shadow .3s ease;
+        }
+
+        .service-card:hover, .chart-card:hover {
+            border-color: rgba(157,114,255,.18);
+        }
+
+        /* ── Enhanced modals ── */
+        .modal {
+            transition: opacity .2s ease !important;
+        }
+
+        .modal.active {
+            backdrop-filter: blur(14px) !important;
+        }
+
+        .modal-content {
+            transition: transform .4s cubic-bezier(.34,1.56,.64,1),
+                        opacity .25s ease !important;
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1) translateY(0) !important;
+        }
+
+        .modal:not(.active) .modal-content {
+            transform: scale(.9) translateY(16px) !important;
+        }
+
+        /* ── Enhanced toast ── */
+        .toast {
+            backdrop-filter: blur(18px);
+            animation: toastBounceIn .45s cubic-bezier(.34,1.56,.64,1) !important;
+        }
+
+        @keyframes toastBounceIn {
+            from { transform: translateX(110%) scale(.85); opacity: 0; }
+            to   { transform: translateX(0) scale(1); opacity: 1; }
+        }
+
+        /* ── Badge glow ── */
+        .badge-paid, .badge-payment_confirmed {
+            box-shadow: 0 0 10px rgba(34,197,94,.12);
+        }
+
+        .badge-manual_review {
+            box-shadow: 0 0 10px rgba(249,115,22,.12);
+            animation: livePulse 2.5s ease-in-out infinite;
+        }
+
+        /* ── Clock widget ── */
+        .topbar-clock {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: rgba(20,20,25,.75);
+            backdrop-filter: blur(8px);
+            font-size: 11px; font-weight: 700;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: .03em;
+        }
+
+        .topbar-clock-time {
+            color: var(--text-main); font-size: 13px;
+        }
+
+        /* ── Offer row accent hover ── */
+        .offer-row {
+            transition: border-color .25s ease, transform .2s ease,
+                        box-shadow .25s ease !important;
+        }
+
+        .offer-row:hover {
+            border-color: rgba(157,114,255,.22) !important;
+            transform: translateX(3px);
+            box-shadow: -3px 0 0 var(--violet);
+        }
+
+        /* ── Nav active slide indicator ── */
+        nav a {
+            position: relative;
+            transition: all .25s cubic-bezier(.34,1.56,.64,1) !important;
+        }
+
+        nav a.active::before {
+            content: '';
+            position: absolute; left: 0; top: 50%;
+            transform: translateY(-50%);
+            width: 3px; height: 55%;
+            border-radius: 0 4px 4px 0;
+            background: var(--violet);
+            box-shadow: 0 0 14px rgba(157,114,255,.4);
+        }
+
+        /* ── Supplier meter gradient ── */
+        .supplier-meter span {
+            background: linear-gradient(90deg, var(--violet), #ff7eb6) !important;
+            box-shadow: 0 0 14px rgba(157,114,255,.25);
+        }
+
+        /* ── Enhanced alert hover ── */
+        .alert {
+            backdrop-filter: blur(8px);
+            transition: transform .2s ease;
+        }
+
+        .alert:hover { transform: translateX(4px); }
+
+        /* ── Form focus glow ── */
+        input:focus, textarea:focus, select:focus {
+            box-shadow: 0 0 0 3px rgba(157,114,255,.14),
+                        0 0 22px rgba(157,114,255,.04) !important;
+        }
+
+        /* ── KPI counting state ── */
+        .kpi-value.counting { color: var(--violet); }
+
+        /* ── Enhanced modal overlay ── */
+        .modal.active {
+            backdrop-filter: blur(14px);
+        }
+
+        /* ── Mobile bottom nav ── */
+        @media (max-width: 560px) {
+            aside {
+                position: fixed !important;
+                bottom: 0 !important; top: auto !important;
+                left: 0; right: 0;
+                width: 100% !important;
+                height: auto !important;
+                padding: 5px 6px 8px !important;
+                border-top: 1px solid var(--border-color);
+                border-bottom: 0 !important;
+                z-index: 100;
+                background: rgba(14,14,18,.93) !important;
+                backdrop-filter: blur(22px) saturate(1.3);
+                -webkit-backdrop-filter: blur(22px) saturate(1.3);
+            }
+
+            nav {
+                justify-content: space-around !important;
+                gap: 0 !important;
+                scrollbar-width: none;
+            }
+
+            nav::-webkit-scrollbar { display: none; }
+
+            nav a {
+                flex: 1 0 auto !important;
+                min-width: 40px !important;
+                max-width: 58px;
+                flex-direction: column;
+                gap: 2px !important;
+                padding: 5px 3px !important;
+                font-size: 9px !important;
+            }
+
+            nav a .nav-icon { font-size: 17px; }
+            nav a .nav-copy {
+                display: block !important;
+                font-size: 7.5px !important;
+                text-align: center;
+                opacity: .8;
+            }
+
+            nav a::before { display: none !important; }
+
+            nav a.active {
+                border-radius: 10px;
+                background: var(--violet-soft) !important;
+            }
+
+            main { padding-bottom: 85px !important; }
+
+            .brand, .sidebar-bottom, .nav-label, .nav-meta {
+                display: none !important;
+            }
+
+            .scroll-to-top { bottom: 78px; }
+            .toast-container { bottom: 80px; }
+        }
     </style>
 </head>
 <body>
+    <div class="global-progress" id="global-progress"><div class="global-progress-bar" id="global-progress-bar"></div></div>
     <!-- Barre de navigation latérale -->
     <aside>
         <div class="brand">
@@ -2035,6 +2463,7 @@ def render_dashboard(
                     <button class="btn btn-secondary" id="binance-test-button" onclick="testBinanceConnection()"><span>Tester Binance</span></button>
                     <button class="btn btn-secondary" onclick="refreshDashboardData()"><span>Actualiser</span></button>
                 </div>
+                <span class="topbar-clock" id="topbar-clock"><span class="topbar-clock-time" id="clock-time">--:--:--</span></span>
                 <div class="admin-chip">
                     <span class="admin-avatar">AD</span>
                     <span class="admin-copy"><strong>Admin</strong><span>Accès propriétaire</span></span>
@@ -2544,6 +2973,7 @@ def render_dashboard(
                 </form>
             </div>
         </section>
+        <button class="scroll-to-top" id="scroll-to-top" aria-label="Retour en haut">↑</button>
     </main>
 
     <!-- MODALS -->
@@ -4032,6 +4462,7 @@ def render_dashboard(
         async function refreshDashboardData(silent = false) {
             if (realtimeRequestRunning) return;
             realtimeRequestRunning = true;
+            showProgress();
             try {
                 const status = document.getElementById("order-filter-status")?.value || "";
                 const search = document.getElementById("order-search")?.value || "";
@@ -4072,6 +4503,7 @@ def render_dashboard(
                     notificationSnapshot = snapshotDashboard(dashboardData);
                     detectDashboardEvents(previousSnapshot, notificationSnapshot);
                     refreshUI();
+                    hideProgress();
                     setRealtimeStatus(true);
                     updateOrdersPagination();
                     updateInventoryPagination();
@@ -4082,6 +4514,7 @@ def render_dashboard(
                 }
             } catch (err) {
                 setRealtimeStatus(false);
+                hideProgress();
                 if (!silent) showToast("Erreur réseau lors de l'actualisation", "error");
             } finally {
                 realtimeRequestRunning = false;
@@ -4726,6 +5159,142 @@ def render_dashboard(
                 row.style.display = (!status || badge === status) ? "" : "none";
             });
         }
+
+        // ═══ PREMIUM ENHANCEMENTS ═══
+
+        // KPI counting animation
+        function animateKpiValues() {
+            document.querySelectorAll('.kpi-value').forEach(el => {
+                const text = el.textContent.trim();
+                const match = text.match(/^([\d,.]+)/);
+                if (!match) return;
+                const raw = match[1].replace(/,/g, '');
+                const target = parseFloat(raw);
+                if (isNaN(target) || target === 0) return;
+                const isDecimal = raw.includes('.');
+                const suffix = text.slice(match[0].length);
+                el.classList.add('counting');
+                const duration = 900;
+                const start = performance.now();
+                function tick(now) {
+                    const elapsed = now - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = 1 - Math.pow(1 - progress, 3);
+                    const current = target * eased;
+                    el.textContent = (isDecimal ? current.toFixed(2) : Math.round(current)) + suffix;
+                    if (progress < 1) requestAnimationFrame(tick);
+                    else el.classList.remove('counting');
+                }
+                requestAnimationFrame(tick);
+            });
+        }
+
+        // Progress bar control
+        function showProgress() {
+            const bar = document.getElementById('global-progress');
+            const fill = document.getElementById('global-progress-bar');
+            if (!bar || !fill) return;
+            bar.classList.add('active');
+            fill.style.width = '0%';
+            setTimeout(() => fill.style.width = '35%', 50);
+            setTimeout(() => fill.style.width = '65%', 300);
+            setTimeout(() => fill.style.width = '85%', 800);
+        }
+
+        function hideProgress() {
+            const bar = document.getElementById('global-progress');
+            const fill = document.getElementById('global-progress-bar');
+            if (!bar || !fill) return;
+            fill.style.width = '100%';
+            setTimeout(() => {
+                bar.classList.remove('active');
+                fill.style.width = '0%';
+            }, 300);
+        }
+
+        // Skeleton loading for KPIs
+        function showKpiSkeleton() {
+            const container = document.getElementById('kpi-container');
+            if (!container) return;
+            container.innerHTML = `<div class="kpi-grid">${
+                [1,2,3,4].map(() => `<div class="skeleton-kpi skeleton">
+                    <div class="skeleton-line w60 skeleton"></div>
+                    <div class="skeleton-line lg skeleton"></div>
+                    <div class="skeleton-line w80 skeleton"></div>
+                </div>`).join('')
+            }</div>`;
+        }
+
+        // Real-time clock
+        function updateClock() {
+            const el = document.getElementById('clock-time');
+            if (el) el.textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Scroll-to-top
+        const scrollBtn = document.getElementById('scroll-to-top');
+        if (scrollBtn) {
+            const mainEl = document.querySelector('main');
+            (mainEl || window).addEventListener('scroll', () => {
+                const scrollY = mainEl ? mainEl.scrollTop : window.scrollY;
+                scrollBtn.classList.toggle('visible', scrollY > 400);
+            }, {passive: true});
+            scrollBtn.addEventListener('click', () => {
+                (mainEl || window).scrollTo({top: 0, behavior: 'smooth'});
+            });
+        }
+
+        // Escape key to close modals
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal.active').forEach(m => {
+                    m.classList.remove('active');
+                });
+            }
+        });
+
+        // Keyboard shortcuts: Ctrl+1 to Ctrl+9 for tab navigation
+        document.addEventListener('keydown', e => {
+            if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
+            const num = parseInt(e.key);
+            if (num >= 1 && num <= 9) {
+                const tabs = document.querySelectorAll('nav a[data-tab]');
+                if (tabs[num - 1]) {
+                    e.preventDefault();
+                    tabs[num - 1].click();
+                }
+            }
+        });
+
+        // Button ripple effect
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('.btn');
+            if (!btn) return;
+            const rect = btn.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height);
+            const ripple = document.createElement('span');
+            ripple.className = 'ripple-circle';
+            ripple.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - rect.left - size/2}px;top:${e.clientY - rect.top - size/2}px`;
+            btn.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+        });
+
+        // Hook into existing refreshDashboardData to show progress
+        const _originalRefreshDashboardData = typeof refreshDashboardData === 'function' ? refreshDashboardData : null;
+        if (_originalRefreshDashboardData) {
+            // We patch the refreshUI function to trigger KPI animation
+            const _origRefreshUI = refreshUI;
+            refreshUI = function() {
+                _origRefreshUI();
+                setTimeout(animateKpiValues, 50);
+            };
+        }
+
+        // Run initial animations after first render
+        setTimeout(animateKpiValues, 600);
+
     </script>
 </body>
 </html>
