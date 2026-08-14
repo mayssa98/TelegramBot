@@ -8,6 +8,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+_SECRET_PLACEHOLDERS = {"[SENSITIVE]", "SENSITIVE"}
+
+
+def env_value(name: str, default: str = "") -> str:
+    """Read a deployment variable while rejecting copied secret placeholders."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        value = value[1:-1].strip()
+    if value.upper() in _SECRET_PLACEHOLDERS:
+        return ""
+    return value
+
+
+def mongodb_uri_from_environment() -> str:
+    """Return the MongoDB connection string injected by Railway/Vercel."""
+    return env_value("HP_MONGODB_URI")
+
 # ---------------------------------------------------------------------------
 # Telegram
 # ---------------------------------------------------------------------------
@@ -116,7 +137,7 @@ GMAIL_CONNECTOR_UID: str = os.environ.get("HP_GMAIL_CONNECTOR_UID", "")
 # ---------------------------------------------------------------------------
 # Base de données
 # ---------------------------------------------------------------------------
-MONGODB_URI: str = os.environ.get("HP_MONGODB_URI", "").strip()
+MONGODB_URI: str = mongodb_uri_from_environment()
 MONGODB_DB: str = os.environ.get("HP_MONGODB_DB", "heavenprem").strip()
 INVENTORY_KEY: str = os.environ.get("HP_INVENTORY_KEY", "").strip()
 DASHBOARD_PASSWORD: str = os.environ.get("HP_DASHBOARD_PASSWORD", "").strip()
@@ -162,4 +183,7 @@ def configuration_issues(*, webhook: bool = False, inventory: bool = False) -> l
             "HP_WEBHOOK_SECRET": os.environ.get("HP_WEBHOOK_SECRET", "").strip(),
             "HP_DASHBOARD_PASSWORD": DASHBOARD_PASSWORD,
         })
-    return [name for name, value in required.items() if not value]
+    issues = [name for name, value in required.items() if not value]
+    if MONGODB_URI and not MONGODB_URI.startswith(("mongodb://", "mongodb+srv://")):
+        issues.append("HP_MONGODB_URI (invalid MongoDB URI)")
+    return issues
