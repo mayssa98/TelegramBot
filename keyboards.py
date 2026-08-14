@@ -1,6 +1,7 @@
 """Constructeurs de claviers inline et reply."""
 import html
 import re
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 import database as db
@@ -81,22 +82,24 @@ def clean_button_name(value):
     return re.sub(r"^[^\w\d]+", "", text, flags=re.UNICODE).strip()
 
 
-def offer_button_label(lang, offer):
+def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
     price = offer.get("price")
     if price is None:
-        price_text = t(lang, "price_tbd")
+        price_text = price_tbd if price_tbd is not None else t(lang, "price_tbd")
     else:
         amount = f"{float(price):.2f}".rstrip("0").rstrip(".")
         currency = str(offer.get("currency") or "USDT").upper()
         price_text = f"${amount}" if currency in {"USD", "USDT"} else f"{amount} {currency}"
     if offer.get("unlimited_stock"):
-        stock_text = f"{t(lang, 'stock_label').title()}: ∞"
+        label = stock_label if stock_label is not None else t(lang, "stock_label")
+        stock_text = f"{label.title()}: ∞"
         suffix = f"{price_text} | {stock_text}"
         max_name_length = max(8, 64 - len(suffix) - 3)
         name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
         return f"{name} | {suffix}"
     stock = int(offer.get("stock") or 0)
-    stock_text = f"{t(lang, 'stock_label').title()}: {stock}"
+    label = stock_label if stock_label is not None else t(lang, "stock_label")
+    stock_text = f"{label.title()}: {stock}"
     # Telegram limits button labels to 64 characters. Always reserve room for
     # the price and live stock quantity so a long name can never hide them.
     suffix = f"{price_text} | {stock_text}"
@@ -292,11 +295,25 @@ def services_keyboard(lang):
 def catalog_offers_keyboard(lang):
     """Show every active offer directly, without the service/category layer."""
     buttons = []
+    db.preload_text_overrides(
+        (
+            "stock_label", "price_tbd", "catalog_request_button",
+            "btn_refresh_short", "btn_main_menu_short",
+        ),
+        lang,
+    )
+    stock_label = t(lang, "stock_label")
+    price_tbd = t(lang, "price_tbd")
+    stock_icon = db.get_text_override_icon("stock_label", lang) or None
     for offer in db.list_catalog_offers():
         safe_offer = dict(offer)
         safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
         buttons.append([InlineKeyboardButton(
-            offer_button_label(lang, safe_offer),
+            offer_button_label(
+                lang, safe_offer,
+                stock_label=stock_label,
+                price_tbd=price_tbd,
+            ),
             callback_data=f"off:{offer['id']}",
             style=(
                 "success"
@@ -304,7 +321,7 @@ def catalog_offers_keyboard(lang):
                 else stock_button_style(offer.get("stock"))
             ),
             icon_custom_emoji_id=(
-                db.get_text_override_icon("stock_label", lang)
+                stock_icon
                 or offer.get("custom_emoji_id")
                 or offer.get("service_custom_emoji_id")
                 or None

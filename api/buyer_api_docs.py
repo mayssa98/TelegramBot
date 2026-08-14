@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import html
 import json
-import os
+
+from config import public_base_url_from_environment
 
 
 def openapi_document() -> dict:
-    base_url = os.environ.get(
-        "HP_PUBLIC_BASE_URL", "https://telegram-bot-mayssa98s-projects.vercel.app"
-    ).rstrip("/")
+    base_url = public_base_url_from_environment()
     error_schema = {
         "type": "object",
         "properties": {

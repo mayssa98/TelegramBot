@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import database as db
-from i18n import t
 import keyboards
+from i18n import t
 
 
 def test_shop_settings_defaults_and_typed_overrides(mock_mongodb):

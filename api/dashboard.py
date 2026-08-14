@@ -3858,7 +3858,7 @@ def render_dashboard(
                 }
                 showToast("Webhook Telegram réparé sur l’URL stable");
             } catch (err) {
-                showToast("Impossible de contacter Telegram depuis Vercel", "error");
+                showToast("Impossible de contacter Telegram depuis Railway", "error");
             } finally {
                 button.disabled = false;
                 button.textContent = originalText;
@@ -3882,7 +3882,7 @@ def render_dashboard(
                 const endpoint = new URL(result.endpoint).hostname;
                 showToast(`Binance connecté via ${endpoint} · ${result.transactions_24h} transaction(s) sur 24 h`);
             } catch (err) {
-                showToast("Impossible de tester Binance depuis Vercel", "error");
+                showToast("Impossible de tester Binance depuis Railway", "error");
             } finally {
                 button.disabled = false;
                 button.textContent = originalText;

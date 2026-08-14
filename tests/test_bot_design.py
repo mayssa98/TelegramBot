@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from telegram.constants import ParseMode
+from telegram.ext import ApplicationHandlerStop
 
 import database as db
 import keyboards as kb
@@ -17,6 +18,7 @@ from bot import (
     announce_channel_restock,
     announce_flash_sale,
     block_maintenance_users,
+    block_non_channel_members,
     broadcast_admin_message,
     broadcast_maintenance_notice,
     cb_admin,
@@ -191,7 +193,7 @@ def test_full_maintenance_blocks_customer_buttons(monkeypatch):
         effective_message=message,
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(ApplicationHandlerStop):
         asyncio.run(block_maintenance_users(update, SimpleNamespace()))
 
     query.answer.assert_awaited_once_with("Maintenance mode is active.", show_alert=True)
@@ -359,6 +361,32 @@ def test_start_requires_official_channel_membership(monkeypatch):
     assert call.kwargs["reply_markup"].inline_keyboard[0][0].url.endswith("/blackmarketBotChannel")
     bot_client.get_chat_member.assert_awaited_once_with("@blackmarketBotChannel", 42)
     assert PENDING.get(42) == ("await_channel_join", 0)
+
+
+def test_verified_membership_is_cached_for_fast_button_clicks(monkeypatch):
+    from bot import _membership_cache
+
+    _membership_cache.clear()
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    monkeypatch.setattr("bot.REQUIRED_CHANNEL", "@cache_channel")
+    monkeypatch.setattr("bot.MEMBERSHIP_CACHE_SECONDS", 300)
+    bot_client = SimpleNamespace(
+        get_chat_member=AsyncMock(return_value=SimpleNamespace(status="member")),
+    )
+    message = SimpleNamespace(text="Catalog", reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=4200),
+        effective_message=message,
+        callback_query=None,
+    )
+    context = SimpleNamespace(bot=bot_client)
+
+    asyncio.run(block_non_channel_members(update, context))
+    asyncio.run(block_non_channel_members(update, context))
+
+    bot_client.get_chat_member.assert_awaited_once_with("@cache_channel", 4200)
+    message.reply_text.assert_not_awaited()
+    _membership_cache.clear()
 
 
 def test_verify_joining_unlocks_marketing_welcome(monkeypatch):

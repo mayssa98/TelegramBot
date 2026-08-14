@@ -1,4 +1,4 @@
-"""HTTP-level smoke tests for the Vercel webhook handler."""
+"""HTTP-level smoke tests for the production webhook handler."""
 
 from __future__ import annotations
 

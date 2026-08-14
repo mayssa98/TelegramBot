@@ -22,6 +22,23 @@ def test_mongodb_uri_rejects_vercel_sensitive_placeholder(monkeypatch):
     assert config.mongodb_uri_from_environment() == ""
 
 
+def test_public_url_uses_railway_generated_domain(monkeypatch):
+    monkeypatch.delenv("HP_PUBLIC_BASE_URL", raising=False)
+    monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "blackmarket.up.railway.app")
+
+    assert (
+        config.public_base_url_from_environment()
+        == "https://blackmarket.up.railway.app"
+    )
+
+
+def test_explicit_public_url_overrides_railway_domain(monkeypatch):
+    monkeypatch.setenv("HP_PUBLIC_BASE_URL", "https://shop.example/")
+    monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "blackmarket.up.railway.app")
+
+    assert config.public_base_url_from_environment() == "https://shop.example"
+
+
 def test_configuration_reports_invalid_mongodb_uri(monkeypatch):
     monkeypatch.setattr(config, "BOT_TOKEN", "token")
     monkeypatch.setattr(config, "ADMIN_ID", 123)

@@ -16,6 +16,8 @@ _client = None
 _db = None
 _schema_initialized = False
 SCHEMA_VERSION = 9
+_text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
+TEXT_OVERRIDE_CACHE_SECONDS = 60
 
 
 def is_otp_service_name(value):
@@ -120,6 +122,7 @@ def init_db():
     global _schema_initialized
     if _schema_initialized:
         return
+    _text_override_cache.clear()
     db = get_conn()
     db.command("ping")
     db.offers.create_index(
@@ -766,13 +769,46 @@ def set_setting(key, value):
     get_conn().settings.update_one({"key": key}, {"$set": {"value": str(value)}}, upsert=True)
 
 
+def preload_text_overrides(keys, lang):
+    """Load several translations in one MongoDB query for fast keyboard rendering."""
+    normalized_keys = list(dict.fromkeys(str(key) for key in keys))
+    normalized_lang = str(lang)
+    if not normalized_keys:
+        return
+    rows = {
+        row["key"]: _public(row)
+        for row in get_conn().text_overrides.find({
+            "key": {"$in": normalized_keys},
+            "lang": normalized_lang,
+        })
+    }
+    expires_at = time.monotonic() + TEXT_OVERRIDE_CACHE_SECONDS
+    for key in normalized_keys:
+        _text_override_cache[(key, normalized_lang)] = (expires_at, rows.get(key))
+
+
+def _cached_text_override(key, lang):
+    cache_key = (str(key), str(lang))
+    cached = _text_override_cache.get(cache_key)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
+    row = _public(get_conn().text_overrides.find_one({
+        "key": cache_key[0], "lang": cache_key[1],
+    }))
+    _text_override_cache[cache_key] = (
+        time.monotonic() + TEXT_OVERRIDE_CACHE_SECONDS,
+        row,
+    )
+    return row
+
+
 def get_text_override(key, lang):
-    row = get_conn().text_overrides.find_one({"key": str(key), "lang": str(lang)})
+    row = _cached_text_override(key, lang)
     return row.get("text") if row else None
 
 
 def get_text_override_icon(key, lang):
-    row = get_conn().text_overrides.find_one({"key": str(key), "lang": str(lang)})
+    row = _cached_text_override(key, lang)
     return row.get("custom_emoji_id", "") if row else ""
 
 
@@ -785,6 +821,7 @@ def set_text_override(key, lang, text, custom_emoji_id=""):
         }},
         upsert=True,
     )
+    _text_override_cache.pop((str(key), str(lang)), None)
 
 
 def list_text_overrides():

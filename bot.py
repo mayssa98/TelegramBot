@@ -45,16 +45,18 @@ from config import (
     CLICK_REPORT_CHAT_ID,
     CURRENCY,
     DEFAULT_LANG,
+    MEMBERSHIP_CACHE_SECONDS,
     REQUIRED_CHANNEL,
     SHOP_NAME,
     SUPPORT_TICKET_CHANNEL_ID,
     USDT_EVM_ADDRESS,
     configuration_issues,
+    public_base_url_from_environment,
 )
 from i18n import TRANSLATIONS, status_label, t
 
 _handlers = [logging.StreamHandler()]
-if not os.environ.get("VERCEL"):
+if not os.environ.get("VERCEL") and not os.environ.get("RAILWAY_ENVIRONMENT_ID"):
     os.makedirs("logs", exist_ok=True)
     _handlers.insert(0, logging.FileHandler("logs/bot.log"))
 logging.basicConfig(
@@ -86,6 +88,36 @@ class PendingStates:
 
 PENDING = PendingStates()
 
+# Positive-only membership cache. Non-members are never cached, and the
+# explicit Verify button always performs a live Telegram check.
+_membership_cache: dict[tuple[int, str], float] = {}
+
+
+def cache_required_channel_member(user_id: int) -> None:
+    channel = str(_normalize_required_chat(REQUIRED_CHANNEL))
+    if channel and MEMBERSHIP_CACHE_SECONDS > 0:
+        _membership_cache[(int(user_id), channel)] = (
+            time.monotonic() + MEMBERSHIP_CACHE_SECONDS
+        )
+
+
+async def is_required_channel_member_cached(bot, user_id: int) -> bool:
+    """Avoid Telegram API round trips for recently verified members."""
+    channel = str(_normalize_required_chat(REQUIRED_CHANNEL))
+    key = (int(user_id), channel)
+    now = time.monotonic()
+    if _membership_cache.get(key, 0) > now:
+        return True
+    _membership_cache.pop(key, None)
+    allowed = await is_required_channel_member(bot, user_id)
+    if allowed:
+        cache_required_channel_member(user_id)
+    if len(_membership_cache) > 10_000:
+        expired = [cache_key for cache_key, expiry in _membership_cache.items() if expiry <= now]
+        for cache_key in expired:
+            _membership_cache.pop(cache_key, None)
+    return allowed
+
 async def block_non_channel_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Prevent customers from bypassing the required channel via direct commands."""
     user = update.effective_user
@@ -96,7 +128,7 @@ async def block_non_channel_members(update: Update, context: ContextTypes.DEFAUL
     message_text = getattr(update.effective_message, "text", "") or ""
     if message_text.startswith("/start"):
         return
-    if await is_required_channel_member(context.bot, user.id):
+    if await is_required_channel_member_cached(context.bot, user.id):
         return
     lang = lang_of(user.id)
     if update.callback_query:
@@ -902,7 +934,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with contextlib.suppress(ValueError, TypeError):
             referrer_id = int(context.args[0][4:])
 
-    if u.id != ADMIN_ID and not await is_required_channel_member(context.bot, u.id):
+    if u.id != ADMIN_ID and not await is_required_channel_member_cached(context.bot, u.id):
         PENDING[u.id] = ("await_channel_join", referrer_id)
         await update.message.reply_text(
             premium_customer_text(lang, "channel_join_required"),
@@ -940,10 +972,7 @@ async def send_main_menu(update, context, lang, chat_id=None):
     text = configured or t(lang, "welcome", shop=SHOP_NAME)
     target = update.message or (update.callback_query.message if update.callback_query else None)
     markup = kb.home_keyboard(lang, uid)
-    public_base_url = os.environ.get(
-        "HP_PUBLIC_BASE_URL",
-        "https://telegram-bot-mayssa98s-projects.vercel.app",
-    ).rstrip("/")
+    public_base_url = public_base_url_from_environment()
     banner_source = (
         os.environ.get("HP_WELCOME_PHOTO_FILE_ID", "").strip()
         or f"{public_base_url}/assets/blackmarket-welcome-v2.png"
@@ -1225,6 +1254,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=kb.channel_join_keyboard(lang),
             )
             return
+        cache_required_channel_member(uid)
         pending = PENDING.pop(uid, None)
         referrer_id = pending[1] if pending and pending[0] == "await_channel_join" else 0
         db.set_user_lang(uid, DEFAULT_LANG)
@@ -1366,7 +1396,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         is_chatgpt_offer = "chat" in off["name"].lower() and "gpt" in off["name"].lower()
         if is_chatgpt_offer:
-            base_url = os.environ.get("HP_PUBLIC_BASE_URL", "https://telegram-bot-mayssa98s-projects.vercel.app").rstrip("/")
+            base_url = public_base_url_from_environment()
             await q.message.reply_photo(
                 photo=f"{base_url}/assets/chatgpt-plus-benefits.png",
                 caption="\U0001f525 *ChatGPT Plus Benefits*",

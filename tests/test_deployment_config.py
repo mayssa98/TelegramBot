@@ -1,16 +1,19 @@
-"""Deployment safeguards for services with region-sensitive upstream APIs."""
+"""Railway safeguards for services with region-sensitive upstream APIs."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_webhook_does_not_run_in_binance_blocked_us_region():
-    config = json.loads((PROJECT_ROOT / "vercel.json").read_text(encoding="utf-8"))
+def test_railway_runs_single_webhook_replica_in_europe():
+    config = json.loads((PROJECT_ROOT / "railway.json").read_text(encoding="utf-8"))
 
-    assert config["regions"] == ["cdg1"]
-    assert config["functions"]["api/webhook.py"]["regions"] == ["cdg1"]
+    deploy = config["deploy"]
+    assert deploy["startCommand"] == "python railway_server.py"
+    assert deploy["healthcheckPath"] == "/health"
+    assert deploy["multiRegionConfig"] == {
+        "europe-west4-drams3a": {"numReplicas": 1}
+    }

@@ -26,13 +26,26 @@ def env_value(name: str, default: str = "") -> str:
 
 
 def mongodb_uri_from_environment() -> str:
-    """Return the MongoDB connection string injected by Railway/Vercel."""
+    """Return the MongoDB connection string injected by the deployment."""
     return env_value("HP_MONGODB_URI")
+
+
+def public_base_url_from_environment() -> str:
+    """Return the explicit URL or Railway's automatically injected domain."""
+    explicit = env_value("HP_PUBLIC_BASE_URL")
+    if explicit:
+        return explicit.rstrip("/")
+    railway_domain = env_value("RAILWAY_PUBLIC_DOMAIN")
+    if railway_domain:
+        if not railway_domain.startswith(("http://", "https://")):
+            railway_domain = f"https://{railway_domain}"
+        return railway_domain.rstrip("/")
+    return "http://127.0.0.1:8080"
 
 # ---------------------------------------------------------------------------
 # Telegram
 # ---------------------------------------------------------------------------
-BOT_TOKEN: str = os.environ.get("HP_BOT_TOKEN", "")
+BOT_TOKEN: str = env_value("HP_BOT_TOKEN")
 
 ADMIN_ID: int = int(os.environ.get("HP_ADMIN_ID", "0"))
 CLICK_REPORT_CHAT_ID: int = int(
@@ -139,8 +152,8 @@ GMAIL_CONNECTOR_UID: str = os.environ.get("HP_GMAIL_CONNECTOR_UID", "")
 # ---------------------------------------------------------------------------
 MONGODB_URI: str = mongodb_uri_from_environment()
 MONGODB_DB: str = os.environ.get("HP_MONGODB_DB", "heavenprem").strip()
-INVENTORY_KEY: str = os.environ.get("HP_INVENTORY_KEY", "").strip()
-DASHBOARD_PASSWORD: str = os.environ.get("HP_DASHBOARD_PASSWORD", "").strip()
+INVENTORY_KEY: str = env_value("HP_INVENTORY_KEY")
+DASHBOARD_PASSWORD: str = env_value("HP_DASHBOARD_PASSWORD")
 
 # ---------------------------------------------------------------------------
 # Boutique
@@ -167,6 +180,9 @@ LOW_STOCK_THRESHOLD: int = int(os.environ.get("HP_LOW_STOCK_THRESHOLD", "5"))
 
 # Délai (secondes) max d'attente d'une vérification automatique avant repli manuel.
 VERIFY_TIMEOUT: int = int(os.environ.get("HP_VERIFY_TIMEOUT", "120"))
+MEMBERSHIP_CACHE_SECONDS: int = max(
+    0, int(os.environ.get("HP_MEMBERSHIP_CACHE_SECONDS", "300"))
+)
 
 
 def configuration_issues(*, webhook: bool = False, inventory: bool = False) -> list[str]:
@@ -180,8 +196,9 @@ def configuration_issues(*, webhook: bool = False, inventory: bool = False) -> l
         required["HP_INVENTORY_KEY"] = INVENTORY_KEY
     if webhook:
         required.update({
-            "HP_WEBHOOK_SECRET": os.environ.get("HP_WEBHOOK_SECRET", "").strip(),
+            "HP_WEBHOOK_SECRET": env_value("HP_WEBHOOK_SECRET"),
             "HP_DASHBOARD_PASSWORD": DASHBOARD_PASSWORD,
+            "CRON_SECRET": env_value("CRON_SECRET"),
         })
     issues = [name for name, value in required.items() if not value]
     if MONGODB_URI and not MONGODB_URI.startswith(("mongodb://", "mongodb+srv://")):

@@ -5,7 +5,6 @@ import database as db
 from config import ADMIN_ID, CURRENCY
 from i18n import TRANSLATIONS
 
-
 TEXT_CATEGORIES = [
     ("menus", "🏠 Menus et boutons"),
     ("payments", "💳 Paiements et Binance Pay"),

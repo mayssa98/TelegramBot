@@ -24,7 +24,8 @@ def test_webhook_handler_is_importable():
 
 
 def test_telegram_webhook_health_detects_stable_url(monkeypatch):
-    expected = "https://telegram-bot-mayssa98s-projects.vercel.app/api/webhook"
+    expected = "https://blackmarket.up.railway.app/api/webhook"
+    monkeypatch.setenv("HP_PUBLIC_BASE_URL", "https://blackmarket.up.railway.app")
     monkeypatch.setattr(
         webhook,
         "_telegram_api",

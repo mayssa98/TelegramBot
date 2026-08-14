@@ -1,4 +1,4 @@
-"""Vercel serverless endpoint for Telegram webhook updates and Admin Dashboard."""
+"""HTTP endpoint for Telegram updates, the dashboard, assets, and scheduled jobs."""
 
 from __future__ import annotations
 
@@ -40,12 +40,19 @@ from app.domain import (
 )
 from app.web import dashboard_api
 from bot import announce_api_flash_sale, announce_channel_restock, build_app
-from config import ADMIN_ID, BOT_TOKEN, CURRENCY, DASHBOARD_PASSWORD
+from config import (
+    ADMIN_ID,
+    BOT_TOKEN,
+    CURRENCY,
+    DASHBOARD_PASSWORD,
+    env_value,
+    public_base_url_from_environment,
+)
 from payment_verifier import binance_healthcheck
 
 _loop = asyncio.new_event_loop()
 _app = None
-_runtime_lock = threading.Lock()
+_runtime_lock = threading.RLock()
 log = logging.getLogger(__name__)
 MAX_WEBHOOK_BODY_BYTES = 1_000_000
 
@@ -107,13 +114,7 @@ def telegram_webhook_health() -> dict:
             "http_status": response.get("http_status"),
         }
     result = response.get("result") if isinstance(response.get("result"), dict) else {}
-    expected_url = (
-        os.environ.get(
-            "HP_PUBLIC_BASE_URL",
-            "https://telegram-bot-mayssa98s-projects.vercel.app",
-        ).rstrip("/")
-        + "/api/webhook"
-    )
+    expected_url = public_base_url_from_environment() + "/api/webhook"
     return {
         "ok": True,
         "healthy": result.get("url") == expected_url and not result.get("last_error_message"),
@@ -126,16 +127,10 @@ def telegram_webhook_health() -> dict:
 
 def repair_telegram_webhook() -> dict:
     """Register the stable production webhook with Telegram's secret header."""
-    secret = os.environ.get("HP_WEBHOOK_SECRET", "").strip()
+    secret = env_value("HP_WEBHOOK_SECRET")
     if not secret:
-        return {"ok": False, "message": "HP_WEBHOOK_SECRET n’est pas configuré sur Vercel."}
-    expected_url = (
-        os.environ.get(
-            "HP_PUBLIC_BASE_URL",
-            "https://telegram-bot-mayssa98s-projects.vercel.app",
-        ).rstrip("/")
-        + "/api/webhook"
-    )
+        return {"ok": False, "message": "HP_WEBHOOK_SECRET n’est pas configuré."}
+    expected_url = public_base_url_from_environment() + "/api/webhook"
     response = _telegram_api(
         "setWebhook",
         {
@@ -167,9 +162,7 @@ def dashboard_write_token() -> str:
 def public_site_html() -> str:
     bot_username = os.environ.get("HP_BOT_USERNAME", "blackmarketa_bot").strip().lstrip("@")
     shop_name = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip() or "BlackMarket"
-    public_base_url = os.environ.get(
-        "HP_PUBLIC_BASE_URL", "https://telegram-bot-mayssa98s-projects.vercel.app"
-    ).rstrip("/")
+    public_base_url = public_base_url_from_environment()
     bot_url = f"https://t.me/{html.escape(bot_username)}"
     social_image_url = f"{html.escape(public_base_url)}/assets/blackmarket-midnight-og.png"
     return f"""<!doctype html>
@@ -222,13 +215,20 @@ def public_site_html() -> str:
 </html>"""
 
 
+def _run_async(awaitable):
+    """Serialize access to the shared Telegram asyncio event loop."""
+    with _runtime_lock:
+        return _loop.run_until_complete(awaitable)
+
+
 def _application():
     global _app
-    if _app is None:
-        candidate = build_app()
-        _loop.run_until_complete(candidate.initialize())
-        _app = candidate
-    return _app
+    with _runtime_lock:
+        if _app is None:
+            candidate = build_app()
+            _run_async(candidate.initialize())
+            _app = candidate
+        return _app
 
 
 class handler(BaseHTTPRequestHandler):
@@ -300,7 +300,7 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/cron/restock":
-            expected = os.environ.get("CRON_SECRET", "").strip()
+            expected = env_value("CRON_SECRET")
             supplied = self.headers.get("Authorization", "")
             if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
@@ -309,7 +309,7 @@ class handler(BaseHTTPRequestHandler):
                 result = reseller_service.detect_restock_events()
                 announced = 0
                 for event in result["events"]:
-                    announced += _loop.run_until_complete(
+                    announced += _run_async(
                         announce_channel_restock(
                             _application(),
                             event["offer_id"],
@@ -332,7 +332,7 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/cron/prices":
-            expected = os.environ.get("CRON_SECRET", "").strip()
+            expected = env_value("CRON_SECRET")
             supplied = self.headers.get("Authorization", "")
             if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
@@ -346,7 +346,7 @@ class handler(BaseHTTPRequestHandler):
                 db.set_setting("price_cron_last_changes", len(result["changes"]))
                 db.set_setting("price_cron_last_flash_sales", len(result["flash_sales"]))
                 for event in result["flash_sales"]:
-                    announced += _loop.run_until_complete(
+                    announced += _run_async(
                         announce_api_flash_sale(_application(), event)
                     )
                 result["announced_messages"] = announced
@@ -687,7 +687,7 @@ class handler(BaseHTTPRequestHandler):
             return
 
         # Webhook Telegram
-        secret = os.environ.get("HP_WEBHOOK_SECRET", "").strip()
+        secret = env_value("HP_WEBHOOK_SECRET")
         supplied = self.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
         if not secret:
             log.error("HP_WEBHOOK_SECRET is not configured; refusing webhook request")
@@ -717,7 +717,7 @@ class handler(BaseHTTPRequestHandler):
             with _runtime_lock:
                 app = _application()
                 update = Update.de_json(payload, app.bot)
-                _loop.run_until_complete(app.process_update(update))
+                _run_async(app.process_update(update))
             self._reply(200, {"ok": True})
         except Exception as exc:
             if "update_id" in locals() and update_id is not None:
@@ -885,7 +885,7 @@ class handler(BaseHTTPRequestHandler):
                     if ticket:
                         app = _application()
                         try:
-                            _loop.run_until_complete(
+                            _run_async(
                                 app.bot.send_message(
                                     ticket["user_id"],
                                     f"🎫 <b>Réponse du Support (Ticket #{tid})</b>\n\n{html.escape(message)}",
@@ -908,7 +908,7 @@ class handler(BaseHTTPRequestHandler):
                     order = db.get_order(oid)
                     app = _application()
                     try:
-                        _loop.run_until_complete(
+                        _run_async(
                             app.bot.send_message(
                                 order["user_id"],
                                 f"❌ <b>Commande #{oid} annulée</b>\n\nRaison : {html.escape(reason or 'Annulée par l admin')}",
@@ -929,7 +929,7 @@ class handler(BaseHTTPRequestHandler):
                 if not order_service.mark_refunded(oid, reason):
                     raise ValueError("La commande ne peut pas être remboursée")
                 order = db.get_order(oid)
-                _loop.run_until_complete(
+                _run_async(
                     _application().bot.send_message(
                         order["user_id"],
                         f"💸 <b>Commande #{oid} remboursée</b>\n\n{html.escape(reason)}",
@@ -943,7 +943,7 @@ class handler(BaseHTTPRequestHandler):
                 content = inventory_service.delivered_content(oid)
                 if not order or not content:
                     raise ValueError("Aucune livraison automatique à renvoyer")
-                _loop.run_until_complete(
+                _run_async(
                     _application().bot.send_message(
                         order["user_id"],
                         f"🎁 <b>Livraison de la commande #{oid}</b>\n\n<code>{html.escape(chr(10).join(content))}</code>",
@@ -957,7 +957,7 @@ class handler(BaseHTTPRequestHandler):
                 order = db.get_order(oid)
                 if not order or not message:
                     raise ValueError("Commande ou message invalide")
-                _loop.run_until_complete(
+                _run_async(
                     _application().bot.send_message(order["user_id"], html.escape(message), parse_mode=ParseMode.HTML)
                 )
                 db.audit_event("customer.message_sent", details={"order_id": oid, "user_id": order["user_id"]})
@@ -988,7 +988,7 @@ class handler(BaseHTTPRequestHandler):
                 order = order_service.manual_deliver_order(oid, content)
                 if not order:
                     raise ValueError("Commande introuvable")
-                _loop.run_until_complete(
+                _run_async(
                     _application().bot.send_message(
                         order["user_id"],
                         f"ðŸŽ <b>Votre commande #{oid} est livrÃ©e !</b>\n\n"

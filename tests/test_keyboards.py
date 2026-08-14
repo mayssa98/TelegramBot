@@ -28,6 +28,46 @@ def test_delivery_keeps_customer_inside_bot_without_admin_contact():
     assert button.url is None
 
 
+def test_catalog_reuses_shared_translation_and_icon_lookups(monkeypatch):
+    offers = [
+        {
+            "id": index,
+            "name": f"Offer {index}",
+            "price": 1.0,
+            "stock": 10,
+            "service_id": 1,
+        }
+        for index in range(1, 21)
+    ]
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: offers)
+    translation_calls = []
+    icon_calls = []
+
+    def fake_t(_lang, key, **_kwargs):
+        translation_calls.append(key)
+        return {
+            "stock_label": "Stock",
+            "price_tbd": "Price TBD",
+            "catalog_request_button": "Request",
+            "btn_refresh_short": "Refresh",
+            "btn_main_menu_short": "Home",
+        }[key]
+
+    def fake_icon(key, lang):
+        icon_calls.append((key, lang))
+        return ""
+
+    monkeypatch.setattr(kb, "t", fake_t)
+    monkeypatch.setattr(kb.db, "get_text_override_icon", fake_icon)
+
+    keyboard = kb.catalog_offers_keyboard("en")
+
+    assert len(keyboard.inline_keyboard) == 22
+    assert translation_calls.count("stock_label") == 1
+    assert translation_calls.count("price_tbd") == 1
+    assert icon_calls.count(("stock_label", "en")) == 1
+
+
 def test_quantity_confirmation_keeps_selected_quantity():
     keyboard = kb.confirm_buy_keyboard("fr", 9, 4)
 
