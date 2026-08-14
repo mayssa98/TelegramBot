@@ -29,6 +29,7 @@ from telegram.constants import ParseMode
 import database as db
 from api.buyer_api_docs import openapi_document, swagger_html
 from api.dashboard import render_dashboard
+from api.public_site import render_public_site
 from app import __version__
 from app.domain import (
     buyer_api_service,
@@ -160,6 +161,14 @@ def dashboard_write_token() -> str:
 
 
 def public_site_html() -> str:
+    bot_username = os.environ.get("HP_BOT_USERNAME", "blackmarketa_bot").strip().lstrip("@")
+    shop_name = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip() or "BlackMarket"
+    public_base_url = public_base_url_from_environment()
+    return render_public_site(bot_username, shop_name, public_base_url)
+
+
+def _legacy_public_site_html() -> str:
+    """Kept temporarily as a reference while older deployments roll over."""
     bot_username = os.environ.get("HP_BOT_USERNAME", "blackmarketa_bot").strip().lstrip("@")
     shop_name = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip() or "BlackMarket"
     public_base_url = public_base_url_from_environment()

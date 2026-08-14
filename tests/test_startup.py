@@ -76,6 +76,17 @@ def test_public_site_links_to_bot():
     assert "/assets/blackmarket-midnight-og.png" in page
 
 
+def test_public_site_has_live_status_and_opt_in_notifications():
+    page = public_site_html()
+
+    assert 'fetch("/health"' in page
+    assert "setInterval(checkHealth, 15000)" in page
+    assert 'id="notify-button"' in page
+    assert "Notification.requestPermission()" in page
+    assert "prefers-reduced-motion:reduce" in page
+    assert "admin/api/data" not in page
+
+
 def test_bot_application_builds_with_mock_database(mock_mongodb, monkeypatch):
     monkeypatch.setattr(db, "init_db", lambda: None)
 

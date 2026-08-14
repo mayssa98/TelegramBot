@@ -568,6 +568,25 @@ def render_dashboard(
             border-left-color: var(--danger);
         }
 
+        .realtime-chip { display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 12px; border:1px solid var(--border-color); border-radius:999px; background:rgba(15,29,48,.75); color:var(--text-muted); font-size:12px; white-space:nowrap; }
+        .realtime-dot { width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 12px var(--success); }
+        .realtime-chip.offline .realtime-dot { background:var(--danger); box-shadow:0 0 12px var(--danger); }
+        .notification-center { position:relative; }
+        .notification-button { width:42px; height:42px; display:grid; place-items:center; border:1px solid var(--border-color); border-radius:12px; background:rgba(15,29,48,.78); color:var(--text-main); cursor:pointer; position:relative; }
+        .notification-button:hover { border-color:var(--cyan); }
+        .notification-badge { position:absolute; right:-5px; top:-6px; min-width:19px; height:19px; padding:0 5px; display:none; place-items:center; border-radius:99px; background:var(--danger); color:white; border:2px solid var(--bg-main); font-size:10px; font-weight:800; }
+        .notification-badge.visible { display:grid; }
+        .notification-panel { position:absolute; right:0; top:50px; width:min(380px,calc(100vw - 30px)); max-height:470px; overflow:hidden; display:none; z-index:90; border:1px solid var(--border-color); border-radius:16px; background:#0d1a2c; box-shadow:0 24px 65px rgba(0,0,0,.45); }
+        .notification-panel.open { display:block; }
+        .notification-panel-head { padding:16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border-color); }
+        .notification-panel-head button { border:0; background:transparent; color:var(--cyan); cursor:pointer; font-weight:700; }
+        .notification-list { max-height:330px; overflow-y:auto; }
+        .notification-item { padding:14px 16px; border-bottom:1px solid var(--border-color); }
+        .notification-item strong { display:block; margin-bottom:4px; font-size:13px; }
+        .notification-item span { color:var(--text-muted); font-size:12px; }
+        .notification-empty { padding:30px 16px; text-align:center; color:var(--text-muted); }
+        .notification-permission { width:calc(100% - 24px); margin:12px; justify-content:center; }
+
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
@@ -2002,6 +2021,15 @@ def render_dashboard(
                 <span class="search-shortcut">CTRL K</span>
             </label>
             <div class="merchant-account">
+                <span class="realtime-chip" id="realtime-chip"><span class="realtime-dot"></span><span id="realtime-copy">Temps réel actif</span></span>
+                <div class="notification-center">
+                    <button class="notification-button" id="notification-button" type="button" onclick="toggleNotificationCenter(event)" aria-label="Centre de notifications" aria-expanded="false">🔔<span class="notification-badge" id="notification-badge">0</span></button>
+                    <div class="notification-panel" id="notification-panel">
+                        <div class="notification-panel-head"><strong>Notifications</strong><button type="button" onclick="clearAdminNotifications()">Tout effacer</button></div>
+                        <div class="notification-list" id="notification-list"></div>
+                        <button class="btn btn-secondary notification-permission" id="browser-notification-button" type="button" onclick="enableBrowserNotifications()">Activer les alertes navigateur</button>
+                    </div>
+                </div>
                 <div class="header-actions">
                     <button class="btn btn-secondary" id="telegram-repair-button" onclick="checkAndRepairTelegram()"><span>Réparer Telegram</span></button>
                     <button class="btn btn-secondary" id="binance-test-button" onclick="testBinanceConnection()"><span>Tester Binance</span></button>
@@ -2663,6 +2691,10 @@ def render_dashboard(
         let apiWorkspaceStep = "overview";
         let selectedApiProductId = null;
         let activeApiProvider = "mailreader";
+        let realtimeTimer = null;
+        let realtimeRequestRunning = false;
+        let adminNotifications = loadAdminNotifications();
+        let notificationSnapshot = snapshotDashboard(dashboardData);
 
         // Every dashboard API request must carry the scoped write token. Most
         // browsers preserve Basic Auth for fetch(), but embedded/mobile
@@ -2711,6 +2743,7 @@ def render_dashboard(
         document.addEventListener("DOMContentLoaded", () => {
             setupTabNavigation();
             refreshUI();
+            renderAdminNotifications();
             refreshDashboardData();
             if (document.getElementById("overview")?.classList.contains("active")) {
                 loadOverviewSupplier();
@@ -2719,11 +2752,118 @@ def render_dashboard(
                 loadApiProducts();
                 loadBuyerApiKeys();
             }
-            setInterval(() => {
-                const panel = document.getElementById("interactions");
-                if (panel && panel.classList.contains("active")) refreshDashboardData(true);
-            }, 10000);
+            startRealtimeUpdates();
         });
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) stopRealtimeUpdates();
+            else {
+                refreshDashboardData(true);
+                startRealtimeUpdates();
+            }
+        });
+
+        document.addEventListener("click", event => {
+            const center = document.querySelector(".notification-center");
+            if (center && !center.contains(event.target)) closeNotificationCenter();
+        });
+
+        function snapshotDashboard(data) {
+            return {
+                orders: Number(data?.summary?.orders || 0),
+                openTickets: Number(data?.summary?.open_tickets || 0),
+                alerts: Array.isArray(data?.alerts) ? data.alerts.length : 0
+            };
+        }
+
+        function loadAdminNotifications() {
+            try { return JSON.parse(localStorage.getItem("admin-notifications-v1") || "[]"); }
+            catch (_) { return []; }
+        }
+
+        function persistAdminNotifications() {
+            localStorage.setItem("admin-notifications-v1", JSON.stringify(adminNotifications.slice(0, 30)));
+        }
+
+        function addAdminNotification(title, message, type = "info") {
+            const item = { id: Date.now() + Math.random(), title, message, type, createdAt: new Date().toISOString(), unread: true };
+            adminNotifications.unshift(item);
+            adminNotifications = adminNotifications.slice(0, 30);
+            persistAdminNotifications();
+            renderAdminNotifications();
+            showToast(`${title} · ${message}`, type === "error" ? "error" : "success");
+            if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body: message });
+        }
+
+        function detectDashboardEvents(previous, current) {
+            if (!previous) return;
+            const newOrders = current.orders - previous.orders;
+            const newTickets = current.openTickets - previous.openTickets;
+            if (newOrders > 0) addAdminNotification("Nouvelle commande", `${newOrders} nouvelle${newOrders > 1 ? "s" : ""} commande${newOrders > 1 ? "s" : ""} reçue${newOrders > 1 ? "s" : ""}.`);
+            if (newTickets > 0) addAdminNotification("Support", `${newTickets} nouvelle${newTickets > 1 ? "s" : ""} demande${newTickets > 1 ? "s" : ""} à traiter.`);
+            if (current.alerts > previous.alerts) addAdminNotification("Alerte système", "Une nouvelle alerte nécessite votre attention.", "error");
+        }
+
+        function renderAdminNotifications() {
+            const list = document.getElementById("notification-list");
+            const badge = document.getElementById("notification-badge");
+            if (!list || !badge) return;
+            const unread = adminNotifications.filter(item => item.unread).length;
+            badge.textContent = unread > 99 ? "99+" : unread;
+            badge.classList.toggle("visible", unread > 0);
+            list.innerHTML = adminNotifications.length ? adminNotifications.map(item => `<div class="notification-item"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message)} · ${new Date(item.createdAt).toLocaleString("fr-FR")}</span></div>`).join("") : '<div class="notification-empty">Aucune notification pour le moment.</div>';
+            const permissionButton = document.getElementById("browser-notification-button");
+            if (permissionButton && "Notification" in window && Notification.permission === "granted") permissionButton.textContent = "Alertes navigateur activées";
+        }
+
+        function toggleNotificationCenter(event) {
+            event?.stopPropagation();
+            const panel = document.getElementById("notification-panel");
+            const button = document.getElementById("notification-button");
+            const open = !panel.classList.contains("open");
+            panel.classList.toggle("open", open);
+            button.setAttribute("aria-expanded", String(open));
+            if (open) {
+                adminNotifications.forEach(item => item.unread = false);
+                persistAdminNotifications();
+                renderAdminNotifications();
+            }
+        }
+
+        function closeNotificationCenter() {
+            document.getElementById("notification-panel")?.classList.remove("open");
+            document.getElementById("notification-button")?.setAttribute("aria-expanded", "false");
+        }
+
+        function clearAdminNotifications() {
+            adminNotifications = [];
+            persistAdminNotifications();
+            renderAdminNotifications();
+        }
+
+        async function enableBrowserNotifications() {
+            if (!("Notification" in window)) return showToast("Ce navigateur ne prend pas en charge les notifications", "error");
+            const permission = await Notification.requestPermission();
+            renderAdminNotifications();
+            showToast(permission === "granted" ? "Alertes navigateur activées" : "Autorisation de notification refusée", permission === "granted" ? "success" : "error");
+        }
+
+        function setRealtimeStatus(online) {
+            const chip = document.getElementById("realtime-chip");
+            const copy = document.getElementById("realtime-copy");
+            chip?.classList.toggle("offline", !online);
+            if (copy) copy.textContent = online ? "Temps réel actif" : "Connexion interrompue";
+        }
+
+        function startRealtimeUpdates() {
+            stopRealtimeUpdates();
+            if (!document.hidden) realtimeTimer = setInterval(() => refreshDashboardData(true), 15000);
+        }
+
+        function stopRealtimeUpdates() {
+            if (realtimeTimer) clearInterval(realtimeTimer);
+            realtimeTimer = null;
+        }
 
         function setupTabNavigation() {
             const buttons = document.querySelectorAll("nav a[data-tab]");
@@ -3890,6 +4030,8 @@ def render_dashboard(
         }
 
         async function refreshDashboardData(silent = false) {
+            if (realtimeRequestRunning) return;
+            realtimeRequestRunning = true;
             try {
                 const status = document.getElementById("order-filter-status")?.value || "";
                 const search = document.getElementById("order-search")?.value || "";
@@ -3915,6 +4057,7 @@ def render_dashboard(
                     fetch("/admin/api/inventory?" + inventoryQuery.toString())
                 ]);
                 if (res.ok && ordersRes.ok && customersRes.ok && ticketsRes.ok && inventoryRes.ok) {
+                    const previousSnapshot = notificationSnapshot;
                     dashboardData = await res.json();
                     const orderData = await ordersRes.json();
                     const customerData = await customersRes.json();
@@ -3926,15 +4069,22 @@ def render_dashboard(
                     dashboardData.inventory = inventoryData.items;
                     inventoryPagination = inventoryData;
                     ordersPagination = orderData;
+                    notificationSnapshot = snapshotDashboard(dashboardData);
+                    detectDashboardEvents(previousSnapshot, notificationSnapshot);
                     refreshUI();
+                    setRealtimeStatus(true);
                     updateOrdersPagination();
                     updateInventoryPagination();
                     if (!silent) showToast("Données actualisées");
                 } else {
-                    showToast("Échec de l'actualisation des données", "error");
+                    setRealtimeStatus(false);
+                    if (!silent) showToast("Échec de l'actualisation des données", "error");
                 }
             } catch (err) {
-                showToast("Erreur réseau lors de l'actualisation", "error");
+                setRealtimeStatus(false);
+                if (!silent) showToast("Erreur réseau lors de l'actualisation", "error");
+            } finally {
+                realtimeRequestRunning = false;
             }
         }
 
