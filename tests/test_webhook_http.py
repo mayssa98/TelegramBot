@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import threading
 from contextlib import contextmanager
@@ -54,6 +55,35 @@ def test_admin_requires_authentication(monkeypatch):
             assert exc.headers["WWW-Authenticate"]
         else:
             raise AssertionError("Admin dashboard was accessible without authentication")
+
+
+def test_react_admin_requires_authentication(monkeypatch):
+    monkeypatch.setattr("api.webhook.DASHBOARD_PASSWORD", "secret")
+    with running_server() as base_url:
+        try:
+            urlopen(f"{base_url}/admin-v2", timeout=5)
+        except HTTPError as exc:
+            assert exc.code == 401
+            assert exc.headers["WWW-Authenticate"] == 'Basic realm="TelegramBot Admin"'
+        else:
+            raise AssertionError("React admin dashboard was accessible without authentication")
+
+
+def test_react_admin_serves_production_build(monkeypatch):
+    monkeypatch.setattr("api.webhook.DASHBOARD_PASSWORD", "secret")
+    encoded = base64.b64encode(b"admin:secret").decode()
+    request = Request(
+        "http://placeholder/admin-v2/orders",
+        headers={"Authorization": f"Basic {encoded}"},
+    )
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/admin-v2/orders"
+        with urlopen(request, timeout=5) as response:
+            body = response.read().decode()
+
+    assert response.status == 200
+    assert "text/html" in response.headers["Content-Type"]
+    assert '<div id="root"></div>' in body
 
 
 def test_webhook_rejects_missing_secret(monkeypatch):

@@ -11,6 +11,7 @@ import html
 import io
 import json
 import logging
+import mimetypes
 import os
 import threading
 import time
@@ -56,6 +57,7 @@ _app = None
 _runtime_lock = threading.RLock()
 log = logging.getLogger(__name__)
 MAX_WEBHOOK_BODY_BYTES = 1_000_000
+ADMIN_UI_DIST = Path(__file__).resolve().parent.parent / "admin-ui" / "dist"
 
 
 def health_payload() -> dict:
@@ -396,6 +398,48 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             self._reply(404, {"ok": False, "error": "asset_not_found"})
+            return
+
+        if path == "/admin-v2" or path.startswith("/admin-v2/"):
+            if not self._dashboard_authorized():
+                self.send_response(401)
+                self.send_header("WWW-Authenticate", 'Basic realm="TelegramBot Admin"')
+                self.end_headers()
+                return
+
+            relative_path = path.removeprefix("/admin-v2/")
+            requested_file = ADMIN_UI_DIST / relative_path
+            if not relative_path or not requested_file.is_file():
+                requested_file = ADMIN_UI_DIST / "index.html"
+            try:
+                resolved_file = requested_file.resolve()
+                resolved_file.relative_to(ADMIN_UI_DIST.resolve())
+            except (OSError, ValueError):
+                self._reply(404, {"ok": False, "error": "asset_not_found"})
+                return
+            if not resolved_file.is_file():
+                self._reply(503, {
+                    "ok": False,
+                    "error": "admin_ui_not_built",
+                    "message": "Run `npm install && npm run build` in admin-ui.",
+                })
+                return
+            body = resolved_file.read_bytes()
+            content_type = mimetypes.guess_type(resolved_file.name)[0] or "application/octet-stream"
+            if resolved_file.suffix == ".html":
+                content_type = "text/html; charset=utf-8"
+            elif resolved_file.suffix in {".js", ".css"}:
+                content_type += "; charset=utf-8"
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header(
+                "Cache-Control",
+                "no-store, max-age=0" if resolved_file.suffix == ".html"
+                else "public, max-age=31536000, immutable",
+            )
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
 
         admin_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "support", "interactions", "activity", "settings"}

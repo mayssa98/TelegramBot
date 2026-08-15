@@ -9,6 +9,7 @@ __pycache__/
 .vercel
 .env*
 outputs/**/node_modules/
+admin-ui/node_modules/
 mobile-app/.gradle/
 mobile-app/local.properties
 mobile-app/app/build/

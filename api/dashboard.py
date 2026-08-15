@@ -2430,6 +2430,7 @@ def render_dashboard(
             <a href="/admin/interactions" data-tab="interactions" data-title="Interactions" class="__ACTIVE_INTERACTIONS__"><span class="nav-icon">⌘</span><span class="nav-copy">Interactions</span></a>
             <a href="/admin/activity" data-tab="activity" data-title="Activité" class="__ACTIVE_ACTIVITY__"><span class="nav-icon">↗</span><span class="nav-copy">Activité</span></a>
             <a href="/admin/settings" data-tab="settings" data-title="Paramètres" class="__ACTIVE_SETTINGS__"><span class="nav-icon">⚙</span><span class="nav-copy">Paramètres</span></a>
+            <a href="/admin-v2" data-title="Aperçu React"><span class="nav-icon">⚛</span><span class="nav-copy">Aperçu React</span><span class="nav-meta">Nouveau</span></a>
         </nav>
         <div class="sidebar-bottom">
             <div class="system-line">
@@ -5166,7 +5167,7 @@ def render_dashboard(
         function animateKpiValues() {
             document.querySelectorAll('.kpi-value').forEach(el => {
                 const text = el.textContent.trim();
-                const match = text.match(/^([\d,.]+)/);
+                const match = text.match(/^([\\d,.]+)/);
                 if (!match) return;
                 const raw = match[1].replace(/,/g, '');
                 const target = parseFloat(raw);
