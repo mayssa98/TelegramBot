@@ -278,6 +278,31 @@ from telegram.constants import ParseMode
 
 log = logging.getLogger("admin")
 
+
+def _purchase_product_total(order, offer=None):
+    """Return the catalogue value of an order, not only its unpaid balance."""
+    qty = max(1, int(order.get("qty") or 1))
+
+    gross_total = order.get("gross_total")
+    if gross_total is not None:
+        return max(0.0, float(gross_total))
+
+    unit_price = order.get("unit_price")
+    if unit_price is not None:
+        return max(0.0, float(unit_price) * qty)
+
+    if offer and offer.get("price") is not None:
+        return max(0.0, float(offer["price"]) * qty)
+
+    # Legacy wallet orders may only contain the wallet contribution and the
+    # remaining external amount.
+    return max(
+        0.0,
+        float(order.get("wallet_amount") or 0.0)
+        + float(order.get("total_price") or 0.0),
+    )
+
+
 async def post_purchase_to_channel(context, order):
     """Post an anonymized purchase notification to @blackmarketBotChannel with a 'Buy Now' button."""
     try:
@@ -292,17 +317,18 @@ async def post_purchase_to_channel(context, order):
         service_name = str(order.get("service_name") or "Service").strip()
         offer_name = str(order.get("offer_name") or "Offre").strip()
         qty = int(order.get("qty") or 1)
-        total_price = float(order.get("total_price") or 0.0)
-
         offer_id = order.get("offer_id")
         service_id = order.get("service_id")
 
+        offer = None
         rem_stock_text = "∞ (Unlimited)"
         if offer_id:
             offer = db.get_offer(int(offer_id))
             if offer and not offer.get("unlimited_stock"):
                 rem_stock = int(offer.get("stock") or 0)
                 rem_stock_text = f"{rem_stock} left" if rem_stock > 0 else "0 (Pre-order available)"
+
+        product_total = _purchase_product_total(order, offer)
 
         if offer_id:
             start_param = f"off_{offer_id}"
@@ -318,7 +344,7 @@ async def post_purchase_to_channel(context, order):
             f"🛒 <b>Product:</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
             f"📦 <b>Quantity Ordered:</b> <code>{qty}</code>\n"
             f"📊 <b>Remaining Stock:</b> <code>{rem_stock_text}</code>\n"
-            f"💰 <b>Total Price:</b> <code>${total_price:.2f} USDT</code>\n"
+            f"💰 <b>Total Price:</b> <code>${product_total:.2f} USDT</code>\n"
             f"⚡ <b>Status:</b> <code>Paid & Confirmed 🟢</code>\n\n"
             "✨ <i>Get yours directly on BlackMarket Bot!</i>"
         )

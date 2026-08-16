@@ -42,6 +42,7 @@ from config import (
     ADMIN_ID,
     BINANCE_PAY_ID,
     BOT_TOKEN,
+    BYBIT_UID,
     CLICK_REPORT_CHAT_ID,
     CURRENCY,
     DEFAULT_LANG,
@@ -163,6 +164,7 @@ def _interaction_button_name(query):
         "paid_chain": "Submit blockchain TXID", "continue_pay": "Continue payment",
         "confirm_buy": "Create new order", "cancel_buy": "Cancel order",
         "pay_wallet": "Pay with wallet", "pay_binance": "Pay with Binance Pay",
+        "pay_bybit": "Pay with Bybit Pay",
         "pay_bsc": "Pay with USDT BSC", "pay_polygon": "Pay with USDT Polygon",
         "orders_export": "Export orders", "rating": "Rate purchase",
         "support_cat": "Support category", "support_order": "Support order",
@@ -1448,12 +1450,13 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_buy_confirmation(update, context, lang)
         return
     if data.startswith((
-        "confirm_buy:", "pay_wallet:", "pay_binance:", "pay_bsc:", "pay_polygon:",
+        "confirm_buy:", "pay_wallet:", "pay_binance:", "pay_bybit:", "pay_bsc:", "pay_polygon:",
     )):
         payment_method = (
             "wallet" if data.startswith("pay_wallet:")
             else "usdt_bsc" if data.startswith("pay_bsc:")
             else "usdt_polygon" if data.startswith("pay_polygon:")
+            else "bybit" if data.startswith("pay_bybit:")
             else "binance"
         )
         await handle_buy_confirmed(update, context, lang, payment_method=payment_method)
@@ -1491,7 +1494,13 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # matching is gone; route that legacy button to TXID entry instead.
         oid = int(data.split(":")[1])
         PENDING[uid] = ("await_txid", oid)
-        await q.message.reply_text(t(lang, "ask_txid", oid=oid),
+        order = db.get_order(oid)
+        prompt_key = (
+            "ask_bybit_txid"
+            if order and order.get("payment_method") == "bybit"
+            else "ask_txid"
+        )
+        await q.message.reply_text(t(lang, prompt_key, oid=oid),
                                    parse_mode=ParseMode.MARKDOWN)
         return
     if data.startswith("paid_chain:"):
@@ -1516,14 +1525,20 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order = db.get_order(oid)
         if order and order["user_id"] == uid:
             onchain = order.get("payment_method") in {"usdt_bsc", "usdt_polygon"}
+            payment_key = (
+                "bybit_order_created"
+                if order.get("payment_method") == "bybit"
+                else "order_created"
+            )
             text = (
                 onchain_payment_screen(lang, order)
                 if onchain
                 else premium_customer_text(
-                    lang, "order_created", oid=oid, service=order["service_name"],
+                    lang, payment_key, oid=oid, service=order["service_name"],
                     offer=order["offer_name"], qty=order["qty"],
                     total=f"{order['total_price']:.2f}", cur=CURRENCY,
                     binance_id=BINANCE_PAY_ID,
+                    bybit_uid=BYBIT_UID,
                 )
             )
             await q.message.reply_text(
@@ -1734,11 +1749,13 @@ async def handle_buy_confirmed(update, context, lang, payment_method="binance"):
         )
         return
 
+    payment_key = "bybit_order_created" if payment_method == "bybit" else "order_created"
     text = premium_customer_text(
-        lang, "order_created", oid=order["id"], service=order["service_name"],
+        lang, payment_key, oid=order["id"], service=order["service_name"],
         offer=order["offer_name"], qty=order["qty"],
         total=f"{order['total_price']:.2f}", cur=CURRENCY,
         binance_id=BINANCE_PAY_ID,
+        bybit_uid=BYBIT_UID,
     )
     await q.edit_message_text(text, parse_mode=ParseMode.HTML,
                               reply_markup=kb.paid_keyboard(

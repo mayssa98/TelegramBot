@@ -110,3 +110,43 @@ def test_wallet_topup_accepts_order_id_shown_on_binance_receipt(monkeypatch):
 
     assert result["status"] == "confirmed"
     assert result["amount"] == 5
+
+
+def test_bybit_payment_matches_confirmed_internal_deposit(monkeypatch):
+    monkeypatch.setattr(payment_verifier, "BYBIT_API_KEY", "key")
+    monkeypatch.setattr(payment_verifier, "BYBIT_API_SECRET", "secret")
+    monkeypatch.setattr(
+        payment_verifier,
+        "_fetch_bybit_internal_deposits",
+        lambda txid: [{
+            "txID": txid,
+            "amount": "12.00000000",
+            "coin": "USDT",
+            "status": 2,
+            "fromMemberId": "123456",
+        }],
+    )
+
+    result = payment_verifier.verify_bybit_payment(
+        "BYBIT_TX_123", 12, "USDT", created_at=100,
+    )
+
+    assert result["status"] == "confirmed"
+    assert result["code"] == "confirmed"
+
+
+def test_bybit_payment_rejects_wrong_amount(monkeypatch):
+    monkeypatch.setattr(payment_verifier, "BYBIT_API_KEY", "key")
+    monkeypatch.setattr(payment_verifier, "BYBIT_API_SECRET", "secret")
+    monkeypatch.setattr(
+        payment_verifier,
+        "_fetch_bybit_internal_deposits",
+        lambda txid: [{
+            "txID": txid, "amount": "11", "coin": "USDT", "status": 2,
+        }],
+    )
+
+    result = payment_verifier.verify_bybit_payment("BYBIT_TX_456", 12, "USDT")
+
+    assert result["status"] == "failed"
+    assert result["code"] == "wrong_amount"

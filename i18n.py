@@ -388,6 +388,11 @@ TRANSLATIONS = {
         "en": "🔥💳 *Binance Pay*\n--------------------\n\n🛍️ Product: *{offer}*\n💫 Quantity: *{qty}*\n\n🚨 *SEND EXACTLY: {total} {cur}*\n🧭 Binance ID: `{binance_id}`\n\nAfter paying, tap *Verify with TXID* and send the Transaction ID or Order ID shown on your Binance receipt.\n\n🎯 Order: *#{oid}*",
         "ar": "🧾 *تم إنشاء الطلب #{oid}*\n\nالخدمة: *{service}*\nالعرض: *{offer}*\nالكمية: *{qty}*\nالمبلغ الإجمالي: *{total} {cur}*\n\n💳 *الدفع عبر Binance Pay*\n\n1️⃣ أرسل *{total} {cur}* إلى معرّف Binance Pay:\n`{binance_id}`\n\n2️⃣ بعد الدفع، اضغط الزر أدناه وأرسل *رقم معاملة Binance*.",
     },
+    "bybit_order_created": {
+        "fr": "🟠💳 *Bybit Pay*\n--------------------\n\n🛍️ Produit : *{offer}*\n💫 Quantité : *{qty}*\n\n🚨 *ENVOYEZ EXACTEMENT : {total} {cur}*\n🧭 UID Bybit : `{bybit_uid}`\n\nAprès le paiement, appuyez sur *Vérifier avec TXID* et envoyez le TXID affiché sur votre reçu Bybit.\n\n🎯 Commande : *#{oid}*",
+        "en": "🟠💳 *Bybit Pay*\n--------------------\n\n🛍️ Product: *{offer}*\n💫 Quantity: *{qty}*\n\n🚨 *SEND EXACTLY: {total} {cur}*\n🧭 Bybit UID: `{bybit_uid}`\n\nAfter paying, tap *Verify with TXID* and send the TXID shown on your Bybit receipt.\n\n🎯 Order: *#{oid}*",
+        "ar": "🟠💳 *Bybit Pay*\n--------------------\n\n🛍️ Product: *{offer}*\n💫 Quantity: *{qty}*\n\n🚨 *SEND EXACTLY: {total} {cur}*\n🧭 Bybit UID: `{bybit_uid}`\n\nAfter paying, tap *Verify with TXID* and send the TXID shown on your Bybit receipt.\n\n🎯 Order: *#{oid}*",
+    },
     "btn_paid": {
         "fr": '\U0001f525 V\xe9rifier le paiement',
         "en": '\U0001f525 Check Payment',
@@ -397,6 +402,11 @@ TRANSLATIONS = {
         "fr": "\u270d\ufe0f Veuillez envoyer l'*ID de transaction Binance* de votre paiement pour la commande #{oid}. Si cela \u00e9choue, contactez le support avec une capture du paiement :",
         "en": "\u270d\ufe0f Please send the *Binance transaction ID* for order #{oid}. If it fails, contact support with a payment screenshot:",
         "ar": "\u270d\ufe0f \u0627\u0644\u0631\u062c\u0627\u0621 \u0625\u0631\u0633\u0627\u0644 *\u0631\u0642\u0645 \u0645\u0639\u0627\u0645\u0644\u0629 Binance* \u0644\u0644\u0637\u0644\u0628 #{oid}. \u0625\u0630\u0627 \u0641\u0634\u0644 \u0627\u0644\u062a\u062d\u0642\u0642\u060c \u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u062f\u0639\u0645 \u0645\u0639 \u0644\u0642\u0637\u0629 \u0634\u0627\u0634\u0629 \u0644\u0644\u062f\u0641\u0639:",
+    },
+    "ask_bybit_txid": {
+        "fr": "✍️ Veuillez envoyer le *TXID Bybit* de votre paiement pour la commande #{oid}. Si cela échoue, contactez le support avec une capture du paiement :",
+        "en": "✍️ Please send the *Bybit TXID* for order #{oid}. If it fails, contact support with a payment screenshot:",
+        "ar": "✍️ Please send the *Bybit TXID* for order #{oid}. If it fails, contact support with a payment screenshot:",
     },
     "btn_verify_txid": {
         "fr": "🧾 Vérifier avec TXID",
@@ -412,6 +422,11 @@ TRANSLATIONS = {
         "fr": "🟡 Payer avec Binance Pay",
         "en": "🟡 Pay with Binance Pay",
         "ar": "🟡 الدفع عبر Binance Pay",
+    },
+    "btn_pay_bybit": {
+        "fr": "🟠 Payer avec Bybit Pay",
+        "en": "🟠 Pay with Bybit Pay",
+        "ar": "🟠 الدفع عبر Bybit Pay",
     },
     "btn_pay_bsc": {
         "fr": "🟨 USDT — BSC (BEP20)",

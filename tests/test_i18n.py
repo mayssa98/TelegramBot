@@ -38,6 +38,19 @@ def test_french_payment_message_matches_binance_style():
     assert "Commande : *#6074*" in message
 
 
+def test_bybit_payment_message_uses_uid_and_receipt_txid():
+    message = t(
+        "fr", "bybit_order_created", oid=6075, service="AI",
+        offer="Lovable", qty=1, total="12.00", cur="USDT",
+        bybit_uid="545988761",
+    )
+
+    assert "*Bybit Pay*" in message
+    assert "UID Bybit : `545988761`" in message
+    assert "12.00 USDT" in message
+    assert "TXID" in t("fr", "ask_bybit_txid", oid=6075)
+
+
 def test_topup_failure_hides_internal_binance_error():
     message = t("en", "topup_failed")
 

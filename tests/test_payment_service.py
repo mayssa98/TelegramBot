@@ -103,6 +103,37 @@ def test_txid_verification_uses_receipt_id_and_amount(mock_mongodb, monkeypatch)
     }
 
 
+def test_bybit_order_uses_bybit_verifier(mock_mongodb, monkeypatch):
+    captured = {}
+
+    def bybit_verifier(txid, amount, currency=None, created_at=None):
+        captured.update({"txid": txid, "amount": amount, "currency": currency})
+        return {"status": "confirmed", "reason": "confirmed"}
+
+    monkeypatch.setattr(payment_service, "verify_bybit_payment", bybit_verifier)
+    monkeypatch.setattr(
+        payment_service,
+        "verify_payment",
+        lambda *_args, **_kwargs: pytest.fail("Binance verifier was called"),
+    )
+    db.add_service("AI", "T")
+    offer_id = db.add_offer(service_id=1, name="Lovable", price=12.0, stock=1)
+    db.add_inventory_items(offer_id, ["delivery"])
+    db.get_conn().orders.insert_one({
+        "id": 13, "user_id": 123, "offer_id": offer_id,
+        "service_name": "AI", "offer_name": "Lovable", "qty": 1,
+        "total_price": 12.0, "payment_method": "bybit",
+        "status": OrderStatus.PENDING_PAYMENT, "txid": "",
+        "created_at": 100, "expires_at": 9999999999,
+    })
+
+    result = payment_service.submit_payment(13, "BYBIT_TX_123", 123)
+
+    assert result["status"] == "delivered"
+    assert captured == {"txid": "BYBIT_TX_123", "amount": 12.0, "currency": "USDT"}
+    assert db.get_order(13)["verify_method"] == "bybit_txid"
+
+
 def test_submit_payment_duplicate_txid(mock_mongodb):
     """Vérifie qu'on ne peut pas réutiliser le même TXID pour une autre commande."""
     conn = db.get_conn()

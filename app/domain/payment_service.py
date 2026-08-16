@@ -1,6 +1,6 @@
 """Service métier pour les paiements.
 
-Centralise la validation du TXID, la vérification Binance, l'idempotence
+Centralise la validation du TXID, les vérifications Binance/Bybit, l'idempotence
 et le passage en revue manuelle.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ import database as db
 from app.constants import OrderStatus
 from app.domain import affiliate_service, inventory_service, loyalty_service, reseller_service
 from config import ADMIN_ID, CURRENCY, TEST_PAYMENT_ENABLED
-from payment_verifier import verify_payment
+from payment_verifier import verify_bybit_payment, verify_payment
 
 log = logging.getLogger(__name__)
 
@@ -269,13 +269,19 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
     # 4. Enregistrer le TXID et passer en vérification
     db.update_order(order_id, txid=txid, status=OrderStatus.AWAITING_VERIFICATION)
 
-    # 5. Verify the submitted Binance receipt identifier and exact amount.
-    verification = verify_payment(
+    # 5. Verify the receipt with the provider selected when the order was made.
+    verifier = (
+        verify_bybit_payment
+        if order.get("payment_method") == "bybit"
+        else verify_payment
+    )
+    verification = verifier(
         txid, order["total_price"], CURRENCY, order.get("created_at")
     )
 
     if verification["status"] == "confirmed":
-        result.update(_finalize_confirmed_payment(order_id, user_id, txid, "txid"))
+        verify_method = "bybit_txid" if order.get("payment_method") == "bybit" else "txid"
+        result.update(_finalize_confirmed_payment(order_id, user_id, txid, verify_method))
     elif verification["status"] == "manual_review":
         reason = verification.get("reason", "Vérification TXID indisponible")
         db.update_order(

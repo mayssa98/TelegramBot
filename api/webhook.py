@@ -53,7 +53,7 @@ from config import (
     public_base_url_from_environment,
 )
 from i18n import t
-from payment_verifier import binance_healthcheck
+from payment_verifier import binance_healthcheck, bybit_healthcheck
 
 _loop = asyncio.new_event_loop()
 _app = None
@@ -626,6 +626,13 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
                 return
             self._reply(200, binance_healthcheck())
+            return
+
+        elif path == "/admin/api/bybit-health":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, bybit_healthcheck())
             return
 
         elif path == "/admin/api/telegram-health":

@@ -76,6 +76,16 @@ BINANCE_API_BASE: str = os.environ.get(
 ).rstrip("/")
 
 # ---------------------------------------------------------------------------
+# Paiement Bybit Pay et vérification automatique (lecture seule)
+# ---------------------------------------------------------------------------
+BYBIT_UID: str = os.environ.get("HP_BYBIT_UID", "").strip()
+BYBIT_API_KEY: str = os.environ.get("HP_BYBIT_API_KEY", "").strip()
+BYBIT_API_SECRET: str = os.environ.get("HP_BYBIT_API_SECRET", "").strip()
+BYBIT_API_BASE: str = os.environ.get(
+    "HP_BYBIT_API_BASE", "https://api.bybit.com"
+).rstrip("/")
+
+# ---------------------------------------------------------------------------
 # Fournisseur revendeur MailReader
 # ---------------------------------------------------------------------------
 MAILREADER_API_KEY: str = os.environ.get("HP_MAILREADER_API_KEY", "").strip()

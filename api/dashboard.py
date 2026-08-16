@@ -2457,7 +2457,8 @@ def render_dashboard(
                 </div>
                 <div class="header-actions">
                     <button class="btn btn-secondary" id="telegram-repair-button" onclick="checkAndRepairTelegram()"><span>Réparer Telegram</span></button>
-                    <button class="btn btn-secondary" id="binance-test-button" onclick="testBinanceConnection()"><span>Tester Binance</span></button>
+                     <button class="btn btn-secondary" id="binance-test-button" onclick="testBinanceConnection()"><span>Tester Binance</span></button>
+                     <button class="btn btn-secondary" id="bybit-test-button" onclick="testBybitConnection()"><span>Tester Bybit</span></button>
                     <button class="btn btn-secondary" onclick="refreshDashboardData()"><span>Actualiser</span></button>
                 </div>
                 <span class="topbar-clock" id="topbar-clock"><span class="topbar-clock-time" id="clock-time">--:--:--</span></span>
@@ -4430,6 +4431,30 @@ def render_dashboard(
                 showToast(`Binance connecté via ${endpoint} · ${result.transactions_24h} transaction(s) sur 24 h`);
             } catch (err) {
                 showToast("Impossible de tester Binance depuis Railway", "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        async function testBybitConnection() {
+            const button = document.getElementById("bybit-test-button");
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = "Test en cours...";
+            try {
+                const response = await fetch("/admin/api/bybit-health", {
+                    headers: { "Accept": "application/json" }
+                });
+                const result = await response.json();
+                if (!response.ok || !result.ok) {
+                    showToast(result.message || "Connexion Bybit indisponible", "error");
+                    return;
+                }
+                const endpoint = new URL(result.endpoint).hostname;
+                showToast(`Bybit connecté via ${endpoint} · ${result.transactions} transaction(s) récente(s)`);
+            } catch (err) {
+                showToast("Impossible de tester Bybit depuis Railway", "error");
             } finally {
                 button.disabled = false;
                 button.textContent = originalText;

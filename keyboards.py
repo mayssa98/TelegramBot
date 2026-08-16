@@ -27,7 +27,7 @@ BUTTON_TEXT_KEYS = {
     "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
-    "btn_pay_binance", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
+    "btn_pay_binance", "btn_pay_bybit", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
     "btn_cancel", "btn_continue_payment", "btn_new_order",
     "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_join_group",
     "btn_verify_join", "btn_channel_buy_now",
@@ -563,6 +563,7 @@ def confirm_buy_keyboard(lang, offer_id, qty=1):
     return InlineKeyboardMarkup([
         [translated_button(lang, "btn_pay_wallet", callback_data=f"pay_wallet:{offer_id}:{qty}")],
         [translated_button(lang, "btn_pay_binance", callback_data=f"pay_binance:{offer_id}:{qty}")],
+        [translated_button(lang, "btn_pay_bybit", callback_data=f"pay_bybit:{offer_id}:{qty}")],
         [translated_button(lang, "btn_pay_bsc", callback_data=f"pay_bsc:{offer_id}:{qty}")],
         [translated_button(lang, "btn_pay_polygon", callback_data=f"pay_polygon:{offer_id}:{qty}")],
         [translated_button(lang, "btn_cancel", callback_data=f"cancel_buy:{offer_id}")],
