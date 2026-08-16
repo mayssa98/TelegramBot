@@ -27,6 +27,7 @@ from bot import (
     compact_offer_text,
     custom_emoji_from_message,
     custom_emojis_from_message,
+    deliver_order,
     handle_buy_confirmed,
     handle_pending_input,
     handle_ticket_attachment,
@@ -39,6 +40,7 @@ from bot import (
     premium_customer_text,
     rich_text_from_message,
     send_main_menu,
+    send_admin_message_to_client,
     send_payment_result,
     text_with_custom_emoji_tokens,
     text_without_custom_emojis,
@@ -1407,7 +1409,128 @@ def test_otp_answers_notify_admin_and_redirect_customer(monkeypatch, mock_mongod
     customer_call = country_message.reply_text.await_args
     assert "directly in this bot" in customer_call.args[0]
     assert customer_call.kwargs["reply_markup"].inline_keyboard[0][0].url is None
-    assert admin_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "adm_deliver:502"
+    review_buttons = admin_call.kwargs["reply_markup"].inline_keyboard[0]
+    assert review_buttons[0].callback_data == "adm_client_message:502"
+    assert review_buttons[1].callback_data == "adm_deliver:502"
+
+
+def test_admin_message_does_not_complete_manual_order(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 601,
+        "user_id": 42,
+        "status": "payment_confirmed",
+    })
+    update = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()))
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    asyncio.run(send_admin_message_to_client(
+        update, SimpleNamespace(bot=bot_client), 601, "Your account is being prepared.",
+    ))
+
+    assert db.get_order(601)["status"] == "payment_confirmed"
+    customer_call = bot_client.send_message.await_args
+    assert customer_call.args[0] == 42
+    assert "Your account is being prepared." in customer_call.args[1]
+    assert customer_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "manual_reply:601"
+    assert "reste en attente" in update.message.reply_text.await_args.args[0]
+
+
+def test_customer_can_reply_until_manual_order_is_delivered(
+    monkeypatch, mock_mongodb,
+):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    mock_mongodb.orders.insert_one({
+        "id": 604,
+        "user_id": 42,
+        "service_name": "Canva",
+        "offer_name": "Canva Pro invitation",
+        "status": "payment_confirmed",
+    })
+    PENDING[42] = ("manual_order_reply", 604)
+    message = SimpleNamespace(
+        text="customer@example.com",
+        reply_text=AsyncMock(),
+    )
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    asyncio.run(handle_pending_input(
+        SimpleNamespace(effective_user=SimpleNamespace(id=42), message=message),
+        SimpleNamespace(bot=bot_client),
+        "en",
+    ))
+
+    admin_call = bot_client.send_message.await_args
+    assert admin_call.args[0] == 999
+    assert "customer@example.com" in admin_call.args[1]
+    assert admin_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "adm_client_message:604"
+    assert admin_call.kwargs["reply_markup"].inline_keyboard[0][1].callback_data == "adm_deliver:604"
+    assert db.get_order(604)["status"] == "payment_confirmed"
+    assert PENDING.get(42) is None
+
+    mock_mongodb.orders.update_one(
+        {"id": 604}, {"$set": {"status": "delivered"}},
+    )
+    PENDING[42] = ("manual_order_reply", 604)
+    closed_message = SimpleNamespace(
+        text="another@example.com",
+        reply_text=AsyncMock(),
+    )
+    bot_client.send_message.reset_mock()
+
+    asyncio.run(handle_pending_input(
+        SimpleNamespace(effective_user=SimpleNamespace(id=42), message=closed_message),
+        SimpleNamespace(bot=bot_client),
+        "en",
+    ))
+
+    bot_client.send_message.assert_not_awaited()
+    assert "conversation is closed" in closed_message.reply_text.await_args.args[0]
+    assert PENDING.get(42) is None
+
+
+def test_manual_order_is_delivered_only_after_content_reaches_customer(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 602,
+        "user_id": 42,
+        "service_name": "Manual service",
+        "offer_name": "Manual account",
+        "status": "payment_confirmed",
+        "delivery_text": "",
+    })
+    update = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()))
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    asyncio.run(deliver_order(
+        update, SimpleNamespace(bot=bot_client), 602, "login:password",
+    ))
+
+    delivered = db.get_order(602)
+    assert delivered["status"] == "delivered"
+    assert delivered["delivery_text"] == "login:password"
+
+
+def test_failed_manual_send_keeps_order_waiting(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 603,
+        "user_id": 42,
+        "service_name": "Manual service",
+        "offer_name": "Manual account",
+        "status": "payment_confirmed",
+        "delivery_text": "",
+    })
+    update = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()))
+    bot_client = SimpleNamespace(
+        send_message=AsyncMock(side_effect=RuntimeError("Telegram unavailable")),
+    )
+
+    asyncio.run(deliver_order(
+        update, SimpleNamespace(bot=bot_client), 603, "login:password",
+    ))
+
+    waiting = db.get_order(603)
+    assert waiting["status"] == "payment_confirmed"
+    assert waiting["delivery_text"] == ""
+    assert "Échec d'envoi" in update.message.reply_text.await_args.args[0]
 
 
 def test_onchain_txid_submission_sends_admin_accept_and_reject_buttons(

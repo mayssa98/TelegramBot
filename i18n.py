@@ -443,6 +443,26 @@ TRANSLATIONS = {
         "en": "🧾 Submit transaction ID",
         "ar": "🧾 Submit transaction ID",
     },
+    "btn_reply_manual_order": {
+        "fr": "💬 Répondre à l’administrateur",
+        "en": "💬 Reply to administrator",
+        "ar": "💬 الرد على المسؤول",
+    },
+    "manual_order_reply_prompt": {
+        "fr": "✍️ Envoyez votre réponse pour la commande #{oid}. Elle sera transmise directement à l’administrateur.",
+        "en": "✍️ Send your reply for order #{oid}. It will be forwarded directly to the administrator.",
+        "ar": "✍️ أرسل ردك للطلب #{oid}. سيتم إرساله مباشرة إلى المسؤول.",
+    },
+    "manual_order_reply_sent": {
+        "fr": "✅ Votre réponse pour la commande #{oid} a été envoyée à l’administrateur. La conversation reste ouverte jusqu’à la livraison.",
+        "en": "✅ Your reply for order #{oid} was sent to the administrator. The conversation remains open until delivery.",
+        "ar": "✅ تم إرسال ردك للطلب #{oid} إلى المسؤول. تبقى المحادثة مفتوحة حتى التسليم.",
+    },
+    "manual_order_conversation_closed": {
+        "fr": "Cette conversation est fermée car la commande a déjà été livrée ou n’est plus en attente.",
+        "en": "This conversation is closed because the order was already delivered or is no longer pending.",
+        "ar": "تم إغلاق هذه المحادثة لأن الطلب تم تسليمه أو لم يعد قيد الانتظار.",
+    },
     "onchain_order_created": {
         "fr": "💳 *PAIEMENT USDT — {network}*\n\n🛍️ Produit : *{offer}*\n📦 Quantité : *{qty}*\n🚨 Envoyez exactement : *{total} USDT*\n\n📍 Adresse :\n`{address}`\n\n⚠️ Utilisez uniquement le réseau *{network}*.\n{contract_warning}\nUne transaction envoyée sur un autre réseau peut être définitivement perdue.\n\nCommande : *#{oid}*",
         "en": "💳 *USDT PAYMENT — {network}*\n\n🛍️ Product: *{offer}*\n📦 Quantity: *{qty}*\n🚨 Send exactly: *{total} USDT*\n\n📍 Address:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\nA transfer sent through another network may be permanently lost.\n\nOrder: *#{oid}*",

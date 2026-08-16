@@ -189,18 +189,24 @@ def order_detail_text(o):
 
 def order_detail_keyboard(o):
     rows = []
-    if o and o["status"] == "paid":
-        rows.append([InlineKeyboardButton("🎁 Livrer", callback_data=f"adm_deliver:{o['id']}")])
+    if o and o["status"] in {"paid", "payment_confirmed"}:
+        rows.extend(manual_delivery_request_keyboard(o["id"]).inline_keyboard)
     rows.append([InlineKeyboardButton("⬅️ Retour", callback_data="adm_panel")])
     return InlineKeyboardMarkup(rows)
 
 
 def manual_delivery_request_keyboard(order_id):
-    """Let the administrator answer a paid customer directly through the bot."""
+    """Let the administrator message the customer or complete the delivery."""
+    order_id = int(order_id)
     return InlineKeyboardMarkup([[
         InlineKeyboardButton(
-            "💬 Répondre au client (compte ou message)",
-            callback_data=f"adm_deliver:{int(order_id)}",
+            "💬 Envoyer un message",
+            callback_data=f"adm_client_message:{order_id}",
+        ),
+        InlineKeyboardButton(
+            "🎁 Envoyer la commande",
+            callback_data=f"adm_deliver:{order_id}",
+            style="success",
         ),
     ]])
 
@@ -394,8 +400,9 @@ async def notify_manual_delivery_request(context, order):
         ADMIN_ID,
         "📦 *Livraison manuelle demandée*\n\n"
         f"{order_detail_text(order)}\n\n"
-        "Appuyez ci-dessous, puis envoyez le compte, le code, les instructions "
-        "ou tout autre message à transmettre directement au client.",
+        "Choisissez *Envoyer un message* pour informer le client sans terminer "
+        "la commande, ou *Envoyer la commande* pour transmettre le compte/code "
+        "et confirmer la livraison.",
         parse_mode="Markdown",
         reply_markup=manual_delivery_request_keyboard(order["id"]),
     )

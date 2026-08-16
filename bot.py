@@ -162,6 +162,7 @@ def _interaction_button_name(query):
         "topup_polygon": "Top up with Polygon", "verify_channel_join": "Verify membership",
         "paid": "Verify payment with TXID",
         "paid_chain": "Submit blockchain TXID", "continue_pay": "Continue payment",
+        "manual_reply": "Reply to administrator",
         "confirm_buy": "Create new order", "cancel_buy": "Cancel order",
         "pay_wallet": "Pay with wallet", "pay_binance": "Pay with Binance Pay",
         "pay_bybit": "Pay with Bybit Pay",
@@ -1168,6 +1169,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_onchain_topup_txid",
         "otp_service",
         "otp_country",
+        "manual_order_reply",
         "await_quantity",
         "catalog_request",
         "adm_setprice",
@@ -1192,6 +1194,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "adm_inventory",
         "adm_manual_stock",
         "adm_broadcast_message",
+        "adm_client_message",
         "adm_deliver",
     }
 
@@ -1317,6 +1320,24 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(
             premium_customer_text(lang, "topup_ask_txid"),
             parse_mode=ParseMode.HTML,
+        )
+        return
+    if data.startswith("manual_reply:"):
+        order_id = int(data.split(":", 1)[1])
+        order = db.get_order(order_id)
+        if not order or int(order.get("user_id") or 0) != uid:
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        if order.get("status") not in {"paid", "payment_confirmed"}:
+            await q.answer(
+                t(lang, "manual_order_conversation_closed"),
+                show_alert=True,
+            )
+            return
+        PENDING[uid] = ("manual_order_reply", order_id)
+        await q.message.reply_text(
+            t(lang, "manual_order_reply_prompt", oid=order_id),
+            parse_mode=ParseMode.MARKDOWN,
         )
         return
     if data.startswith("orders_group:") or data == "orders_export:all":
@@ -2460,7 +2481,43 @@ async def handle_pending_input(update, context, lang):
         await delete_customer_support_message(update.message)
         return
 
+    if kind == "manual_order_reply":
+        order_id = int(ref)
+        order = db.get_order(order_id)
+        if (
+            not order
+            or int(order.get("user_id") or 0) != uid
+            or order.get("status") not in {"paid", "payment_confirmed"}
+        ):
+            PENDING.pop(uid, None)
+            await update.message.reply_text(
+                t(lang, "manual_order_conversation_closed")
+            )
+            return
+        await context.bot.send_message(
+            ADMIN_ID,
+            "💬 <b>Customer reply — manual order</b>\n\n"
+            f"Order: <b>#{order_id}</b>\n"
+            f"Customer: <code>{uid}</code>\n"
+            f"Product: <b>{html.escape(str(order.get('service_name') or ''))} — "
+            f"{html.escape(str(order.get('offer_name') or ''))}</b>\n\n"
+            f"Message:\n{html.escape(text)}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.manual_delivery_request_keyboard(order_id),
+        )
+        PENDING.pop(uid, None)
+        await update.message.reply_text(
+            t(lang, "manual_order_reply_sent", oid=order_id),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
     # --- Admin : livraison ---
+    if kind == "adm_client_message" and uid == ADMIN_ID:
+        await send_admin_message_to_client(update, context, ref, text)
+        PENDING.pop(uid, None)
+        return
+
     if kind == "adm_deliver" and uid == ADMIN_ID:
         await deliver_order(update, context, ref, text)
         PENDING.pop(uid, None)
@@ -3175,6 +3232,19 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"(compte / code / instructions). Il sera transmis au client.")
         return
 
+    if data.startswith("adm_client_message:"):
+        oid = int(data.split(":", 1)[1])
+        order = db.get_order(oid)
+        if not order:
+            await q.message.reply_text("⚠️ Commande introuvable.")
+            return
+        PENDING[uid] = ("adm_client_message", oid)
+        await q.message.reply_text(
+            f"💬 Envoyez le message destiné au client pour la commande #{oid}.\n\n"
+            "Ce message ne livrera pas et ne confirmera pas la commande."
+        )
+        return
+
     # ---- gestion catalogue ----
     if data == "adm_catalog":
         await q.edit_message_text("📦 *Gestion catalogue* — choisissez un service :",
@@ -3365,7 +3435,6 @@ async def deliver_order(update, context, order_id, content):
     if not o:
         await update.message.reply_text("Commande introuvable.")
         return
-    db.update_order(order_id, status="delivered", delivery_text=content)
     cl = lang_of(o["user_id"])
     try:
         await context.bot.send_message(
@@ -3375,9 +3444,39 @@ async def deliver_order(update, context, order_id, content):
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=kb.post_delivery_keyboard(cl, order_id),
         )
+        delivered = order_service.manual_deliver_order(order_id, content)
+        if not delivered:
+            await update.message.reply_text(
+                f"⚠️ Le contenu a été envoyé, mais la commande #{order_id} "
+                "n’était plus en attente de livraison."
+            )
+            return
         await update.message.reply_text(f"✅ Commande #{order_id} livrée au client.")
     except Exception as e:
         await update.message.reply_text(f"⚠️ Échec d'envoi au client : {e}")
+
+
+async def send_admin_message_to_client(update, context, order_id, content):
+    """Send an informational message without changing the order status."""
+    order = db.get_order(order_id)
+    if not order:
+        await update.message.reply_text("Commande introuvable.")
+        return
+    try:
+        await context.bot.send_message(
+            int(order["user_id"]),
+            "💬 <b>Message concernant votre commande "
+            f"#{int(order_id)}</b>\n\n{html.escape(str(content))}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.manual_order_reply_keyboard(
+                lang_of(int(order["user_id"])), order_id,
+            ),
+        )
+        await update.message.reply_text(
+            f"✅ Message envoyé au client. La commande #{order_id} reste en attente de livraison."
+        )
+    except Exception as exc:
+        await update.message.reply_text(f"⚠️ Échec d'envoi au client : {exc}")
 
 
 async def notify_client(context, user_id, key, **kwargs):

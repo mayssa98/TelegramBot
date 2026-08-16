@@ -473,7 +473,10 @@ def manual_deliver_order(order_id: int, content: str) -> dict | None:
 
     conn = db.get_conn()
     result = conn.orders.update_one(
-        {"id": order_id},
+        {
+            "id": order_id,
+            "status": {"$in": [OrderStatus.PAID, OrderStatus.PAYMENT_CONFIRMED]},
+        },
         {
             "$set": {
                 "status": OrderStatus.DELIVERED,

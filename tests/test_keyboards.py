@@ -92,6 +92,19 @@ def test_admin_onchain_review_keyboard_has_accept_and_reject_actions():
     assert keyboard.inline_keyboard[0][1].callback_data == "adm_onchain_reject:154"
 
 
+def test_manual_delivery_keyboard_separates_message_from_order_delivery():
+    keyboard = admin.manual_delivery_request_keyboard(503)
+
+    assert keyboard.inline_keyboard[0][0].callback_data == "adm_client_message:503"
+    assert keyboard.inline_keyboard[0][1].callback_data == "adm_deliver:503"
+
+
+def test_manual_order_reply_keyboard_targets_the_same_order():
+    keyboard = kb.manual_order_reply_keyboard("en", 503)
+
+    assert keyboard.inline_keyboard[0][0].callback_data == "manual_reply:503"
+
+
 def test_offer_button_label_uses_store_style():
     label = offer_button_label(
         "en",

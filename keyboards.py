@@ -28,7 +28,7 @@ BUTTON_TEXT_KEYS = {
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_pay_bybit", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
-    "btn_cancel", "btn_continue_payment", "btn_new_order",
+    "btn_cancel", "btn_continue_payment", "btn_new_order", "btn_reply_manual_order",
     "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_join_group",
     "btn_verify_join", "btn_channel_buy_now",
 }
@@ -583,6 +583,18 @@ def onchain_payment_keyboard(lang, order_id):
             style="danger",
         )],
     ])
+
+
+def manual_order_reply_keyboard(lang, order_id):
+    """Let a customer reply while a manual order is awaiting delivery."""
+    return InlineKeyboardMarkup([[
+        translated_button(
+            lang,
+            "btn_reply_manual_order",
+            callback_data=f"manual_reply:{int(order_id)}",
+            style="primary",
+        ),
+    ]])
 
 
 def duplicate_order_keyboard(lang, existing_order_id, offer_id, qty=1):
