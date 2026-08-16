@@ -2,7 +2,10 @@
 import html
 import re
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+
+def InlineKeyboardButton(*args, style=None, **kwargs):
+    return _InlineKeyboardButton(*args, **kwargs)
 
 import database as db
 from config import ADMIN_ID, REQUIRED_CHANNEL, REQUIRED_GROUP
