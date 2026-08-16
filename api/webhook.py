@@ -1001,7 +1001,15 @@ class handler(BaseHTTPRequestHandler):
                 sid = int(form["service_id"])
                 name = form["name"].strip()[:80]
                 emoji = form.get("emoji", "")[:12]
-                db.update_service(sid, name=name, emoji=emoji)
+                channel = form.get("sales_channel", "both")
+                channels = ["bot", "tn_site"] if channel == "both" else [channel]
+                db.update_service(
+                    sid,
+                    name=name,
+                    emoji=emoji,
+                    sales_channels=channels,
+                    name_ar=form.get("name_ar", "").strip(),
+                )
                 db.audit_event("service.updated", details={"service_id": sid, "name": name})
 
             elif action == "toggle_service":

@@ -898,7 +898,36 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
   const [serviceChannel, setServiceChannel] = useState(workspace === "site" ? "tn_site" : "bot");
   const [stockOffer, setStockOffer] = useState(null);
   const [stock, setStock] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editService, setEditService] = useState(null);
+  const [editServiceName, setEditServiceName] = useState("");
+  const [editServiceNameAr, setEditServiceNameAr] = useState("");
+  const [editServiceEmoji, setEditServiceEmoji] = useState("📦");
+  const [editServiceChannel, setEditServiceChannel] = useState("both");
+
+  const startEditService = (service) => {
+    setEditService(service);
+    setEditServiceName(service.name || "");
+    setEditServiceNameAr(service.name_ar || "");
+    setEditServiceEmoji(service.emoji || "📦");
+    const channels = service.sales_channels || ["bot", "tn_site"];
+    setEditServiceChannel(channels.length > 1 ? "both" : (channels[0] || "bot"));
+  };
+
+  const updateService = async (event) => {
+    event.preventDefault();
+    if (!editService) return;
+    if (
+      await onAction({
+        action: "update_service",
+        service_id: editService.id,
+        name: editServiceName,
+        name_ar: editServiceNameAr,
+        emoji: editServiceEmoji,
+        sales_channel: editServiceChannel,
+      })
+    )
+      setEditService(null);
+  };
   const createService = async (event) => {
     event.preventDefault();
     if (
@@ -992,6 +1021,9 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
                 </div>
               </div>
               <div className="catalog-service-actions">
+                <button title="Modifier le service" onClick={() => startEditService(service)}>
+                  <Edit3 size={16} />
+                </button>
                 <button title="Activer/désactiver" onClick={() => onAction({ action: "toggle_service", service_id: service.id })}>
                   {service.active === 0 ? <ToggleLeft /> : <ToggleRight />}
                 </button>
@@ -1122,6 +1154,43 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
             <div className="dialog-actions">
               <ActionButton type="submit" icon={Plus}>
                 Créer
+              </ActionButton>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {editService && (
+        <Modal title={`Modifier le service · ${editService.name}`} onClose={() => setEditService(null)}>
+          <form onSubmit={updateService}>
+            <div className="form-grid">
+              <Field label="Nom">
+                <input
+                  required
+                  value={editServiceName}
+                  onChange={(event) => setEditServiceName(event.target.value)}
+                />
+              </Field>
+              <Field label="Emoji">
+                <input
+                  value={editServiceEmoji}
+                  onChange={(event) => setEditServiceEmoji(event.target.value)}
+                  style={{ maxWidth: 80, textAlign: "center", fontSize: "1.25rem" }}
+                />
+              </Field>
+              <Field label="Nom arabe" wide>
+                <input dir="rtl" value={editServiceNameAr} onChange={(event) => setEditServiceNameAr(event.target.value)} />
+              </Field>
+              <Field label="Canal" wide>
+                <select value={editServiceChannel} onChange={(event) => setEditServiceChannel(event.target.value)}>
+                  <option value="both">Bot + Site tunisien</option>
+                  <option value="bot">Bot uniquement</option>
+                  <option value="tn_site">Site tunisien uniquement</option>
+                </select>
+              </Field>
+            </div>
+            <div className="dialog-actions">
+              <ActionButton type="submit" icon={Check}>
+                Enregistrer
               </ActionButton>
             </div>
           </form>
