@@ -393,32 +393,23 @@ def catalog_offers_keyboard(lang):
             safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
             stock = int(offer.get("stock") or 0)
             is_out = not offer.get("unlimited_stock") and stock <= 0
-            if is_out:
-                p = offer.get("price")
-                p_text = f"${float(p):.2f}".rstrip("0").rstrip(".") if p is not None else ""
-                left_text, right_text = format_split_button_texts(
-                    safe_offer["name"], p_text, t(lang, "btn_preorder"),
-                )
-                regular_offer_buttons.append([
-                    InlineKeyboardButton(left_text, callback_data=f"off:{offer['id']}", style="danger"),
-                    InlineKeyboardButton(right_text, callback_data=f"preorder_start:{offer['id']}", style="danger"),
-                ])
-            else:
-                regular_offer_buttons.append([InlineKeyboardButton(
-                    offer_button_label(
-                        lang, safe_offer,
-                        stock_label=stock_label,
-                        price_tbd=price_tbd,
-                    ),
-                    callback_data=f"off:{offer['id']}",
-                    style="success" if offer.get("unlimited_stock") else stock_button_style(stock),
-                    icon_custom_emoji_id=(
-                        stock_icon
-                        or offer.get("custom_emoji_id")
-                        or offer.get("service_custom_emoji_id")
-                        or None
-                    ),
-                )])
+            cb_data = f"preorder_start:{offer['id']}" if is_out else f"off:{offer['id']}"
+            btn_style = "danger" if is_out else ("success" if offer.get("unlimited_stock") else stock_button_style(stock))
+            regular_offer_buttons.append([InlineKeyboardButton(
+                offer_button_label(
+                    lang, safe_offer,
+                    stock_label=stock_label,
+                    price_tbd=price_tbd,
+                ),
+                callback_data=cb_data,
+                style=btn_style,
+                icon_custom_emoji_id=(
+                    stock_icon
+                    or offer.get("custom_emoji_id")
+                    or offer.get("service_custom_emoji_id")
+                    or None
+                ),
+            )])
 
     # 1. Place grouped category buttons (Adobe, ChatGPT, Telegram, VPNs) AT THE TOP in rows of 2
     row = []
@@ -469,28 +460,20 @@ def offers_keyboard(lang, service_id):
 
         stock = int(off.get("stock") or 0)
         is_out = not off.get("unlimited_stock") and stock <= 0
-        if is_out:
-            p = off.get("price")
-            p_text = f"${float(p):.2f}".rstrip("0").rstrip(".") if p is not None else ""
-            left_text, right_text = format_split_button_texts(
-                safe_offer["name"], p_text, t(lang, "btn_preorder"),
-            )
-            buttons.append([
-                InlineKeyboardButton(left_text, callback_data=f"off:{off['id']}", style="danger"),
-                InlineKeyboardButton(right_text, callback_data=f"preorder_start:{off['id']}", style="danger"),
-            ])
-        else:
-            buttons.append([InlineKeyboardButton(
-                offer_button_label(lang, safe_offer),
-                callback_data=f"off:{off['id']}",
-                style="success" if off.get("unlimited_stock") else stock_button_style(stock),
-                icon_custom_emoji_id=(
-                    db.get_text_override_icon("stock_label", lang)
-                    or off.get("custom_emoji_id")
-                    or (service.get("custom_emoji_id") if service else None)
-                    or None
-                ),
-            )])
+        cb_data = f"preorder_start:{off['id']}" if is_out else f"off:{off['id']}"
+        btn_style = "danger" if is_out else ("success" if off.get("unlimited_stock") else stock_button_style(stock))
+
+        buttons.append([InlineKeyboardButton(
+            offer_button_label(lang, safe_offer),
+            callback_data=cb_data,
+            style=btn_style,
+            icon_custom_emoji_id=(
+                db.get_text_override_icon("stock_label", lang)
+                or off.get("custom_emoji_id")
+                or (service.get("custom_emoji_id") if service else None)
+                or None
+            ),
+        )])
     buttons.append([translated_button(lang, "btn_back_services", callback_data="catalog")])
     return InlineKeyboardMarkup(buttons)
 
