@@ -308,32 +308,6 @@ TRANSLATIONS = {
         "ar": "{emoji} *{offer}*\n\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\n\n\U0001f4ab *OFFER DETAILS*\n\n\U0001f6e1 *Warranty*\n{note}\n\n\U000023f3 *Duration*\n{duration}\n\n\U0001f4e7 *Mail*\n{mail}\n\n\U0001f510 *Access*\n{access}\n\n\U0001f69a *Delivery*\n{delivery}\n\n\U0001f48e *Price*\n*{price} {cur}*\n\n\U0001f4e6 *Stock*\n*{stock} account(s)*\n\n{description}\n\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\n\U0001f680 _Tap Buy now to select quantity._",
     },
     "btn_buy": {"fr": "🛒 Acheter maintenant", "en": "🛒 Buy now", "ar": "🛒 اشترِ الآن"},
-    "btn_preorder": {"fr": "📦 Précommander", "en": "📦 Pre-order", "ar": "📦 طلب مسبق"},
-    "preorder_prompt": {
-        "fr": "📦 *PRÉCOMMANDE — {offer}*\n\nCette offre est actuellement en rupture de stock.\n\nSouhaitez-vous enregistrer une précommande pour être servi en priorité dès le réapprovisionnement ?",
-        "en": "📦 *PRE-ORDER — {offer}*\n\nThis offer is currently out of stock.\n\nWould you like to place a pre-order for priority delivery when restocked?",
-        "ar": "📦 *طلب مسبق — {offer}*\n\nهذا العرض غير متوفر حالياً.\n\nهل ترغب في تسجيل طلب مسبق للحصول على الأولوية عند توفر المخزون؟",
-    },
-    "preorder_success": {
-        "fr": "✅ *Précommande enregistrée !*\n\nProduit : *{offer}*\nQuantité : *{qty}*\n\nNotre équipe a été notifiée. Vous serez réapprovisionné et contacté en priorité dès le retour en stock.",
-        "en": "✅ *Pre-order registered!*\n\nProduct: *{offer}*\nQuantity: *{qty}*\n\nOur team has been notified. You will be contacted with priority as soon as stock is available.",
-        "ar": "✅ *تم تسجيل الطلب المسبق!*\n\nالمنتج: *{offer}*\nالكمية: *{qty}*\n\nتم إخطار فريقنا. سيتم التواصل معك وتسليم طلبك فور توفر المخزون.",
-    },
-    "preorder_admin_notification": {
-        "fr": "📦 *NOUVELLE PRÉCOMMANDE*\n\n👤 Client : {user}\n🆔 Telegram ID : `{user_id}`\n📋 Produit : *{offer}*\n📦 Quantité : *{qty}*",
-        "en": "📦 *NEW PRE-ORDER*\n\n👤 Customer: {user}\n🆔 Telegram ID: `{user_id}`\n📋 Product: *{offer}*\n📦 Quantity: *{qty}*",
-        "ar": "📦 *طلب مسبق جديد*\n\n👤 العميل: {user}\n🆔 معرّف تيليغرام: `{user_id}`\n📋 المنتج: *{offer}*\n📦 الكمية: *{qty}*",
-    },
-    "preorder_confirm_notice": {
-        "fr": "⚠️ *Offre en PRÉCOMMANDE :* Produit en rupture. La livraison s'effectuera avec priorité numéro 1 dès le réapprovisionnement.",
-        "en": "⚠️ *PRE-ORDER Item:* Currently out of stock. Priority delivery as soon as restocked.",
-        "ar": "⚠️ *عنصر طلب مسبق:* غير متوفر حالياً. تسليم ذو أولوية فور التجديد.",
-    },
-    "preorder_paid_admin_notification": {
-        "fr": "📦 *NOUVELLE PRÉCOMMANDE PAYÉE !*\n\n👤 Client : {user}\n🆔 Telegram ID : `{user_id}`\n📋 Produit : *{offer}*\n📦 Quantité : *{qty}*\n💰 Total : *{total} USDT*\n💳 Paiement : *{method}*",
-        "en": "📦 *NEW PAID PRE-ORDER!*\n\n👤 Customer: {user}\n🆔 Telegram ID: `{user_id}`\n📋 Product: *{offer}*\n📦 Quantity: *{qty}*\n💰 Total: *{total} USDT*\n💳 Payment: *{method}*",
-        "ar": "📦 *طلب مسبق مدفوع جديد!*\n\n👤 العميل: {user}\n🆔 معرّف تيليغرام: `{user_id}`\n📋 المنتج: *{offer}*\n📦 الكمية: *{qty}*\n💰 الإجمالي: *{total} USDT*\n💳 طريقة الدفع: *{method}*",
-    },
     "btn_back": {"fr": "⬅️ Retour", "en": "⬅️ Back", "ar": "⬅️ رجوع"},
     "btn_back_services": {
         "fr": "🔶 Services",

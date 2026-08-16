@@ -4,17 +4,15 @@ import re
 
 from telegram import InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
-class InlineKeyboardButton(_InlineKeyboardButton):
-    def __init__(self, *args, style=None, **kwargs):
-        if style in {"primary", "success", "danger"}:
-            api_kwargs = kwargs.pop("api_kwargs", None) or {}
-            api_kwargs["style"] = style
-            kwargs["api_kwargs"] = api_kwargs
-        super().__init__(*args, **kwargs)
-
-    @property
-    def style(self):
-        return self.api_kwargs.get("style") if self.api_kwargs else None
+def InlineKeyboardButton(*args, style=None, **kwargs):
+    if style in {"primary", "success", "danger"}:
+        api_kwargs = kwargs.pop("api_kwargs", None) or {}
+        api_kwargs["style"] = style
+        kwargs["api_kwargs"] = api_kwargs
+    btn = _InlineKeyboardButton(*args, **kwargs)
+    if style:
+        object.__setattr__(btn, "style", style)
+    return btn
 
 import database as db
 from config import ADMIN_ID, REQUIRED_CHANNEL, REQUIRED_GROUP
@@ -27,7 +25,7 @@ BUTTON_TEXT_KEYS = {
     "topup_verify_txid", "topup_bsc", "topup_polygon",
     "topup_home_button",
     "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
-    "onboarding_start", "btn_back_services", "btn_buy", "btn_preorder", "btn_back", "btn_paid",
+    "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
     "btn_cancel", "btn_continue_payment", "btn_new_order",
@@ -94,7 +92,14 @@ def get_service_emoji(name, current_emoji=""):
 
 
 def stock_badge(stock, unlimited=False):
-    return ""
+    if unlimited:
+        return "🟢"
+    stock = int(stock or 0)
+    if stock > 3:
+        return "🟢"
+    if stock > 0:
+        return "🔵"
+    return "🔴"
 
 
 def stock_button_style(stock):
@@ -134,7 +139,7 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
     stock = int(offer.get("stock") or 0)
     if stock <= 0:
         preorder_text = t(lang, "btn_preorder")
-        suffix = f"{price_text} | {preorder_text}"
+        suffix = f"{price_text} | 📦 {preorder_text}"
         max_name_length = max(8, 64 - len(suffix) - 3)
         name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
         return f"{name} | {suffix}"
@@ -332,7 +337,7 @@ def services_keyboard(lang):
 def format_split_button_texts(name, price_str, right_text):
     """Format left and right button texts cleanly without duplicate emojis or artificial truncation."""
     clean_r = str(right_text or "").replace("📦", "").strip()
-    right_label = f"📦 {clean_r}" if clean_r else "📦 Pre-order"
+    right_label = f"📦 {clean_r}" if clean_r else "📦 Info"
     p_part = f" | {price_str}" if price_str else ""
     left_label = f"{clean_button_name(name)}{p_part}"
     return left_label, right_label
@@ -344,7 +349,7 @@ def catalog_offers_keyboard(lang):
     db.preload_text_overrides(
         (
             "stock_label", "price_tbd", "catalog_request_button",
-            "btn_refresh_short", "btn_main_menu_short", "btn_preorder",
+            "btn_refresh_short", "btn_main_menu_short",
         ),
         lang,
     )
@@ -398,7 +403,7 @@ def catalog_offers_keyboard(lang):
             safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
             stock = int(offer.get("stock") or 0)
             is_out = not offer.get("unlimited_stock") and stock <= 0
-            cb_data = f"preorder_start:{offer['id']}" if is_out else f"off:{offer['id']}"
+            cb_data = f"off:{offer['id']}"
             btn_style = "danger" if is_out else ("success" if offer.get("unlimited_stock") else stock_button_style(stock))
             regular_offer_buttons.append([InlineKeyboardButton(
                 offer_button_label(
@@ -465,7 +470,7 @@ def offers_keyboard(lang, service_id):
 
         stock = int(off.get("stock") or 0)
         is_out = not off.get("unlimited_stock") and stock <= 0
-        cb_data = f"preorder_start:{off['id']}" if is_out else f"off:{off['id']}"
+        cb_data = f"off:{off['id']}"
         btn_style = "danger" if is_out else ("success" if off.get("unlimited_stock") else stock_button_style(stock))
 
         buttons.append([InlineKeyboardButton(
@@ -488,17 +493,10 @@ def offer_detail_keyboard(lang, offer):
     if offer.get("price") is not None and db.offer_has_stock(offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
     elif offer.get("price") is not None:
-        buttons.append([translated_button(lang, "btn_preorder", callback_data=f"preorder_start:{offer['id']}", style="warning")])
+        buttons.append([translated_button(lang, "btn_preorder", callback_data=f"preorder_start:{offer['id']}", style="danger")])
     back_data = f"svc:{offer['service_id']}" if offer.get("service_id") else "catalog"
     buttons.append([translated_button(lang, "btn_back", callback_data=back_data)])
     return InlineKeyboardMarkup(buttons)
-
-
-def preorder_confirm_keyboard(lang, offer_id, qty=1):
-    return InlineKeyboardMarkup([
-        [translated_button(lang, "btn_preorder", callback_data=f"confirm_preorder:{offer_id}:{qty}", style="success")],
-        [translated_button(lang, "btn_cancel_short", callback_data=f"off:{offer_id}")],
-    ])
 
 
 def quantity_keyboard(lang, offer, page=0, page_size=20):
