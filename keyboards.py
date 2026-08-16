@@ -5,6 +5,10 @@ import re
 from telegram import InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 def InlineKeyboardButton(*args, style=None, **kwargs):
+    if style:
+        api_kwargs = kwargs.pop("api_kwargs", None) or {}
+        api_kwargs["style"] = style
+        kwargs["api_kwargs"] = api_kwargs
     return _InlineKeyboardButton(*args, **kwargs)
 
 import database as db
