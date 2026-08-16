@@ -64,31 +64,14 @@ def compact_offer_name(name, max_len=34):
     return clean_name[: max_len - 3].rstrip() + "..."
 
 
-KNOWN_SERVICE_EMOJIS = {
-    "chatgpt": "🤖", "gpt": "🤖", "openai": "🤖",
-    "adobe": "🅰️",
-    "lovable": "💜",
-    "vpn": "🛡️", "vpns": "🛡️",
-    "telegram": "✈️",
-    "netflix": "🍿",
-    "canva": "🎨",
-    "capcut": "✂️",
-    "youtube": "📺",
-    "linkedin": "💼",
-    "outlook": "✉️",
-    "gemini": "✨",
-}
+KNOWN_SERVICE_EMOJIS = {}
 
 
 def get_service_emoji(name, current_emoji=""):
     emoji = str(current_emoji or "").strip()
-    if emoji and emoji not in {"🟢", "🔴", "🔵"}:
-        return emoji
-    name_lower = str(name or "").lower()
-    for key, val in KNOWN_SERVICE_EMOJIS.items():
-        if key in name_lower:
-            return val
-    return "📦"
+    if emoji in {"🟢", "🔴", "🔵", "📦"}:
+        return ""
+    return emoji
 
 
 def stock_badge(stock, unlimited=False):
