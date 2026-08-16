@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Archive,
   Ban,
   Boxes,
   Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Clock3,
   ClipboardList,
   Cloud,
   Copy,
@@ -28,6 +30,7 @@ import {
   ShoppingBag,
   ToggleLeft,
   ToggleRight,
+  TrendingUp,
   Trash2,
   UserRound,
   Users,
@@ -368,13 +371,58 @@ function OrdersPage({ data, onAction }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState("date");
+  const [direction, setDirection] = useState("desc");
   const [selected, setSelected] = useState(null);
   const [result, loading] = useRemoteList("/admin/api/orders", {
     search,
     status,
     page,
     per_page: 25,
+    sort,
+    direction,
   });
+  const analytics = result.analytics || {};
+  const daily = analytics.daily || [];
+  const chartPoints = useMemo(() => {
+    const maximum = Math.max(...daily.map((item) => Number(item.count || 0)), 1);
+    return daily.map((item, index) => ({
+      ...item,
+      x: daily.length <= 1 ? 0 : (index / (daily.length - 1)) * 600,
+      y: 142 - (Number(item.count || 0) / maximum) * 112,
+    }));
+  }, [daily]);
+  const statusSegments = useMemo(() => {
+    const colors = {
+      delivered: "#34d399",
+      paid: "#22d3ee",
+      payment_confirmed: "#60a5fa",
+      cancelled: "#fb7185",
+      refunded: "#f97316",
+      pending_payment: "#fbbf24",
+      manual_review: "#a78bfa",
+    };
+    return Object.entries(analytics.statuses || {})
+      .map(([key, value]) => ({ key, value, color: colors[key] || "#64748b" }))
+      .sort((a, b) => b.value - a.value);
+  }, [analytics.statuses]);
+  const totalStatuses = statusSegments.reduce((sum, item) => sum + item.value, 0);
+  let donutCursor = 0;
+  const donutBackground = statusSegments.length
+    ? `conic-gradient(${statusSegments.map((item) => {
+        const start = donutCursor;
+        donutCursor += (item.value / totalStatuses) * 100;
+        return `${item.color} ${start}% ${donutCursor}%`;
+      }).join(", ")})`
+    : "conic-gradient(#1c2b3d 0 100%)";
+  const toggleSort = (nextSort) => {
+    if (sort === nextSort) setDirection((value) => (value === "desc" ? "asc" : "desc"));
+    else {
+      setSort(nextSort);
+      setDirection("desc");
+    }
+    setPage(1);
+  };
   return (
     <>
       <PageHeader
@@ -382,6 +430,33 @@ function OrdersPage({ data, onAction }) {
         title="Commandes"
         description="Suivez les paiements, livraisons et interventions manuelles."
       />
+      <section className="order-kpis" aria-label="Statistiques des commandes">
+        <article><span className="order-kpi-icon violet"><ClipboardList size={19} /></span><div><small>Total commandes</small><strong>{analytics.total || 0}</strong><em>Volume global</em></div></article>
+        <article><span className="order-kpi-icon cyan"><CircleDollarSign size={19} /></span><div><small>Chiffre d'affaires</small><strong>{money(analytics.revenue, data.currency)}</strong><em>Commandes encaissées</em></div></article>
+        <article><span className="order-kpi-icon green"><CheckCircle2 size={19} /></span><div><small>Taux de livraison</small><strong>{analytics.success_rate || 0}%</strong><em>{analytics.delivered || 0} livrée(s)</em></div></article>
+        <article><span className="order-kpi-icon amber"><Clock3 size={19} /></span><div><small>À traiter</small><strong>{analytics.pending || 0}</strong><em>Action requise</em></div></article>
+      </section>
+      <section className="order-analytics-grid">
+        <article className="data-panel order-trend-card">
+          <header><div><span className="eyebrow">Activité</span><h3>Commandes sur 7 jours</h3></div><TrendingUp size={19} /></header>
+          <div className="order-line-chart">
+            <svg viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="Courbe des commandes sur 7 jours">
+              {[30, 86, 142].map((y) => <line key={y} x1="0" x2="600" y1={y} y2={y} className="order-grid-line" />)}
+              {chartPoints.length > 1 && <polygon points={`0,160 ${chartPoints.map((point) => `${point.x},${point.y}`).join(" ")} 600,160`} className="order-area" />}
+              {chartPoints.length > 1 && <polyline points={chartPoints.map((point) => `${point.x},${point.y}`).join(" ")} className="order-chart-line" />}
+              {chartPoints.map((point) => <circle key={point.date} cx={point.x} cy={point.y} r="4" className="order-chart-dot"><title>{point.count} commande(s)</title></circle>)}
+            </svg>
+            <div className="order-chart-labels">{daily.map((item) => <span key={item.date}>{new Intl.DateTimeFormat("fr-FR", { weekday: "short" }).format(new Date(`${item.date}T12:00:00`))}</span>)}</div>
+          </div>
+        </article>
+        <article className="data-panel order-status-card">
+          <header><div><span className="eyebrow">Répartition</span><h3>Statuts des commandes</h3></div></header>
+          <div className="order-status-content">
+            <div className="order-donut" style={{ background: donutBackground }}><div><strong>{analytics.total || 0}</strong><span>Total</span></div></div>
+            <div className="order-legend">{statusSegments.slice(0, 5).map((item) => <button key={item.key} onClick={() => { setStatus(item.key); setPage(1); }}><i style={{ background: item.color }} /><span>{STATUS_LABELS[item.key] || item.key}</span><strong>{item.value}</strong></button>)}</div>
+          </div>
+        </article>
+      </section>
       <FilterBar
         search={search}
         setSearch={(value) => {
@@ -406,16 +481,22 @@ function OrdersPage({ data, onAction }) {
               </option>
             ))}
         </select>
+        <select value={`${sort}-${direction}`} onChange={(event) => { const [nextSort, nextDirection] = event.target.value.split("-"); setSort(nextSort); setDirection(nextDirection); setPage(1); }} aria-label="Trier les commandes">
+          <option value="date-desc">Plus récentes</option>
+          <option value="date-asc">Plus anciennes</option>
+          <option value="amount-desc">Montant décroissant</option>
+          <option value="amount-asc">Montant croissant</option>
+        </select>
       </FilterBar>
       <section className="data-panel">
         <div className="responsive-table">
           <table>
             <thead>
               <tr>
-                <th>Commande</th>
+                <th><button className={`sort-button ${sort === "date" ? "active" : ""}`} onClick={() => toggleSort("date")}>Commande <span>{sort === "date" ? (direction === "desc" ? "↓" : "↑") : "↕"}</span></button></th>
                 <th>Client</th>
                 <th>Produit</th>
-                <th>Montant</th>
+                <th><button className={`sort-button ${sort === "amount" ? "active" : ""}`} onClick={() => toggleSort("amount")}>Montant <span>{sort === "amount" ? (direction === "desc" ? "↓" : "↑") : "↕"}</span></button></th>
                 <th>Statut</th>
                 <th>Date</th>
                 <th />

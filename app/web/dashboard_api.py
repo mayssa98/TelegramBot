@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pymongo import DESCENDING
@@ -63,12 +63,71 @@ def list_orders(params: dict[str, list[str]]) -> dict[str, Any]:
     sort_field = "total_price" if _first(params, "sort") == "amount" else "created_at"
     sort_direction = 1 if _first(params, "direction") == "asc" else DESCENDING
     rows = collection.find(query).sort(sort_field, sort_direction).skip((page - 1) * per_page).limit(per_page)
+    analytics_query = dict(query)
+    analytics_query.pop("status", None)
+    analytics = _order_analytics(collection, analytics_query)
     return {
         "items": [db._public(row) for row in rows],
         "page": page,
         "per_page": per_page,
         "total": total,
         "pages": max(1, (total + per_page - 1) // per_page),
+        "analytics": analytics,
+    }
+
+
+def _order_analytics(collection: Any, query: dict[str, Any]) -> dict[str, Any]:
+    """Build compact global metrics for the React orders dashboard."""
+    now = datetime.now(UTC)
+    start = (now - timedelta(days=6)).date()
+    days = {
+        (start + timedelta(days=offset)).isoformat(): {"count": 0, "revenue": 0.0}
+        for offset in range(7)
+    }
+    statuses: dict[str, int] = {}
+    revenue = 0.0
+    paid_statuses = {"paid", "payment_confirmed", "delivered"}
+    pending_statuses = {"pending_payment", "awaiting_verification", "manual_review", "preparing_delivery"}
+    delivered = pending = 0
+
+    for row in collection.find(query, {"status": 1, "total_price": 1, "created_at": 1}):
+        status = str(row.get("status") or "unknown")
+        statuses[status] = statuses.get(status, 0) + 1
+        amount = float(row.get("total_price") or 0)
+        if status in paid_statuses:
+            revenue += amount
+        if status == "delivered":
+            delivered += 1
+        if status in pending_statuses:
+            pending += 1
+
+        created_at = row.get("created_at")
+        try:
+            created = (
+                datetime.fromtimestamp(created_at, UTC)
+                if isinstance(created_at, (int, float))
+                else created_at.astimezone(UTC)
+            )
+            key = created.date().isoformat()
+            if key in days:
+                days[key]["count"] += 1
+                if status in paid_statuses:
+                    days[key]["revenue"] += amount
+        except (AttributeError, OSError, OverflowError, TypeError, ValueError):
+            continue
+
+    total = sum(statuses.values())
+    return {
+        "total": total,
+        "revenue": round(revenue, 2),
+        "delivered": delivered,
+        "pending": pending,
+        "success_rate": round((delivered / total * 100) if total else 0, 1),
+        "statuses": statuses,
+        "daily": [
+            {"date": key, "count": value["count"], "revenue": round(value["revenue"], 2)}
+            for key, value in days.items()
+        ],
     }
 
 

@@ -24,6 +24,9 @@ def test_order_filters_and_pagination(mock_mongodb):
     assert result["total"] == 2
     assert result["pages"] == 2
     assert result["items"][0]["id"] == 3
+    assert result["analytics"]["total"] == 3
+    assert result["analytics"]["delivered"] == 2
+    assert result["analytics"]["statuses"] == {"pending_payment": 1, "delivered": 2}
 
 
 def test_order_search_matches_numeric_customer(mock_mongodb):
