@@ -4,12 +4,17 @@ import re
 
 from telegram import InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
-def InlineKeyboardButton(*args, style=None, **kwargs):
-    if style in {"primary", "success", "danger"}:
-        api_kwargs = kwargs.pop("api_kwargs", None) or {}
-        api_kwargs["style"] = style
-        kwargs["api_kwargs"] = api_kwargs
-    return _InlineKeyboardButton(*args, **kwargs)
+class InlineKeyboardButton(_InlineKeyboardButton):
+    def __init__(self, *args, style=None, **kwargs):
+        if style in {"primary", "success", "danger"}:
+            api_kwargs = kwargs.pop("api_kwargs", None) or {}
+            api_kwargs["style"] = style
+            kwargs["api_kwargs"] = api_kwargs
+        super().__init__(*args, **kwargs)
+
+    @property
+    def style(self):
+        return self.api_kwargs.get("style") if self.api_kwargs else None
 
 import database as db
 from config import ADMIN_ID, REQUIRED_CHANNEL, REQUIRED_GROUP
