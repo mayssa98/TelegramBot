@@ -1413,8 +1413,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             with contextlib.suppress(Exception):
                 await q.message.delete()
-            return
-        is_chatgpt_offer = "chat" in off["name"].lower() and "gpt" in off["name"].lower()
+        off_name = str(off.get("name") or "").lower()
+        is_chatgpt_offer = "chat" in off_name and "gpt" in off_name
         if is_chatgpt_offer:
             base_url = public_base_url_from_environment()
             await q.message.reply_photo(
