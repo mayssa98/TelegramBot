@@ -137,13 +137,6 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
         return f"{name} | {suffix}"
 
     stock = int(offer.get("stock") or 0)
-    if stock <= 0:
-        preorder_text = t(lang, "btn_preorder")
-        suffix = f"{price_text} | 📦 {preorder_text}"
-        max_name_length = max(8, 64 - len(suffix) - 3)
-        name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
-        return f"{name} | {suffix}"
-
     suffix = f"{price_text} | {lbl}: {stock}"
     max_name_length = max(8, 64 - len(suffix) - 3)
     name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
