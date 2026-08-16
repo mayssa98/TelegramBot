@@ -324,6 +324,18 @@ def services_keyboard(lang):
     return InlineKeyboardMarkup(buttons)
 
 
+def format_split_button_texts(name, price_str, right_text):
+    """Format left and right button texts to achieve a precise 75% / 25% width ratio on Telegram clients."""
+    right_label = f"📦 {right_text}".strip()
+    right_len = len(right_label)
+    target_left_len = max(24, right_len * 3)
+    p_part = f" | {price_str}" if price_str else ""
+    allowed_name_len = max(8, target_left_len - len(p_part))
+    clean_name = compact_offer_name(name, allowed_name_len)
+    left_label = f"{clean_name}{p_part}".ljust(target_left_len)
+    return left_label, right_label
+
+
 def catalog_offers_keyboard(lang):
     """Show grouped category buttons (Adobe, ChatGPT, Telegram, VPNs) AT THE TOP in a 2-column grid, followed by individual offer buttons."""
     buttons = []
@@ -387,9 +399,9 @@ def catalog_offers_keyboard(lang):
             if is_out:
                 p = offer.get("price")
                 p_text = f"${float(p):.2f}".rstrip("0").rstrip(".") if p is not None else ""
-                short_name = compact_offer_name(safe_offer["name"], 30)
-                left_text = f"{short_name} | {p_text}" if p_text else short_name
-                right_text = f"📦 {t(lang, 'btn_preorder')}"
+                left_text, right_text = format_split_button_texts(
+                    safe_offer["name"], p_text, t(lang, "btn_preorder"),
+                )
                 regular_offer_buttons.append([
                     InlineKeyboardButton(left_text, callback_data=f"off:{offer['id']}", style="danger"),
                     InlineKeyboardButton(right_text, callback_data=f"preorder_start:{offer['id']}", style="danger"),
@@ -463,9 +475,9 @@ def offers_keyboard(lang, service_id):
         if is_out:
             p = off.get("price")
             p_text = f"${float(p):.2f}".rstrip("0").rstrip(".") if p is not None else ""
-            short_name = compact_offer_name(safe_offer["name"], 30)
-            left_text = f"{short_name} | {p_text}" if p_text else short_name
-            right_text = f"📦 {t(lang, 'btn_preorder')}"
+            left_text, right_text = format_split_button_texts(
+                safe_offer["name"], p_text, t(lang, "btn_preorder"),
+            )
             buttons.append([
                 InlineKeyboardButton(left_text, callback_data=f"off:{off['id']}", style="danger"),
                 InlineKeyboardButton(right_text, callback_data=f"preorder_start:{off['id']}", style="danger"),
