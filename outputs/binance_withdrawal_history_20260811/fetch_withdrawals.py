@@ -16,7 +16,6 @@ from urllib.request import Request, urlopen
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config import BINANCE_API_BASES, BINANCE_API_KEY, BINANCE_API_SECRET
 
-
 OUTPUT = Path(__file__).with_name("withdrawals_masked.json")
 START = datetime(2017, 7, 1, tzinfo=UTC)
 WINDOW = timedelta(days=89)
