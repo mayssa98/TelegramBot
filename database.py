@@ -252,20 +252,7 @@ def _seed_catalog():
 
 
 def _repair_catalog_encoding(db):
-    """Repair catalogue emojis previously seeded from a misencoded deployment."""
-    emojis = {
-        "Canva": "🎨", "Capcut": "🎬", "Chatgpt": "🤖",
-        "Discord Nitro": "🎮", "Gemini AI": "✨", "Grok AI": "🧠",
-        "Manus AI": "🚀", "Adobe Creative Cloud": "🅰️",
-        "Alight Motion": "📲", "Base44 AI": "🧩", "Duolingo": "🦉",
-        "Emergent AI": "🌐", "Flux AI": "⚡", "Freebeat AI": "🎵",
-        "Gamma AI": "📊", "Getcontac Premium": "📞", "Google Colab": "🐍",
-        "Meitu": "📸", "Outlook Mail": "📧", "Perplexity AI": "🔍",
-        "Picsart": "🖼️", "Reelshort": "📹", "Uncensored AI": "🔓",
-        "Viu": "📺", "VPN": "🛡️", "Weshsop AI": "🛍️",
-    }
-    for name, emoji in emojis.items():
-        db.services.update_one({"name": name}, {"$set": {"emoji": emoji}})
+    """Repair catalogue notes previously seeded from a misencoded deployment."""
     db.offers.update_many(
         {"note": {"$in": ["Prix Ã  définir", "Prix Ã  dÃ©finir"]}},
         {"$set": {"note": "Prix à définir"}},
