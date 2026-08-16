@@ -994,6 +994,8 @@ class handler(BaseHTTPRequestHandler):
                     name_ar=form.get("name_ar", "").strip(),
                 )
                 db.audit_event("service.created", details={"service_id": sid, "name": name})
+                self._reply(200, {"ok": True, "service_id": sid, "message": f"Catégorie « {name} » créée."})
+                return
 
             elif action == "update_service":
                 sid = int(form["service_id"])

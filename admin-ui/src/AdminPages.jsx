@@ -1594,8 +1594,46 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
     delivery_delay: product.delivery_delay || "Instantané après confirmation",
     low_stock_threshold: product.low_stock_threshold || 5,
   });
+  const [newServiceName, setNewServiceName] = useState("");
+  const [newServiceEmoji, setNewServiceEmoji] = useState("📦");
+  const [creatingSvc, setCreatingSvc] = useState(false);
+  const isNewService = form.service_id === "__new__";
   const set = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  const handlePublish = async () => {
+    let serviceId = form.service_id;
+    if (isNewService) {
+      if (!newServiceName.trim()) return;
+      setCreatingSvc(true);
+      try {
+        const result = await onAction({
+          action: "add_service",
+          name: newServiceName.trim(),
+          emoji: newServiceEmoji || "📦",
+        });
+        if (!result) { setCreatingSvc(false); return; }
+        serviceId = result.service_id || result.id || "";
+        if (!serviceId) { setCreatingSvc(false); return; }
+      } catch {
+        setCreatingSvc(false);
+        return;
+      }
+      setCreatingSvc(false);
+    }
+    if (
+      await onAction({
+        action: "save_reseller_product",
+        provider,
+        product_id: product.id,
+        ...form,
+        service_id: serviceId,
+        enabled: form.enabled ? "1" : "0",
+      })
+    )
+      onClose();
+  };
+
   return (
     <Modal title={product.name} onClose={onClose} wide>
       <div className="form-grid">
@@ -1623,8 +1661,29 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
                 {service.name}
               </option>
             ))}
+            <option disabled>──────────</option>
+            <option value="__new__">＋ Nouvelle catégorie…</option>
           </select>
         </Field>
+        {isNewService && (
+          <>
+            <Field label="Nom de la catégorie">
+              <input
+                value={newServiceName}
+                onChange={(event) => setNewServiceName(event.target.value)}
+                placeholder="Ex. Spotify, Disney+…"
+                autoFocus
+              />
+            </Field>
+            <Field label="Emoji">
+              <input
+                value={newServiceEmoji}
+                onChange={(event) => setNewServiceEmoji(event.target.value)}
+                style={{ maxWidth: 80, textAlign: "center", fontSize: "1.25rem" }}
+              />
+            </Field>
+          </>
+        )}
         <Field label="Publication">
           <label className="switch">
             <input
@@ -1658,20 +1717,10 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
       <div className="dialog-actions">
         <ActionButton
           icon={Check}
-          onClick={async () => {
-            if (
-              await onAction({
-                action: "save_reseller_product",
-                provider,
-                product_id: product.id,
-                ...form,
-                enabled: form.enabled ? "1" : "0",
-              })
-            )
-              onClose();
-          }}
+          disabled={creatingSvc || (isNewService && !newServiceName.trim())}
+          onClick={handlePublish}
         >
-          Publier
+          {creatingSvc ? "Création…" : "Publier"}
         </ActionButton>
       </div>
     </Modal>
