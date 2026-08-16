@@ -268,12 +268,18 @@ def services_keyboard(lang):
         row = []
         for _i, svc in enumerate(svcs):
             total = svc.get("total_stock", 0)
-            safe_name = clean_button_name(svc.get("name")) or f"Service #{svc['id']}"
-            label = compact_offer_name(safe_name, 28)
+            emoji = (svc.get("emoji") or "").strip()
+            raw_name = (svc.get("name") or f"Service #{svc['id']}").strip()
+            clean_name = clean_button_name(raw_name) or raw_name
+            if emoji and not raw_name.startswith(emoji):
+                label_text = f"{emoji} {clean_name}"
+            else:
+                label_text = raw_name
+            label = compact_offer_name(label_text, 28)
             row.append(InlineKeyboardButton(
                 label,
                 callback_data=f"svc:{svc['id']}",
-                style="success" if svc.get("unlimited_stock") else stock_button_style(total),
+                style="success" if (svc.get("unlimited_stock") or total > 0) else "danger",
                 icon_custom_emoji_id=svc.get("custom_emoji_id") or None,
             ))
             if len(row) == 2:
@@ -349,16 +355,25 @@ def onboarding_keyboard(lang, step):
 
 def offers_keyboard(lang, service_id):
     buttons = []
+    service = db.get_service(service_id)
+    svc_emoji = (service.get("emoji") or "").strip() if service else ""
     for off in db.list_offers(service_id):
         safe_offer = dict(off)
-        safe_offer["name"] = clean_button_name(off.get("name")) or f"Offre #{off['id']}"
+        off_name = (off.get("name") or f"Offre #{off['id']}").strip()
+        clean_name = clean_button_name(off_name) or off_name
+        emoji = (safe_offer.get("emoji") or svc_emoji).strip()
+        if emoji and not off_name.startswith(emoji):
+            safe_offer["name"] = f"{emoji} {clean_name}"
+        else:
+            safe_offer["name"] = off_name
         buttons.append([InlineKeyboardButton(
             offer_button_label(lang, safe_offer),
             callback_data=f"off:{off['id']}",
-            style="success" if off.get("unlimited_stock") else stock_button_style(off.get("stock")),
+            style="success" if (off.get("unlimited_stock") or int(off.get("stock") or 0) > 0) else stock_button_style(off.get("stock")),
             icon_custom_emoji_id=(
                 db.get_text_override_icon("stock_label", lang)
                 or off.get("custom_emoji_id")
+                or (service.get("custom_emoji_id") if service else None)
                 or None
             ),
         )])
@@ -370,7 +385,8 @@ def offer_detail_keyboard(lang, offer):
     buttons = []
     if offer["price"] is not None and db.offer_has_stock(offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
-    buttons.append([translated_button(lang, "btn_back", callback_data="catalog")])
+    back_data = f"svc:{offer['service_id']}" if offer.get("service_id") else "catalog"
+    buttons.append([translated_button(lang, "btn_back", callback_data=back_data)])
     return InlineKeyboardMarkup(buttons)
 
 
