@@ -1,9 +1,10 @@
 # React admin dashboard
 
-The React dashboard is the mobile-first replacement for the server-rendered
-admin interface. The production build is served by the Python application at
-`/admin-v2`; the existing dashboard remains available at `/admin` while its
-remaining pages are migrated.
+The React dashboard is the mobile-first administration interface. The Python
+application serves its production build at `/admin` and exposes the secured
+JSON and form-action endpoints used by every React page. The former
+server-rendered interface is retained only as an emergency fallback at
+`/admin-legacy`.
 
 ## Development
 
@@ -13,7 +14,7 @@ npm run dev
 ```
 
 Vite proxies `/admin/api` requests to `http://localhost:8080`. Start the Python
-server on that port and authenticate through `/admin-v2` before using the local
+server on that port and authenticate through `/admin` before using the local
 frontend.
 
 ## Production build

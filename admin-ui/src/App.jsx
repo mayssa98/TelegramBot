@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import AdminPage from "./AdminPages";
 import {
   Activity,
   AlertTriangle,
@@ -25,16 +26,16 @@ import {
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard, legacy: "/admin" },
-  { id: "orders", label: "Commandes", icon: ClipboardList, legacy: "/admin/orders" },
-  { id: "catalog", label: "Catalogue", icon: ShoppingBag, legacy: "/admin/catalog" },
-  { id: "api-products", label: "Produits API", icon: Cloud, legacy: "/admin/api-products" },
-  { id: "inventory", label: "Inventaire", icon: Boxes, legacy: "/admin/inventory" },
-  { id: "customers", label: "Clients", icon: Users, legacy: "/admin/customers" },
-  { id: "support", label: "Support", icon: Headphones, legacy: "/admin/support" },
-  { id: "interactions", label: "Interactions", icon: MessageSquareText, legacy: "/admin/interactions" },
-  { id: "activity", label: "Activité", icon: Activity, legacy: "/admin/activity" },
-  { id: "settings", label: "Paramètres", icon: Settings, legacy: "/admin/settings" },
+  { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
+  { id: "orders", label: "Commandes", icon: ClipboardList },
+  { id: "catalog", label: "Catalogue", icon: ShoppingBag },
+  { id: "api-products", label: "Produits API", icon: Cloud },
+  { id: "inventory", label: "Inventaire", icon: Boxes },
+  { id: "customers", label: "Clients", icon: Users },
+  { id: "support", label: "Support", icon: Headphones },
+  { id: "interactions", label: "Interactions", icon: MessageSquareText },
+  { id: "activity", label: "Activité", icon: Activity },
+  { id: "settings", label: "Paramètres", icon: Settings },
 ];
 
 const STATUS_LABELS = {
@@ -298,20 +299,6 @@ function Overview({ data, onNavigate, onOpenBot }) {
   );
 }
 
-function MigrationPage({ page }) {
-  const item = NAV_ITEMS.find((entry) => entry.id === page) || NAV_ITEMS[0];
-  const Icon = item.icon;
-  return (
-    <section className="migration-panel">
-      <div className="migration-icon"><Icon size={28} /></div>
-      <span className="eyebrow">Migration React en cours</span>
-      <h2>{item.label}</h2>
-      <p>Cette section reste disponible dans le tableau de bord actuel pendant que nous la reconstruisons dans React.</p>
-      <a className="primary-button" href={item.legacy}>Ouvrir la section actuelle <ChevronRight size={17} /></a>
-    </section>
-  );
-}
-
 function SearchDialog({ data, onClose, onNavigate }) {
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLowerCase();
@@ -382,7 +369,8 @@ function ErrorState({ message, onRetry }) {
 }
 
 export default function App() {
-  const initialPage = window.location.pathname.replace(/^\/admin-v2\/?/, "").split("/")[0] || "overview";
+  const routePage = () => window.location.pathname.replace(/^\/admin(?:-v2)?\/?/, "").split("/")[0] || "overview";
+  const initialPage = routePage();
   const [activePage, setActivePage] = useState(NAV_ITEMS.some((item) => item.id === initialPage) ? initialPage : "overview");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -393,6 +381,7 @@ export default function App() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [busyAction, setBusyAction] = useState("");
   const [toast, setToast] = useState(null);
+  const [actionVersion, setActionVersion] = useState(0);
 
   const loadData = useCallback(async (background = false) => {
     background ? setRefreshing(true) : setLoading(true);
@@ -422,7 +411,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     const handlePopState = () => {
-      const page = window.location.pathname.replace(/^\/admin-v2\/?/, "").split("/")[0] || "overview";
+      const page = routePage();
       setActivePage(NAV_ITEMS.some((item) => item.id === page) ? page : "overview");
     };
     window.addEventListener("popstate", handlePopState);
@@ -432,7 +421,27 @@ export default function App() {
   const navigate = (page) => {
     setActivePage(page);
     setMobileOpen(false);
-    window.history.pushState({}, "", page === "overview" ? "/admin-v2" : `/admin-v2/${page}`);
+    window.history.pushState({}, "", page === "overview" ? "/admin" : `/admin/${page}`);
+  };
+
+  const adminAction = async (params) => {
+    try {
+      const response = await fetch("/admin", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body: new URLSearchParams(Object.entries(params).map(([key, value]) => [key, value == null ? "" : String(value)])),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.ok === false) throw new Error(payload.message || payload.error || "Action refusée.");
+      setToast({ title: "Action enregistrée", message: payload.message || "Les modifications ont été appliquées." });
+      await loadData(true);
+      setActionVersion((value) => value + 1);
+      return payload;
+    } catch (actionError) {
+      setToast({ type: "error", title: "Action impossible", message: actionError.message });
+      return null;
+    }
   };
 
   const runHealthCheck = async (type) => {
@@ -469,7 +478,7 @@ export default function App() {
       <div className="main-shell">
         <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} isRefreshing={refreshing} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} />
         <main className="content">
-          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <MigrationPage page={activePage} />}
+          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={`${activePage}-${actionVersion}`} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} setToast={setToast} />}
         </main>
       </div>
       {searchOpen && data && <SearchDialog data={data} onClose={() => setSearchOpen(false)} onNavigate={navigate} />}

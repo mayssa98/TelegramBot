@@ -400,14 +400,20 @@ class handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
-        if path == "/admin" or path == "/admin-v2" or path.startswith("/admin-v2/"):
+        admin_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "support", "interactions", "activity", "settings"}
+        react_admin_route = (
+            path in {"/admin", "/admin-v2"}
+            or path.startswith("/admin-v2/")
+            or path.startswith("/admin/") and path.removeprefix("/admin/") in admin_tabs
+        )
+        if react_admin_route:
             if not self._dashboard_authorized():
                 self.send_response(401)
                 self.send_header("WWW-Authenticate", 'Basic realm="TelegramBot Admin"')
                 self.end_headers()
                 return
 
-            relative_path = path.removeprefix("/admin-v2/")
+            relative_path = path.removeprefix("/admin-v2/") if path.startswith("/admin-v2/") else ""
             requested_file = ADMIN_UI_DIST / relative_path
             if not relative_path or not requested_file.is_file():
                 requested_file = ADMIN_UI_DIST / "index.html"
@@ -442,8 +448,7 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        admin_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "support", "interactions", "activity", "settings"}
-        if path == "/admin" or path.startswith("/admin/") and path.removeprefix("/admin/") in admin_tabs:
+        if path == "/admin-legacy" or path.startswith("/admin-legacy/") and path.removeprefix("/admin-legacy/") in admin_tabs:
             if not self._dashboard_authorized():
                 self.send_response(401)
                 self.send_header("WWW-Authenticate", 'Basic realm="TelegramBot Admin"')
@@ -452,7 +457,7 @@ class handler(BaseHTTPRequestHandler):
 
             # Servir le dashboard HTML
             try:
-                active_tab = path.removeprefix("/admin/") if path.startswith("/admin/") else "overview"
+                active_tab = path.removeprefix("/admin-legacy/") if path.startswith("/admin-legacy/") else "overview"
                 data = db.dashboard_data()
                 data["shop_name"] = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip()
                 data["currency"] = CURRENCY

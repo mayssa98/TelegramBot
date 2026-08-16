@@ -103,6 +103,22 @@ def test_primary_admin_route_serves_react_build(monkeypatch):
     assert '<div id="root"></div>' in body
 
 
+def test_react_admin_section_route_serves_spa(monkeypatch):
+    monkeypatch.setattr("api.webhook.DASHBOARD_PASSWORD", "secret")
+    encoded = base64.b64encode(b"admin:secret").decode()
+    request = Request(
+        "http://placeholder/admin/orders",
+        headers={"Authorization": f"Basic {encoded}"},
+    )
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/admin/orders"
+        with urlopen(request, timeout=5) as response:
+            body = response.read().decode()
+
+    assert response.status == 200
+    assert '<div id="root"></div>' in body
+
+
 def test_webhook_rejects_missing_secret(monkeypatch):
     monkeypatch.setenv("HP_WEBHOOK_SECRET", "expected-secret")
     request = Request(
