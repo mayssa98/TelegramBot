@@ -205,6 +205,23 @@ def manual_delivery_request_keyboard(order_id):
     ]])
 
 
+def onchain_payment_review_keyboard(order_id):
+    """Accept or reject one pending BSC/Polygon payment."""
+    order_id = int(order_id)
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "✅ Accepter",
+            callback_data=f"adm_onchain_approve:{order_id}",
+            style="success",
+        ),
+        InlineKeyboardButton(
+            "❌ Refuser",
+            callback_data=f"adm_onchain_reject:{order_id}",
+            style="danger",
+        ),
+    ]])
+
+
 def catalog_admin_keyboard():
     rows = [[InlineKeyboardButton(
         s.get("name") or f"Service #{s['id']}",

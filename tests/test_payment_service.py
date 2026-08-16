@@ -336,3 +336,49 @@ def test_onchain_payment_is_saved_for_manual_review(mock_mongodb):
     assert saved["status"] == OrderStatus.MANUAL_REVIEW
     assert saved["txid"] == txid
     assert saved["verify_method"] == "manual_usdt_bsc"
+
+
+def test_admin_approval_finalizes_onchain_order_exactly_once(mock_mongodb):
+    service_id = db.add_service("VPN", "T")
+    offer_id = db.add_offer(service_id, "VPN plan", 5.0, 1)
+    db.add_inventory_items(offer_id, ["vpn-account"])
+    order = order_service.create_order(
+        42, db.get_offer(offer_id), payment_method="usdt_polygon",
+    )
+    payment_service.submit_onchain_payment(order["id"], "0x" + "b" * 64, 42)
+
+    result = payment_service.review_onchain_payment(
+        order["id"], 999, approved=True,
+    )
+    repeated = payment_service.review_onchain_payment(
+        order["id"], 999, approved=True,
+    )
+
+    assert result["status"] == "delivered"
+    assert result["delivered_content"] == ["vpn-account"]
+    assert result["order"]["verify_method"] == "approved_usdt_polygon"
+    assert result["order"]["reviewed_by"] == 999
+    assert repeated["status"] == "already_processed"
+
+
+def test_admin_rejection_returns_onchain_order_to_failed_verification(mock_mongodb):
+    service_id = db.add_service("VPN", "T")
+    offer_id = db.add_offer(service_id, "VPN plan", 5.0, 1)
+    order = order_service.create_order(
+        42, db.get_offer(offer_id), payment_method="usdt_bsc",
+    )
+    txid = "0x" + "c" * 64
+    payment_service.submit_onchain_payment(order["id"], txid, 42)
+
+    result = payment_service.review_onchain_payment(
+        order["id"], 999, approved=False,
+    )
+    repeated = payment_service.review_onchain_payment(
+        order["id"], 999, approved=False,
+    )
+
+    assert result["status"] == "rejected"
+    assert result["order"]["status"] == OrderStatus.VERIFICATION_FAILED
+    assert result["order"]["verify_method"] == "rejected_usdt_bsc"
+    assert result["order"]["txid"] == txid
+    assert repeated["status"] == "already_processed"

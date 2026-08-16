@@ -85,6 +85,13 @@ def test_onchain_payment_keyboard_submits_txid_without_auto_confirmation():
     assert keyboard.inline_keyboard[1][0].callback_data == "cancel_buy:81"
 
 
+def test_admin_onchain_review_keyboard_has_accept_and_reject_actions():
+    keyboard = admin.onchain_payment_review_keyboard(154)
+
+    assert keyboard.inline_keyboard[0][0].callback_data == "adm_onchain_approve:154"
+    assert keyboard.inline_keyboard[0][1].callback_data == "adm_onchain_reject:154"
+
+
 def test_offer_button_label_uses_store_style():
     label = offer_button_label(
         "en",

@@ -1396,6 +1396,49 @@ def test_otp_answers_notify_admin_and_redirect_customer(monkeypatch, mock_mongod
     assert admin_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "adm_deliver:502"
 
 
+def test_onchain_txid_submission_sends_admin_accept_and_reject_buttons(
+    monkeypatch, mock_mongodb,
+):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    mock_mongodb.orders.insert_one({
+        "id": 154,
+        "user_id": 42,
+        "offer_id": 1,
+        "service_name": "VPN",
+        "offer_name": "VPN plan",
+        "qty": 1,
+        "total_price": 13.20,
+        "payment_method": "usdt_polygon",
+        "status": "pending_payment",
+        "txid": "",
+        "created_at": 100,
+        "expires_at": 9999999999,
+    })
+    txid = "0x" + "d" * 64
+    PENDING[42] = (
+        "await_onchain_txid",
+        {"order_id": 154, "network": "Polygon"},
+    )
+    message = SimpleNamespace(text=txid, reply_text=AsyncMock())
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        message=message,
+    )
+
+    asyncio.run(
+        handle_pending_input(update, SimpleNamespace(bot=bot_client), "en")
+    )
+
+    admin_call = bot_client.send_message.await_args
+    assert admin_call.args[0] == 999
+    assert "On-chain payment review" in admin_call.args[1]
+    keyboard = admin_call.kwargs["reply_markup"]
+    assert keyboard.inline_keyboard[0][0].callback_data == "adm_onchain_approve:154"
+    assert keyboard.inline_keyboard[0][1].callback_data == "adm_onchain_reject:154"
+    assert db.get_order(154)["status"] == "manual_review"
+
+
 def test_customer_support_text_is_deleted_after_channel_delivery(mock_mongodb):
     PENDING[42] = ("support", "other")
     user = SimpleNamespace(

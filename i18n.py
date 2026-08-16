@@ -458,6 +458,11 @@ TRANSLATIONS = {
         "en": "🔎 *Transaction submitted*\n\nOrder #{oid} — USDT {network}\nYour payment is now awaiting administrator verification. Delivery starts only after confirmation.",
         "ar": "🔎 *Transaction submitted*\n\nOrder #{oid} — USDT {network}\nYour payment is now awaiting administrator verification. Delivery starts only after confirmation.",
     },
+    "onchain_payment_rejected": {
+        "fr": "❌ *Paiement non accepté*\n\nLe paiement de la commande #{oid} sur {network} n’a pas été validé par l’administrateur. Vérifiez votre transfert puis soumettez un autre TXID, ou contactez le support.",
+        "en": "❌ *Payment rejected*\n\nThe {network} payment for order #{oid} was not approved by the administrator. Check your transfer and submit another TXID, or contact support.",
+        "ar": "❌ *Payment rejected*\n\nThe {network} payment for order #{oid} was not approved by the administrator. Check your transfer and submit another TXID, or contact support.",
+    },
     "onboarding_1": {
         "fr": "✨ *Bienvenue dans l’univers {shop}*\n\nDes services numériques premium, présentés simplement et accessibles en quelques secondes.\n\n`1/3`  Découvrir",
         "en": "✨ *Welcome to the {shop} experience*\n\nPremium digital services, clearly presented and available in seconds.\n\n`1/3`  Discover",

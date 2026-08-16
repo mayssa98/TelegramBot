@@ -2111,9 +2111,10 @@ async def handle_pending_input(update, context, lang):
                 f"Order: <b>#{order_id}</b>\n"
                 f"Network: <b>{html.escape(result['network'])}</b>\n"
                 f"Amount: <b>{float(result['order']['total_price']):.2f} USDT</b>\n"
-                f"TXID: <code>{html.escape(text)}</code>",
-                parse_mode=ParseMode.HTML,
-            )
+                 f"TXID: <code>{html.escape(text)}</code>",
+                 parse_mode=ParseMode.HTML,
+                 reply_markup=admin.onchain_payment_review_keyboard(order_id),
+             )
         return
 
     if kind == "await_topup_txid":
@@ -2510,6 +2511,17 @@ async def begin_otp_order_questions(message, lang, order_id, uid):
     return True
 
 # ---------------- Traitement de paiement ----------------
+class _DirectChatMessage:
+    """Minimal Message adapter that sends replies directly to one customer."""
+
+    def __init__(self, bot, chat_id):
+        self.bot = bot
+        self.chat_id = int(chat_id)
+
+    async def reply_text(self, text, **kwargs):
+        return await self.bot.send_message(self.chat_id, text, **kwargs)
+
+
 async def send_payment_result(message, context, lang, order_id, result, uid):
     if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery"):
         affiliate = result.get("affiliate")
@@ -2826,6 +2838,84 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🛠️ *Panneau Admin*",
             reply_markup=admin.admin_panel_keyboard(),
         )
+        return
+
+    if data.startswith("adm_onchain_approve:"):
+        order_id = int(data.split(":", 1)[1])
+        result = await asyncio.to_thread(
+            payment_service.review_onchain_payment,
+            order_id,
+            uid,
+            approved=True,
+        )
+        if result["status"] in {"not_found", "already_processed"}:
+            await q.edit_message_text(
+                "⚠️ Cette demande a déjà été traitée ou n’existe plus.",
+            )
+            return
+        if result["status"] == "failed":
+            await q.edit_message_text(
+                "⚠️ Le paiement n’a pas pu être accepté. Vérifiez le stock et réessayez.",
+                reply_markup=admin.onchain_payment_review_keyboard(order_id),
+            )
+            return
+        order = result["order"]
+        network = "BSC (BEP20)" if order["payment_method"] == "usdt_bsc" else "Polygon"
+        await q.edit_message_text(
+            "✅ <b>On-chain payment accepted</b>\n"
+            f"Order: <b>#{order_id}</b>\n"
+            f"Network: <b>{network}</b>\n"
+            f"Amount: <b>{float(order.get('total_price') or 0):.2f} USDT</b>\n"
+            f"TXID: <code>{html.escape(str(order.get('txid') or ''))}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        customer_id = int(order["user_id"])
+        await send_payment_result(
+            _DirectChatMessage(context.bot, customer_id),
+            context,
+            lang_of(customer_id),
+            order_id,
+            result,
+            customer_id,
+        )
+        return
+
+    if data.startswith("adm_onchain_reject:"):
+        order_id = int(data.split(":", 1)[1])
+        result = await asyncio.to_thread(
+            payment_service.review_onchain_payment,
+            order_id,
+            uid,
+            approved=False,
+        )
+        if result["status"] in {"not_found", "already_processed"}:
+            await q.edit_message_text(
+                "⚠️ Cette demande a déjà été traitée ou n’existe plus.",
+            )
+            return
+        order = result["order"]
+        network = "BSC (BEP20)" if order["payment_method"] == "usdt_bsc" else "Polygon"
+        await q.edit_message_text(
+            "❌ <b>On-chain payment rejected</b>\n"
+            f"Order: <b>#{order_id}</b>\n"
+            f"Network: <b>{network}</b>\n"
+            f"TXID: <code>{html.escape(str(order.get('txid') or ''))}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        customer_id = int(order["user_id"])
+        customer_lang = lang_of(customer_id)
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                customer_id,
+                t(
+                    customer_lang,
+                    "onchain_payment_rejected",
+                    oid=order_id,
+                    network=network,
+                ),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=kb.txid_verify_keyboard(customer_lang, order_id),
+            )
         return
 
     if data.startswith("adm_topup_approve:"):

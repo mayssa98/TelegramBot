@@ -370,6 +370,67 @@ def submit_onchain_payment(order_id: int, txid: str, user_id: int) -> dict[str, 
     return {"status": "manual_review", "order": db.get_order(order_id), "network": network}
 
 
+def review_onchain_payment(
+    order_id: int, admin_id: int, *, approved: bool,
+) -> dict[str, Any]:
+    """Atomically accept or reject one pending BSC/Polygon payment."""
+    order_id = int(order_id)
+    order = db.get_order(order_id)
+    if not order or order.get("payment_method") not in {"usdt_bsc", "usdt_polygon"}:
+        return {"status": "not_found", "order": order}
+    if order.get("status") != OrderStatus.MANUAL_REVIEW:
+        return {"status": "already_processed", "order": order}
+
+    if not approved:
+        now = int(time.time())
+        updated = db.get_conn().orders.update_one(
+            {
+                "id": order_id,
+                "status": OrderStatus.MANUAL_REVIEW,
+                "payment_method": {"$in": ["usdt_bsc", "usdt_polygon"]},
+            },
+            {"$set": {
+                "status": OrderStatus.VERIFICATION_FAILED,
+                "verify_method": f"rejected_{order['payment_method']}",
+                "reviewed_by": int(admin_id),
+                "reviewed_at": now,
+                "updated_at": now,
+            }},
+        )
+        if updated.modified_count != 1:
+            return {"status": "already_processed", "order": db.get_order(order_id)}
+        db.audit_event(
+            "payment.onchain_rejected",
+            actor_id=admin_id,
+            details={"order_id": order_id, "txid": order.get("txid", "")},
+        )
+        return {"status": "rejected", "order": db.get_order(order_id)}
+
+    # _finalize_confirmed_payment performs an atomic paid transition and the
+    # standard inventory/supplier delivery workflow.
+    result = _finalize_confirmed_payment(
+        order_id,
+        int(order["user_id"]),
+        str(order.get("txid") or ""),
+        f"approved_{order['payment_method']}",
+    )
+    if result["status"] != "failed":
+        db.get_conn().orders.update_one(
+            {"id": order_id},
+            {"$set": {
+                "reviewed_by": int(admin_id),
+                "reviewed_at": int(time.time()),
+            }},
+        )
+        db.audit_event(
+            "payment.onchain_approved",
+            actor_id=admin_id,
+            details={"order_id": order_id, "txid": order.get("txid", "")},
+        )
+        result["order"] = db.get_order(order_id)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Confirmation manuelle (admin)
 # ---------------------------------------------------------------------------
