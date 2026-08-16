@@ -2,14 +2,7 @@
 import html
 import re
 
-from telegram import InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-
-def InlineKeyboardButton(*args, style=None, **kwargs):
-    if style:
-        api_kwargs = kwargs.pop("api_kwargs", None) or {}
-        api_kwargs["style"] = style
-        kwargs["api_kwargs"] = api_kwargs
-    return _InlineKeyboardButton(*args, **kwargs)
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 import database as db
 from config import ADMIN_ID, REQUIRED_CHANNEL, REQUIRED_GROUP
@@ -383,7 +376,6 @@ def catalog_offers_keyboard(lang):
                 grouped_category_buttons.append(InlineKeyboardButton(
                     label,
                     callback_data=f"svc:{sid}",
-                    style="success" if (has_unlimited or total_stock > 0) else "warning",
                 ))
         else:
             safe_offer = dict(offer)
@@ -391,7 +383,6 @@ def catalog_offers_keyboard(lang):
             stock = int(offer.get("stock") or 0)
             is_out = not offer.get("unlimited_stock") and stock <= 0
             cb_data = f"preorder_start:{offer['id']}" if is_out else f"off:{offer['id']}"
-            btn_style = "warning" if is_out else ("success" if offer.get("unlimited_stock") else stock_button_style(stock))
             regular_offer_buttons.append([InlineKeyboardButton(
                 offer_button_label(
                     lang, safe_offer,
@@ -399,7 +390,6 @@ def catalog_offers_keyboard(lang):
                     price_tbd=price_tbd,
                 ),
                 callback_data=cb_data,
-                style=btn_style,
                 icon_custom_emoji_id=(
                     stock_icon
                     or offer.get("custom_emoji_id")
@@ -458,12 +448,10 @@ def offers_keyboard(lang, service_id):
         stock = int(off.get("stock") or 0)
         is_out = not off.get("unlimited_stock") and stock <= 0
         cb_data = f"preorder_start:{off['id']}" if is_out else f"off:{off['id']}"
-        btn_style = "warning" if is_out else ("success" if off.get("unlimited_stock") else stock_button_style(stock))
 
         buttons.append([InlineKeyboardButton(
             offer_button_label(lang, safe_offer),
             callback_data=cb_data,
-            style=btn_style,
             icon_custom_emoji_id=(
                 db.get_text_override_icon("stock_label", lang)
                 or off.get("custom_emoji_id")
