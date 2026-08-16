@@ -5,11 +5,13 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import html
 import re
 import secrets
 import time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
+from urllib.parse import urlsplit
 
 from pymongo import ReturnDocument
 
@@ -31,6 +33,35 @@ ALLOWED_PROOF_TYPES = {
     "image/png": (b"\x89PNG\r\n\x1a\n",),
     "application/pdf": (b"%PDF-",),
 }
+CATEGORY_LABELS = {
+    "ai": {"fr": "Outils IA", "ar": "أدوات الذكاء الاصطناعي"},
+    "streaming": {"fr": "Streaming", "ar": "الترفيه والبث"},
+    "design": {"fr": "Design & création", "ar": "التصميم والإبداع"},
+    "productivity": {"fr": "Productivité", "ar": "الإنتاجية"},
+    "cloud": {"fr": "Cloud & Dev", "ar": "السحابة والتطوير"},
+    "communication": {"fr": "Communication", "ar": "التواصل"},
+    "security": {"fr": "Sécurité", "ar": "الأمان"},
+    "other": {"fr": "Autres services", "ar": "خدمات أخرى"},
+}
+SERVICE_LOGOS = {
+    "ai": "https://cdn.simpleicons.org/openai/FFFFFF",
+    "chatgpt plus": "https://cdn.simpleicons.org/openai/FFFFFF",
+    "netflix": "https://cdn.simpleicons.org/netflix/E50914",
+    "google one pro": "https://cdn.simpleicons.org/google/4285F4",
+    "adobe pro": "https://cdn.simpleicons.org/adobe/FF0000",
+    "capcut": "https://cdn.simpleicons.org/capcut/FFFFFF",
+    "canva": "https://cdn.simpleicons.org/canva/00C4CC",
+    "linkidin": "https://cdn.simpleicons.org/linkedin/0A66C2",
+    "mails": "https://cdn.simpleicons.org/gmail/EA4335",
+    "lovable": "https://cdn.simpleicons.org/lovable/FF6B6B",
+    "vpns": "https://cdn.simpleicons.org/protonvpn/6D4AFF",
+    "youtube": "https://cdn.simpleicons.org/youtube/FF0000",
+    "quillbot": "https://cdn.simpleicons.org/quillbot/499557",
+    "framer": "https://cdn.simpleicons.org/framer/FFFFFF",
+    "supabase": "https://cdn.simpleicons.org/supabase/3FCF8E",
+    "telegram premuim": "https://cdn.simpleicons.org/telegram/26A5E4",
+}
+DEFAULT_SERVICE_LOGO = "/storefront/service-fallback.png"
 
 
 class StorefrontError(ValueError):
@@ -63,10 +94,64 @@ def _price_millimes(offer: dict[str, Any]) -> int:
         return 0
 
 
+def _clean_description(value: Any) -> str:
+    text = str(value or "").replace("[[HTML]]", " ")
+    text = re.sub(r"<tg-emoji\b[^>]*>.*?</tg-emoji>", " ", text, flags=re.I | re.S)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"</?(?:blockquote|p|div|li|ul|ol)\b[^>]*>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n", text)
+    return text.strip()[:600]
+
+
+def _site_description(offer: dict[str, Any], lang: str) -> str:
+    dedicated = offer.get("site_description_ar" if lang == "ar" else "site_description_fr")
+    fallback = _localized(offer, "description", lang)
+    return _clean_description(dedicated or fallback)
+
+
+def _safe_image_url(value: Any) -> str:
+    url = str(value or "").strip()[:1000]
+    if not url:
+        return ""
+    parsed = urlsplit(url)
+    if parsed.scheme == "https" and parsed.netloc:
+        return url
+    if url.startswith("/storefront/"):
+        return url
+    return ""
+
+
+def _site_category(service: dict[str, Any], offer: dict[str, Any]) -> str:
+    configured = str(offer.get("site_category") or "").strip().lower()
+    if configured in CATEGORY_LABELS:
+        return configured
+    name = f"{service.get('name', '')} {offer.get('name', '')}".lower()
+    if re.search(r"\b(?:ai|ia)\b", name):
+        return "ai"
+    rules = (
+        ("ai", ("chatgpt", "gemini", "claude", "manus", "higgsfield")),
+        ("streaming", ("netflix", "spotify", "youtube", "stream")),
+        ("design", ("adobe", "canva", "capcut", "framer", "design")),
+        ("cloud", ("supabase", "cloud", "hosting", "google one", "developer")),
+        ("communication", ("telegram", "discord", "linkedin")),
+        ("security", ("otp", "vpn", "security", "number")),
+        ("productivity", ("office", "microsoft", "notion", "quillbot", "grammarly")),
+    )
+    return next((category for category, words in rules if any(word in name for word in words)), "other")
+
+
+def _service_logo(service: dict[str, Any]) -> str:
+    return SERVICE_LOGOS.get(str(service.get("name") or "").strip().lower(), DEFAULT_SERVICE_LOGO)
+
+
 def catalog(lang: str = "fr") -> dict[str, Any]:
     """Return the active shared bot catalog projected for the Tunisian site."""
     lang = "ar" if lang == "ar" else "fr"
     services = []
+    used_categories: set[str] = set()
     for service in db.list_services():
         if not _site_visible(service):
             continue
@@ -75,11 +160,13 @@ def catalog(lang: str = "fr") -> dict[str, Any]:
             if not _site_visible(offer):
                 continue
             available = bool(offer.get("unlimited_stock") or int(offer.get("stock") or 0) > 0)
+            category = _site_category(service, offer)
+            used_categories.add(category)
             products.append({
                 "id": int(offer["id"]),
                 "service_id": int(service["id"]),
                 "name": _localized(offer, "name", lang),
-                "description": _localized(offer, "description", lang),
+                "description": _site_description(offer, lang),
                 "warranty": _localized(offer, "note", lang),
                 "delivery_delay": _localized(offer, "delivery_delay", lang),
                 "price_millimes": _price_millimes(offer),
@@ -88,6 +175,11 @@ def catalog(lang: str = "fr") -> dict[str, Any]:
                 "available": available,
                 "stock": -1 if offer.get("unlimited_stock") else max(0, int(offer.get("stock") or 0)),
                 "featured": bool(offer.get("site_featured")),
+                "image_url": _safe_image_url(offer.get("site_image_url")),
+                "logo_url": _service_logo(service),
+                "category": category,
+                "category_label": CATEGORY_LABELS[category][lang],
+                "badge": str(offer.get("site_badge_ar" if lang == "ar" else "site_badge") or "").strip()[:60],
                 "emoji": offer.get("emoji") or service.get("emoji") or "✦",
             })
         if products:
@@ -95,6 +187,7 @@ def catalog(lang: str = "fr") -> dict[str, Any]:
                 "id": int(service["id"]),
                 "name": _localized(service, "name", lang),
                 "emoji": service.get("emoji") or "◆",
+                "logo_url": _service_logo(service),
                 "products": products,
             })
     return {
@@ -103,6 +196,11 @@ def catalog(lang: str = "fr") -> dict[str, Any]:
         "currency": "TND",
         "whatsapp": TN_WHATSAPP_NUMBER,
         "services": services,
+        "categories": [
+            {"id": key, "label": labels[lang]}
+            for key, labels in CATEGORY_LABELS.items()
+            if key in used_categories
+        ],
         "payment_methods": [
             {"id": key, "label": labels[lang]}
             for key, labels in PAYMENT_METHODS.items()

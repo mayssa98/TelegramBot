@@ -49,6 +49,43 @@ def test_catalog_projects_existing_bot_products_in_tnd(mock_mongodb, monkeypatch
     assert product["currency"] == "TND"
     assert product["price_millimes"] == 32_000
     assert product["available"] is True
+    assert product["category"] == "ai"
+    assert product["logo_url"] == "https://cdn.simpleicons.org/openai/FFFFFF"
+    assert result["categories"] == [{"id": "ai", "label": "Outils IA"}]
+
+
+def test_unknown_service_uses_local_generated_logo(mock_mongodb):
+    service_id = db.add_service("Service interne", "◆")
+    db.add_offer(service_id, "Accès spécial", 2, 1)
+
+    product = storefront_service.catalog("fr")["services"][0]["products"][0]
+
+    assert product["logo_url"] == "/storefront/service-fallback.png"
+
+
+def test_catalog_uses_site_visual_content_and_cleans_telegram_markup(mock_mongodb):
+    offer_id = _product()
+    db.update_offer(
+        offer_id,
+        description="[[HTML]]<b>Description bot</b><tg-emoji emoji-id=\"1\">⚡</tg-emoji>",
+        site_description_fr="Une description claire pour le site.",
+        site_description_ar="وصف واضح للموقع",
+        site_image_url="https://cdn.example.com/chatgpt.webp",
+        site_category="ai",
+        site_badge="Populaire",
+        site_badge_ar="الأكثر طلباً",
+        site_featured=True,
+    )
+
+    french = storefront_service.catalog("fr")["services"][0]["products"][0]
+    arabic = storefront_service.catalog("ar")["services"][0]["products"][0]
+
+    assert french["description"] == "Une description claire pour le site."
+    assert french["image_url"] == "https://cdn.example.com/chatgpt.webp"
+    assert french["badge"] == "Populaire"
+    assert french["featured"] is True
+    assert arabic["description"] == "وصف واضح للموقع"
+    assert arabic["badge"] == "الأكثر طلباً"
 
 
 def test_storefront_order_requires_tunisian_phone_and_encrypts_receipt(mock_mongodb):

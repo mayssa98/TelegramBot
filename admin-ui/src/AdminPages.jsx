@@ -50,6 +50,8 @@ const STATUS_LABELS = {
   refunded: "Remboursée",
   expired: "Expirée",
   paid: "Payée",
+  stock_issue: "Problème de stock",
+  rejected: "Refusée",
   open: "Ouvert",
   waiting_admin: "Attente admin",
   waiting_customer: "Attente client",
@@ -652,8 +654,8 @@ function OrdersPage({ data, onAction }) {
   );
 }
 
-function OfferForm({ services, offer, onAction, onClose }) {
-  const currentChannels = offer?.sales_channels || ["bot", "tn_site"];
+function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both" }) {
+  const currentChannels = offer?.sales_channels || (defaultChannel === "both" ? ["bot", "tn_site"] : [defaultChannel]);
   const [form, setForm] = useState({
     service_id: offer?.service_id || services[0]?.id || "",
     name: offer?.name || "",
@@ -668,6 +670,13 @@ function OfferForm({ services, offer, onAction, onClose }) {
     tn_price: offer?.tn_price_millimes != null ? Number(offer.tn_price_millimes) / 1000 : "",
     name_ar: offer?.name_ar || "",
     description_ar: offer?.description_ar || "",
+    site_description_fr: offer?.site_description_fr || "",
+    site_description_ar: offer?.site_description_ar || "",
+    site_image_url: offer?.site_image_url || "",
+    site_category: offer?.site_category || "",
+    site_badge: offer?.site_badge || "",
+    site_badge_ar: offer?.site_badge_ar || "",
+    site_featured: Boolean(offer?.site_featured),
   });
   const set = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -681,6 +690,7 @@ function OfferForm({ services, offer, onAction, onClose }) {
         ? { offer_id: offer.id, sort_order: offer.sort_order || 0 }
         : {}),
       auto_delivery: form.auto_delivery ? "on" : "",
+      site_featured: form.site_featured ? "on" : "",
     };
     if (await onAction(payload)) onClose();
   };
@@ -730,6 +740,38 @@ function OfferForm({ services, offer, onAction, onClose }) {
           </Field>
           <Field label="Prix site tunisien (TND)">
             <input min="0" step="0.001" type="number" value={form.tn_price} onChange={(event) => set("tn_price", event.target.value)} placeholder="Ex. 29.900" />
+          </Field>
+          <Field label="Catégorie du site">
+            <select value={form.site_category} onChange={(event) => set("site_category", event.target.value)}>
+              <option value="">Détection automatique</option>
+              <option value="ai">Outils IA</option>
+              <option value="streaming">Streaming</option>
+              <option value="design">Design & création</option>
+              <option value="productivity">Productivité</option>
+              <option value="cloud">Cloud & Dev</option>
+              <option value="communication">Communication</option>
+              <option value="security">Sécurité</option>
+              <option value="other">Autres services</option>
+            </select>
+          </Field>
+          <Field label="Image du produit (URL HTTPS)" wide>
+            <input type="url" value={form.site_image_url} onChange={(event) => set("site_image_url", event.target.value)} placeholder="https://…/produit.webp" />
+          </Field>
+          {form.site_image_url && <div className="product-image-preview"><img src={form.site_image_url} alt="Aperçu du produit" onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Aperçu de l’image</strong><span>Cette image sera utilisée sur Trust Market TN.</span></div></div>}
+          <Field label="Badge français">
+            <input value={form.site_badge} onChange={(event) => set("site_badge", event.target.value)} placeholder="Populaire, Nouveau…" />
+          </Field>
+          <Field label="Badge arabe">
+            <input dir="rtl" value={form.site_badge_ar} onChange={(event) => set("site_badge_ar", event.target.value)} placeholder="الأكثر طلباً" />
+          </Field>
+          <Field label="Description française du site" wide>
+            <textarea value={form.site_description_fr} onChange={(event) => set("site_description_fr", event.target.value)} placeholder="Description commerciale claire, sans balises Telegram…" />
+          </Field>
+          <Field label="Description arabe du site" wide>
+            <textarea dir="rtl" value={form.site_description_ar} onChange={(event) => set("site_description_ar", event.target.value)} placeholder="وصف المنتج بالعربية…" />
+          </Field>
+          <Field label="Mise en avant sur le site">
+            <label className="switch"><input type="checkbox" checked={form.site_featured} onChange={(event) => set("site_featured", event.target.checked)} /><span />Produit vedette</label>
           </Field>
           <Field label="Seuil de stock">
             <input
@@ -800,7 +842,7 @@ function OfferForm({ services, offer, onAction, onClose }) {
   );
 }
 
-function CatalogPage({ data, onAction }) {
+function CatalogPage({ data, onAction, workspace = "bot" }) {
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("all");
   const [offer, setOffer] = useState(undefined);
@@ -809,7 +851,7 @@ function CatalogPage({ data, onAction }) {
   const [serviceName, setServiceName] = useState("");
   const [serviceNameAr, setServiceNameAr] = useState("");
   const [serviceEmoji, setServiceEmoji] = useState("📦");
-  const [serviceChannel, setServiceChannel] = useState("both");
+  const [serviceChannel, setServiceChannel] = useState(workspace === "site" ? "tn_site" : "bot");
   const [stockOffer, setStockOffer] = useState(null);
   const [stock, setStock] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -830,6 +872,9 @@ function CatalogPage({ data, onAction }) {
   const visibleServices = (data.services || []).map((service) => {
     const serviceMatch = `${service.name || ""} ${service.id || ""}`.toLowerCase().includes(normalizedSearch);
     const offers = (service.offers || []).filter((item) => {
+      const channels = item.sales_channels || ["bot", "tn_site"];
+      if (workspace === "site" && !channels.includes("tn_site")) return false;
+      if (workspace === "bot" && !channels.includes("bot")) return false;
       if (!normalizedSearch) return true;
       if (searchField === "service") return serviceMatch;
       const searchable = {
@@ -846,9 +891,9 @@ function CatalogPage({ data, onAction }) {
   return (
     <>
       <PageHeader
-        eyebrow="Boutique"
-        title="Catalogue"
-        description="Gérez les catégories, produits, prix et disponibilités."
+        eyebrow={workspace === "site" ? "Trust Market TN" : "Bot Telegram"}
+        title={workspace === "site" ? "Produits du site" : "Catalogue du bot"}
+        description={workspace === "site" ? "Gérez uniquement les produits publiés sur Trust Market TN et leurs prix en TND." : "Gérez les catégories et produits publiés dans le bot Telegram."}
         actions={
           <>
             <ActionButton
@@ -890,7 +935,7 @@ function CatalogPage({ data, onAction }) {
                 <div>
                   <h3>{service.name}</h3>
                   <small>
-                    {service.offer_count || 0} produit(s) ·{" "}
+                    {service.offers?.length || 0} produit(s) ·{" "}
                     {service.total_stock || 0} en stock
                   </small>
                   <div className="service-providers">
@@ -917,6 +962,7 @@ function CatalogPage({ data, onAction }) {
                   className="offer-card"
                   key={item.id || `${service.id}-${item.name}-${index}`}
                 >
+                  {item.site_image_url && <img className="offer-thumb" src={item.site_image_url} alt="" />}
                   <div>
                     <strong>{item.name}</strong>
                     <span>
@@ -928,6 +974,7 @@ function CatalogPage({ data, onAction }) {
                         ? "Bot + Site TN"
                         : item.sales_channels?.[0] === "tn_site" ? "Site TN" : "Bot"}
                       {item.tn_price_millimes != null ? ` · ${(Number(item.tn_price_millimes) / 1000).toFixed(3)} TND` : ""}
+                      {item.site_category ? ` · ${item.site_category}` : ""}
                     </span>
                     <span className={`offer-provider ${item.supplier_provider ? "api" : "internal"}`}>
                       {item.supplier_provider ? <Cloud size={11} /> : <Database size={11} />}
@@ -997,6 +1044,7 @@ function CatalogPage({ data, onAction }) {
           offer={offer}
           onAction={onAction}
           onClose={() => setShowOffer(false)}
+          defaultChannel={workspace === "site" ? "tn_site" : "bot"}
         />
       )}
       {showService && (
@@ -2160,6 +2208,61 @@ function CustomersPage({ data, onAction }) {
   );
 }
 
+function SiteOverviewPage() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = () => {
+    setLoading(true);
+    setError("");
+    fetch("/admin/api/storefront-orders?status=all", {
+      credentials: "same-origin",
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Commandes indisponibles");
+        setOrders(payload.orders || []);
+      })
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+  const approvedStatuses = new Set(["paid", "delivered"]);
+  const revenue = orders.filter((order) => approvedStatuses.has(order.status)).reduce((total, order) => total + Number(order.total || 0), 0);
+  const pending = orders.filter((order) => order.status === "manual_review").length;
+  const delivered = orders.filter((order) => order.status === "delivered").length;
+  const customers = new Set(orders.map((order) => order.phone).filter(Boolean)).size;
+  return (
+    <>
+      <PageHeader
+        eyebrow="Administration du site"
+        title="Trust Market TN"
+        description="Vue séparée des ventes en TND, paiements manuels et clients du site tunisien."
+        actions={<><a className="action-button secondary" href="/fr" target="_blank" rel="noreferrer"><Globe2 size={16} />Voir la boutique</a><ActionButton secondary icon={RefreshCw} onClick={load}>Actualiser</ActionButton></>}
+      />
+      <section className="order-kpis" aria-label="Statistiques Trust Market TN">
+        <article><span className="order-kpi-icon violet"><ShoppingBag size={19} /></span><div><small>Commandes site</small><strong>{orders.length}</strong><em>Volume total</em></div></article>
+        <article><span className="order-kpi-icon cyan"><CircleDollarSign size={19} /></span><div><small>Revenu validé</small><strong>{money(revenue, "TND")}</strong><em>Paiements acceptés</em></div></article>
+        <article><span className="order-kpi-icon amber"><Clock3 size={19} /></span><div><small>À vérifier</small><strong>{pending}</strong><em>Reçus en attente</em></div></article>
+        <article><span className="order-kpi-icon green"><Users size={19} /></span><div><small>Clients site</small><strong>{customers}</strong><em>{delivered} commande(s) livrée(s)</em></div></article>
+      </section>
+      <section className="data-panel">
+        <header className="site-overview-panel-head"><div><span>Activité récente</span><h3>Dernières commandes du site</h3></div><a className="action-button" href="/admin/tn-storefront">Gérer les commandes <ChevronRight size={15} /></a></header>
+        <div className="responsive-table">
+          <table>
+            <thead><tr><th>Commande</th><th>Client</th><th>Produit</th><th>Montant</th><th>Paiement</th><th>Statut</th><th>Date</th></tr></thead>
+            <tbody>{orders.slice(0, 8).map((order) => <tr key={order.id}><td><strong>TN-{order.id}</strong></td><td><strong>{order.customer_name}</strong><small>{order.phone}</small></td><td>{order.offer_name}</td><td><strong>{money(order.total, "TND")}</strong></td><td>{STOREFRONT_PAYMENT_LABELS[order.payment_method] || order.payment_method}</td><td><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></td><td>{date(order.created_at)}</td></tr>)}</tbody>
+          </table>
+        </div>
+        {loading && <div className="table-loading">Chargement…</div>}
+        {!loading && error && <div className="table-loading">{error}</div>}
+        {!loading && !error && !orders.length && <Empty icon={ShoppingBag} title="Aucune commande sur le site" />}
+      </section>
+    </>
+  );
+}
+
 function TunisiaStorefrontPage({ onAction }) {
   const [status, setStatus] = useState("manual_review");
   const [orders, setOrders] = useState([]);
@@ -2198,8 +2301,8 @@ function TunisiaStorefrontPage({ onAction }) {
         actions={<ActionButton secondary icon={RefreshCw} onClick={load}>Actualiser</ActionButton>}
       />
       <div className="storefront-channel-switch">
-        <a href="/admin/orders">Bot Telegram</a>
-        <button className="active">Site tunisien</button>
+        <a href="/admin/site-overview">Vue d’ensemble</a>
+        <button className="active">Commandes du site</button>
         <a href="/fr" target="_blank" rel="noreferrer">Voir la boutique ↗</a>
       </div>
       <FilterBar search="" setSearch={() => {}}>
@@ -2851,8 +2954,10 @@ export default function AdminPage({
   onAction,
   onHealthCheck,
   setToast,
+  workspace,
 }) {
-  const props = { data, onAction, onHealthCheck, setToast };
+  const props = { data, onAction, onHealthCheck, setToast, workspace };
+  if (page === "site-overview") return <SiteOverviewPage {...props} />;
   if (page === "orders") return <OrdersPage {...props} />;
   if (page === "catalog") return <CatalogPage {...props} />;
   if (page === "api-products") return <ApiProductsPage {...props} />;

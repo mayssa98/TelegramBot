@@ -484,7 +484,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
-        admin_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "tn-storefront", "support", "interactions", "activity", "settings"}
+        admin_tabs = {"overview", "site-overview", "orders", "catalog", "api-products", "inventory", "customers", "tn-storefront", "support", "interactions", "activity", "settings"}
         react_admin_route = (
             path in {"/admin", "/admin-v2"}
             or path.startswith("/admin-v2/")
@@ -1026,6 +1026,13 @@ class handler(BaseHTTPRequestHandler):
                     tn_price_millimes=tn_price_millimes,
                     name_ar=form.get("name_ar", "").strip(),
                     description_ar=form.get("description_ar", "").strip(),
+                    site_description_fr=form.get("site_description_fr", "").strip(),
+                    site_description_ar=form.get("site_description_ar", "").strip(),
+                    site_image_url=form.get("site_image_url", "").strip(),
+                    site_category=form.get("site_category", "").strip(),
+                    site_badge=form.get("site_badge", "").strip(),
+                    site_badge_ar=form.get("site_badge_ar", "").strip(),
+                    site_featured=form.get("site_featured", "") == "on",
                 )
                 initial_inventory_text = form.get("initial_inventory", "").strip()
                 if initial_inventory_text:
@@ -1056,6 +1063,13 @@ class handler(BaseHTTPRequestHandler):
                     tn_price_millimes=(round(float(tn_price_raw) * 1000) if tn_price_raw else None),
                     name_ar=form.get("name_ar", "").strip(),
                     description_ar=form.get("description_ar", "").strip(),
+                    site_description_fr=form.get("site_description_fr", "").strip(),
+                    site_description_ar=form.get("site_description_ar", "").strip(),
+                    site_image_url=form.get("site_image_url", "").strip(),
+                    site_category=form.get("site_category", "").strip(),
+                    site_badge=form.get("site_badge", "").strip(),
+                    site_badge_ar=form.get("site_badge_ar", "").strip(),
+                    site_featured=form.get("site_featured", "") == "on",
                 )
                 db.audit_event("offer.updated", details={"offer_id": oid, "name": name})
 

@@ -511,6 +511,13 @@ def update_offer(
     tn_price_millimes=None,
     name_ar=None,
     description_ar=None,
+    site_description_fr=None,
+    site_description_ar=None,
+    site_image_url=None,
+    site_category=None,
+    site_badge=None,
+    site_badge_ar=None,
+    site_featured=None,
 ):
     values = {
         key: value
@@ -537,6 +544,13 @@ def update_offer(
             "tn_price_millimes": tn_price_millimes,
             "name_ar": name_ar,
             "description_ar": description_ar,
+            "site_description_fr": site_description_fr,
+            "site_description_ar": site_description_ar,
+            "site_image_url": site_image_url,
+            "site_category": site_category,
+            "site_badge": site_badge,
+            "site_badge_ar": site_badge_ar,
+            "site_featured": site_featured,
         }.items()
         if value is not None
     }
@@ -631,6 +645,13 @@ def add_offer(
     tn_price_millimes=None,
     name_ar="",
     description_ar="",
+    site_description_fr="",
+    site_description_ar="",
+    site_image_url="",
+    site_category="",
+    site_badge="",
+    site_badge_ar="",
+    site_featured=False,
 ):
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
@@ -661,6 +682,13 @@ def add_offer(
         "tn_price_millimes": tn_price_millimes,
         "name_ar": str(name_ar or "")[:200],
         "description_ar": str(description_ar or "")[:2000],
+        "site_description_fr": str(site_description_fr or "")[:2000],
+        "site_description_ar": str(site_description_ar or "")[:2000],
+        "site_image_url": str(site_image_url or "")[:1000],
+        "site_category": str(site_category or "")[:60],
+        "site_badge": str(site_badge or "")[:60],
+        "site_badge_ar": str(site_badge_ar or "")[:60],
+        "site_featured": bool(site_featured),
         **special_values,
     })
     return oid
@@ -692,6 +720,17 @@ def duplicate_offer(offer_id):
         delivery_delay=source.get("delivery_delay", ""),
         unlimited_stock=source.get("unlimited_stock", False),
         manual_stock=source.get("manual_stock", False),
+        sales_channels=source.get("sales_channels"),
+        tn_price_millimes=source.get("tn_price_millimes"),
+        name_ar=source.get("name_ar", ""),
+        description_ar=source.get("description_ar", ""),
+        site_description_fr=source.get("site_description_fr", ""),
+        site_description_ar=source.get("site_description_ar", ""),
+        site_image_url=source.get("site_image_url", ""),
+        site_category=source.get("site_category", ""),
+        site_badge=source.get("site_badge", ""),
+        site_badge_ar=source.get("site_badge_ar", ""),
+        site_featured=source.get("site_featured", False),
     )
 
 

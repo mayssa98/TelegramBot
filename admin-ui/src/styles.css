@@ -33,10 +33,15 @@ a { color: inherit; text-decoration: none; }
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; width: 248px; display: flex; flex-direction: column; padding: 0 14px 18px; border-right: 1px solid var(--line); background: rgba(8,19,33,.97); backdrop-filter: blur(18px); }
 .brand { height: 78px; display: flex; align-items: center; gap: 11px; padding: 0 8px; border-bottom: 1px solid var(--line); }
 .brand-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: white; background: linear-gradient(145deg, #a78bfa, #7c3aed); box-shadow: 0 8px 28px rgba(124,58,237,.28); font-size: 17px; font-weight: 800; letter-spacing: -.8px; }
+.workspace-brand-logo { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 13px; object-fit: cover; box-shadow: 0 8px 28px rgba(239,68,68,.2); }
 .brand > div:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
 .brand strong { font-size: 15px; letter-spacing: -.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand span { font-size: 10px; color: var(--muted); letter-spacing: 1.4px; text-transform: uppercase; }
-.nav-list { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 24px 0; overflow-y: auto; }
+.workspace-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 14px 4px 0; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: #07111d; }
+.workspace-switch button { min-height: 35px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 7px; border: 0; border-radius: 8px; color: #657a91; background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; }
+.workspace-switch button.active { color: #ede9fe; background: rgba(124,58,237,.2); box-shadow: inset 0 0 0 1px rgba(167,139,250,.18); }
+.workspace-switch button.active.site { color: #fff1f2; background: linear-gradient(135deg,rgba(220,38,38,.28),rgba(249,115,96,.16)); box-shadow: inset 0 0 0 1px rgba(248,113,113,.18); }
+.nav-list { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 18px 0 24px; overflow-y: auto; }
 .nav-heading { padding: 0 12px 8px; color: #54687f; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; }
 .nav-item { width: 100%; min-height: 43px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border: 1px solid transparent; border-radius: 9px; color: #8497ac; background: transparent; cursor: pointer; text-align: left; transition: .18s ease; }
 .nav-item:hover { color: var(--text); background: rgba(255,255,255,.035); }
@@ -48,6 +53,10 @@ a { color: inherit; text-decoration: none; }
 .sidebar-footer > div:last-child { min-width: 0; display: grid; gap: 2px; }
 .sidebar-footer strong { font-size: 11px; }
 .sidebar-footer span { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.site-overview-panel-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line); }
+.site-overview-panel-head > div { display:grid; gap:3px; }.site-overview-panel-head span { color:var(--muted); font-size:8px; letter-spacing:1px; text-transform:uppercase; }.site-overview-panel-head h3 { margin:0; font-size:14px; }
+.product-image-preview { grid-column:1/-1; display:flex; align-items:center; gap:13px; padding:11px; border:1px solid var(--line); border-radius:11px; background:#091522; }.product-image-preview img { width:84px; height:64px; border-radius:9px; object-fit:cover; }.product-image-preview div { display:grid; gap:4px; }.product-image-preview strong { font-size:11px; }.product-image-preview span { color:var(--muted); font-size:9px; }
+.offer-thumb { width:52px; height:52px; flex:0 0 52px; border-radius:10px; object-fit:cover; background:#07111d; }
 
 .main-shell { min-height: 100vh; margin-left: 248px; }
 .topbar { position: sticky; top: 0; z-index: 30; min-height: 78px; display: grid; grid-template-columns: auto minmax(220px, 1fr) auto; align-items: center; gap: 18px; padding: 12px clamp(20px, 3vw, 42px); border-bottom: 1px solid var(--line); background: rgba(6,13,24,.88); backdrop-filter: blur(18px); }
@@ -295,7 +304,7 @@ td strong { color: #e6edf6; }
 .service-providers .internal,.offer-provider.internal { color:#94a3b8; background:rgba(148,163,184,.08); }
 .offer-card { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 15px; border-bottom:1px solid rgba(28,43,61,.7); }
 .offer-card:last-child { border:0; }
-.offer-card > div:first-child { min-width:0; display:grid; gap:4px; }
+.offer-card > div:not(.offer-actions) { min-width:0; display:grid; gap:4px; margin-right:auto; }
 .offer-card strong { overflow:hidden; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
 .offer-card span { color:var(--muted); font-size:8px; }
 .offer-card .offer-provider { margin-top:3px; color:#67e8f9; background:rgba(34,211,238,.08); }

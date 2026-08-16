@@ -30,6 +30,7 @@ const COPY = {
     trusted: "Paiement vérifié manuellement", local: "Réservé à la Tunisie", delivery: "Livraison rapide",
     products: "Nos services", productsLead: "Tous les produits disponibles dans le bot, maintenant accessibles en dinars tunisiens.",
     search: "Rechercher un service ou un produit…", all: "Tous", available: "Disponible", unavailable: "Épuisé",
+    trending: "Sélection du moment", trendingLead: "Les outils numériques les plus demandés en Tunisie.", category: "Catégorie", noProducts: "Aucun produit ne correspond à votre recherche.",
     buy: "Commander", from: "à partir de", how: "Commander en trois étapes",
     step1: "Choisissez", step1Text: "Sélectionnez le service adapté à votre besoin.",
     step2: "Payez", step2Text: "Utilisez D17, Flouci, ISI ou un virement.",
@@ -51,6 +52,7 @@ const COPY = {
     trusted: "تحقق يدوي من الدفع", local: "مخصص لتونس", delivery: "تسليم سريع",
     products: "خدماتنا", productsLead: "كل منتجات البوت متوفرة الآن بالدينار التونسي.",
     search: "ابحث عن خدمة أو منتج…", all: "الكل", available: "متوفر", unavailable: "غير متوفر",
+    trending: "مختاراتنا", trendingLead: "أكثر الأدوات الرقمية طلباً في تونس.", category: "الفئة", noProducts: "لا توجد منتجات مطابقة لبحثك.",
     buy: "اطلب الآن", from: "ابتداءً من", how: "اطلب في ثلاث خطوات",
     step1: "اختر", step1Text: "اختر الخدمة التي تناسب احتياجاتك.",
     step2: "ادفع", step2Text: "استعمل D17 أو Flouci أو ISI أو التحويل.",
@@ -69,6 +71,25 @@ function money(value) {
   return `${new Intl.NumberFormat("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number(value || 0))} TND`;
 }
 
+function ProductCard({ product, t, onCheckout, delay = 0, featured = false }) {
+  const visualUrl = product.image_url || product.logo_url;
+  return (
+    <article className={`product-card ${featured ? "featured-product" : ""}`} style={{ "--delay": `${delay}ms` }}>
+      <div className={`product-art ${product.image_url ? "has-image" : visualUrl ? "has-logo" : ""}`}>
+        {visualUrl ? <img src={visualUrl} alt={product.serviceName} loading="lazy" onError={(event) => { if (!event.currentTarget.src.endsWith("/storefront/service-fallback.png")) event.currentTarget.src = "/storefront/service-fallback.png"; else event.currentTarget.style.display = "none"; }} /> : <span>{product.emoji}</span>}
+        {product.badge && <b className="product-badge">{product.badge}</b>}
+        <i className={product.available ? "online" : "offline"}>{product.available ? t.available : t.unavailable}</i>
+      </div>
+      <div className="product-copy">
+        <div className="product-meta"><span>{product.category_label}</span><small>{product.serviceName}</small></div>
+        <h3>{product.name}</h3>
+        <p>{product.description || product.warranty || "Service numérique vérifié"}</p>
+        <div className="product-footer"><div><small>{t.from}</small><strong>{money(product.price)}</strong></div><button disabled={!product.available} onClick={() => onCheckout(product)}>{t.buy}<ChevronRight size={17} /></button></div>
+      </div>
+    </article>
+  );
+}
+
 function App() {
   const initialLang = window.location.pathname.startsWith("/ar") ? "ar" : "fr";
   const [lang, setLang] = useState(initialLang);
@@ -76,7 +97,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [serviceId, setServiceId] = useState("all");
+  const [categoryId, setCategoryId] = useState("all");
   const [checkout, setCheckout] = useState(null);
   const t = COPY[lang];
   const isAr = lang === "ar";
@@ -94,16 +115,18 @@ function App() {
   const products = useMemo(() => data.services.flatMap((service) =>
     service.products.map((product) => ({ ...product, serviceName: service.name }))), [data]);
   const visible = products.filter((product) => {
-    const matchesService = serviceId === "all" || product.service_id === Number(serviceId);
+    const matchesCategory = categoryId === "all" || product.category === categoryId;
     const needle = query.trim().toLowerCase();
-    return matchesService && (!needle || `${product.name} ${product.description} ${product.serviceName}`.toLowerCase().includes(needle));
+    return matchesCategory && (!needle || `${product.name} ${product.description} ${product.serviceName} ${product.category_label}`.toLowerCase().includes(needle));
   });
+  const featuredProducts = products.filter((product) => product.featured && product.available);
+  const highlights = (featuredProducts.length ? featuredProducts : products.filter((product) => product.available)).slice(0, 4);
   const whatsappUrl = `https://wa.me/${data.whatsapp || "21626183573"}?text=${encodeURIComponent(isAr ? "السلام عليكم، أحتاج إلى مساعدة بخصوص خدمات الموقع." : "Bonjour, j’ai besoin d’aide concernant les services du site.")}`;
   const changeLang = () => {
     const next = isAr ? "fr" : "ar";
     window.history.replaceState({}, "", `/${next}`);
     setLang(next);
-    setServiceId("all");
+    setCategoryId("all");
   };
   const Arrow = isAr ? ArrowLeft : ArrowRight;
 
@@ -149,15 +172,14 @@ function App() {
 
         <section className="catalog-section" id="catalog">
           <div className="section-heading"><div><span className="eyebrow">Trust Market Selection</span><h2>{t.products}</h2><p>{t.productsLead}</p></div><label className="search-box"><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} /></label></div>
-          <div className="category-tabs"><button className={serviceId === "all" ? "active" : ""} onClick={() => setServiceId("all")}>{t.all}</button>{data.services.map((service) => <button className={serviceId === String(service.id) ? "active" : ""} onClick={() => setServiceId(String(service.id))} key={service.id}><span>{service.emoji}</span>{service.name}</button>)}</div>
+          {!loading && highlights.length > 0 && <div className="featured-block"><div className="featured-heading"><div><Sparkles /><span><strong>{t.trending}</strong><small>{t.trendingLead}</small></span></div></div><div className="featured-grid">{highlights.map((product, index) => <ProductCard product={product} t={t} onCheckout={setCheckout} delay={index * 45} featured key={`featured-${product.id}`} />)}</div></div>}
+          <div className="category-tabs"><button className={categoryId === "all" ? "active" : ""} onClick={() => setCategoryId("all")}>{t.all}</button>{(data.categories || []).map((category) => <button className={categoryId === category.id ? "active" : ""} onClick={() => setCategoryId(category.id)} key={category.id}>{category.label}</button>)}</div>
           <div className="product-grid">
             {loading ? Array.from({ length: 6 }).map((_, index) => <div className="product-card skeleton" key={index} />) : visible.map((product, index) => (
-              <article className="product-card" style={{ "--delay": `${index * 45}ms` }} key={product.id}>
-                <div className="product-art"><span>{product.emoji}</span><small>{product.serviceName}</small><i className={product.available ? "online" : "offline"}>{product.available ? t.available : t.unavailable}</i></div>
-                <div className="product-copy"><h3>{product.name}</h3><p>{product.description || product.warranty || (isAr ? "خدمة رقمية مضمونة" : "Service numérique vérifié")}</p><div className="product-footer"><div><small>{t.from}</small><strong>{money(product.price)}</strong></div><button disabled={!product.available} onClick={() => setCheckout(product)}>{t.buy}<ChevronRight size={17} /></button></div></div>
-              </article>
+              <ProductCard product={product} t={t} onCheckout={setCheckout} delay={index * 45} key={product.id} />
             ))}
           </div>
+          {!loading && visible.length === 0 && <div className="catalog-empty"><Search /><strong>{t.noProducts}</strong></div>}
         </section>
 
         <section className="how-section" id="how"><div className="section-heading centered"><div><span className="eyebrow">Simple & transparent</span><h2>{t.how}</h2></div></div><div className="steps"><article><span>01</span><ShoppingBag /><h3>{t.step1}</h3><p>{t.step1Text}</p></article><article><span>02</span><FileCheck2 /><h3>{t.step2}</h3><p>{t.step2Text}</p></article><article><span>03</span><Check /><h3>{t.step3}</h3><p>{t.step3Text}</p></article></div></section>

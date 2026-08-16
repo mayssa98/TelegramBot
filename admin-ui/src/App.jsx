@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   Bell,
+  Bot,
   Boxes,
   ChevronRight,
   CircleDollarSign,
@@ -11,6 +12,7 @@ import {
   Cloud,
   Database,
   Headphones,
+  Globe2,
   LayoutDashboard,
   Menu,
   MessageSquareText,
@@ -25,19 +27,27 @@ import {
   X,
 } from "lucide-react";
 
-const NAV_ITEMS = [
+const BOT_NAV_ITEMS = [
   { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
   { id: "orders", label: "Commandes", icon: ClipboardList },
   { id: "catalog", label: "Catalogue", icon: ShoppingBag },
   { id: "api-products", label: "Produits API", icon: Cloud },
   { id: "inventory", label: "Inventaire", icon: Boxes },
   { id: "customers", label: "Clients", icon: Users },
-  { id: "tn-storefront", label: "Site tunisien", icon: ShoppingBag },
   { id: "support", label: "Support", icon: Headphones },
   { id: "interactions", label: "Interactions", icon: MessageSquareText },
   { id: "activity", label: "Activité", icon: Activity },
   { id: "settings", label: "Paramètres", icon: Settings },
 ];
+
+const SITE_NAV_ITEMS = [
+  { id: "site-overview", label: "Vue d’ensemble", icon: LayoutDashboard },
+  { id: "tn-storefront", label: "Commandes", icon: ClipboardList },
+  { id: "catalog", label: "Produits du site", icon: ShoppingBag },
+  { id: "inventory", label: "Stock partagé", icon: Boxes },
+];
+
+const ALL_NAV_ITEMS = [...BOT_NAV_ITEMS, ...SITE_NAV_ITEMS];
 
 const STATUS_LABELS = {
   pending_payment: "Paiement en attente",
@@ -70,9 +80,11 @@ function initials(value = "BM") {
     .toUpperCase();
 }
 
-function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate }) {
+function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspaceChange, workspace }) {
   const pendingOrders = data?.summary?.pending_orders || 0;
   const openTickets = data?.summary?.open_tickets || 0;
+  const navItems = workspace === "site" ? SITE_NAV_ITEMS : BOT_NAV_ITEMS;
+  const isSite = workspace === "site";
 
   return (
     <>
@@ -83,14 +95,19 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate }) {
       />
       <aside className={`sidebar ${mobileOpen ? "is-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark">{initials(data?.shop_name || "BlackMarket")}</div>
-          <div><strong>{data?.shop_name || "BlackMarket"}</strong><span>Control Center</span></div>
+          {isSite ? <img className="workspace-brand-logo" src="/admin-v2/trust-market-logo.png" alt="Trust Market TN" /> : <div className="brand-mark">{initials(data?.shop_name || "BlackMarket")}</div>}
+          <div><strong>{isSite ? "Trust Market TN" : data?.shop_name || "BlackMarket"}</strong><span>{isSite ? "Store Admin" : "Bot Control Center"}</span></div>
           <button className="icon-button mobile-only" onClick={onClose} aria-label="Fermer"><X size={20} /></button>
         </div>
 
+        <div className="workspace-switch" aria-label="Choisir l’espace administrateur">
+          <button className={!isSite ? "active" : ""} onClick={() => onWorkspaceChange("bot")}><Bot size={15} /><span>Bot</span></button>
+          <button className={isSite ? "active site" : ""} onClick={() => onWorkspaceChange("site")}><Globe2 size={15} /><span>Site TN</span></button>
+        </div>
+
         <nav className="nav-list" aria-label="Navigation principale">
-          <span className="nav-heading">Espace de travail</span>
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+          <span className="nav-heading">{isSite ? "Trust Market TN" : "Bot Telegram"}</span>
+          {navItems.map(({ id, label, icon: Icon }) => {
             const count = id === "orders" ? pendingOrders : id === "support" ? openTickets : 0;
             return (
               <button
@@ -108,33 +125,34 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate }) {
 
         <div className="sidebar-footer">
           <div className="connection-dot" />
-          <div><strong>Bot connecté</strong><span>@{data?.bot_username || "blackmarketa_bot"}</span></div>
+          <div><strong>{isSite ? "Boutique en ligne" : "Bot connecté"}</strong><span>{isSite ? "Paiements en TND" : `@${data?.bot_username || "blackmarketa_bot"}`}</span></div>
         </div>
       </aside>
     </>
   );
 }
 
-function Header({ activePage, alertCount, busyAction, isRefreshing, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance }) {
-  const current = NAV_ITEMS.find((item) => item.id === activePage) || NAV_ITEMS[0];
+function Header({ activePage, alertCount, busyAction, isRefreshing, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance, workspace }) {
+  const navItems = workspace === "site" ? SITE_NAV_ITEMS : BOT_NAV_ITEMS;
+  const current = navItems.find((item) => item.id === activePage) || navItems[0];
   return (
     <header className="topbar">
       <div className="topbar-title">
         <button className="icon-button menu-button" onClick={onMenu} aria-label="Ouvrir le menu"><Menu size={21} /></button>
-        <div><span>Administration</span><h1>{current.label}</h1></div>
+        <div><span>{workspace === "site" ? "Trust Market TN" : "Administration du bot"}</span><h1>{current.label}</h1></div>
       </div>
       <button className="global-search-trigger" onClick={onSearch}>
         <Search size={17} />
-        <span>Rechercher commandes, produits ou clients…</span>
+        <span>{workspace === "site" ? "Rechercher produits et stock du site…" : "Rechercher commandes, produits ou clients…"}</span>
         <kbd>Ctrl K</kbd>
       </button>
       <div className="topbar-actions">
-        <button className="header-action" onClick={onRepairTelegram} disabled={Boolean(busyAction)}>
+        {workspace === "bot" && <button className="header-action" onClick={onRepairTelegram} disabled={Boolean(busyAction)}>
           <Wrench size={16} className={busyAction === "telegram" ? "spin" : ""} /><span>Réparer Telegram</span>
-        </button>
-        <button className="header-action" onClick={onTestBinance} disabled={Boolean(busyAction)}>
+        </button>}
+        {workspace === "bot" && <button className="header-action" onClick={onTestBinance} disabled={Boolean(busyAction)}>
           <ShieldCheck size={16} className={busyAction === "binance" ? "spin" : ""} /><span>Tester Binance</span>
-        </button>
+        </button>}
         <button className="icon-button" onClick={onRefresh} aria-label="Actualiser" title="Actualiser les données">
           <RefreshCw size={19} className={isRefreshing ? "spin" : ""} />
         </button>
@@ -373,7 +391,10 @@ function ErrorState({ message, onRetry }) {
 export default function App() {
   const routePage = () => window.location.pathname.replace(/^\/admin(?:-v2)?\/?/, "").split("/")[0] || "overview";
   const initialPage = routePage();
-  const [activePage, setActivePage] = useState(NAV_ITEMS.some((item) => item.id === initialPage) ? initialPage : "overview");
+  const storedWorkspace = window.localStorage.getItem("admin-workspace");
+  const routeWorkspace = ["site-overview", "tn-storefront"].includes(initialPage) ? "site" : initialPage === "overview" ? "bot" : storedWorkspace;
+  const [workspace, setWorkspace] = useState(routeWorkspace === "site" ? "site" : "bot");
+  const [activePage, setActivePage] = useState(ALL_NAV_ITEMS.some((item) => item.id === initialPage) ? initialPage : "overview");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -414,7 +435,10 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const page = routePage();
-      setActivePage(NAV_ITEMS.some((item) => item.id === page) ? page : "overview");
+      const nextPage = ALL_NAV_ITEMS.some((item) => item.id === page) ? page : "overview";
+      setActivePage(nextPage);
+      if (["site-overview", "tn-storefront"].includes(nextPage)) setWorkspace("site");
+      if (nextPage === "overview") setWorkspace("bot");
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -424,6 +448,12 @@ export default function App() {
     setActivePage(page);
     setMobileOpen(false);
     window.history.pushState({}, "", page === "overview" ? "/admin" : `/admin/${page}`);
+  };
+
+  const switchWorkspace = (nextWorkspace) => {
+    setWorkspace(nextWorkspace);
+    window.localStorage.setItem("admin-workspace", nextWorkspace);
+    navigate(nextWorkspace === "site" ? "site-overview" : "overview");
   };
 
   const adminAction = async (params) => {
@@ -476,11 +506,11 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar activePage={activePage} data={data} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={navigate} />
+      <Sidebar activePage={activePage} data={data} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={navigate} onWorkspaceChange={switchWorkspace} workspace={workspace} />
       <div className="main-shell">
-        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} isRefreshing={refreshing} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} />
+        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} isRefreshing={refreshing} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} workspace={workspace} />
         <main className="content">
-          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={`${activePage}-${actionVersion}`} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} setToast={setToast} />}
+          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={`${activePage}-${actionVersion}`} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} setToast={setToast} workspace={workspace} />}
         </main>
       </div>
       {searchOpen && data && <SearchDialog data={data} onClose={() => setSearchOpen(false)} onNavigate={navigate} />}
