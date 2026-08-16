@@ -390,6 +390,11 @@ def catalog_offers_keyboard(lang):
                     label,
                     callback_data=f"svc:{sid}",
                     style=cat_style,
+                    icon_custom_emoji_id=(
+                        offer.get("service_custom_emoji_id")
+                        or offer.get("custom_emoji_id")
+                        or None
+                    ),
                 ))
         else:
             safe_offer = dict(offer)
