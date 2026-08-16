@@ -324,6 +324,16 @@ TRANSLATIONS = {
         "en": "📦 *NEW PRE-ORDER*\n\n👤 Customer: {user}\n🆔 Telegram ID: `{user_id}`\n📋 Product: *{offer}*\n📦 Quantity: *{qty}*",
         "ar": "📦 *طلب مسبق جديد*\n\n👤 العميل: {user}\n🆔 معرّف تيليغرام: `{user_id}`\n📋 المنتج: *{offer}*\n📦 الكمية: *{qty}*",
     },
+    "preorder_confirm_notice": {
+        "fr": "⚠️ *Offre en PRÉCOMMANDE :* Produit en rupture. La livraison s'effectuera avec priorité numéro 1 dès le réapprovisionnement.",
+        "en": "⚠️ *PRE-ORDER Item:* Currently out of stock. Priority delivery as soon as restocked.",
+        "ar": "⚠️ *عنصر طلب مسبق:* غير متوفر حالياً. تسليم ذو أولوية فور التجديد.",
+    },
+    "preorder_paid_admin_notification": {
+        "fr": "📦 *NOUVELLE PRÉCOMMANDE PAYÉE !*\n\n👤 Client : {user}\n🆔 Telegram ID : `{user_id}`\n📋 Produit : *{offer}*\n📦 Quantité : *{qty}*\n💰 Total : *{total} USDT*\n💳 Paiement : *{method}*",
+        "en": "📦 *NEW PAID PRE-ORDER!*\n\n👤 Customer: {user}\n🆔 Telegram ID: `{user_id}`\n📋 Product: *{offer}*\n📦 Quantity: *{qty}*\n💰 Total: *{total} USDT*\n💳 Payment: *{method}*",
+        "ar": "📦 *طلب مسبق مدفوع جديد!*\n\n👤 العميل: {user}\n🆔 معرّف تيليغرام: `{user_id}`\n📋 المنتج: *{offer}*\n📦 الكمية: *{qty}*\n💰 الإجمالي: *{total} USDT*\n💳 طريقة الدفع: *{method}*",
+    },
     "btn_back": {"fr": "⬅️ Retour", "en": "⬅️ Back", "ar": "⬅️ رجوع"},
     "btn_back_services": {
         "fr": "🔶 Services",

@@ -1375,16 +1375,47 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=kb.offers_keyboard(lang, sid),
         )
         return
+    if data.startswith("preorder_start:"):
+        oid = int(data.split(":")[1])
+        off = db.get_offer(oid)
+        if not off:
+            await q.message.reply_text(premium_customer_text(lang, "out_of_stock"), parse_mode=ParseMode.HTML)
+            return
+        PENDING[uid] = ("await_quantity", oid, True)
+        send_quantity_prompt = q.message.reply_text if (q.message and q.message.photo) else q.edit_message_text
+        await send_quantity_prompt(
+            t(
+                lang,
+                "choose_quantity",
+                offer=f"{off['name']} (Précommande)",
+                stock="📦 Pre-order (Rupture)",
+                price=f"{off['price']:.2f}" if off.get("price") is not None else "?",
+                cur=CURRENCY,
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.quantity_keyboard(lang, off, page=0),
+        )
+        return
+
     if data.startswith("preorder:"):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
         if not off:
             await q.message.reply_text(premium_customer_text(lang, "out_of_stock"), parse_mode=ParseMode.HTML)
             return
-        await q.edit_message_text(
-            t(lang, "preorder_prompt", offer=off["name"]),
+        PENDING[uid] = ("await_quantity", oid, True)
+        send_quantity_prompt = q.message.reply_text if (q.message and q.message.photo) else q.edit_message_text
+        await send_quantity_prompt(
+            t(
+                lang,
+                "choose_quantity",
+                offer=f"{off['name']} (Précommande)",
+                stock="📦 Pre-order (Rupture)",
+                price=f"{off['price']:.2f}" if off.get("price") is not None else "?",
+                cur=CURRENCY,
+            ),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.preorder_confirm_keyboard(lang, oid, 1),
+            reply_markup=kb.quantity_keyboard(lang, off, page=0),
         )
         return
 
@@ -1392,25 +1423,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parts = data.split(":")
         oid = int(parts[1])
         qty = int(parts[2]) if len(parts) > 2 else 1
-        off = db.get_offer(oid)
-        if not off:
-            await q.message.reply_text(premium_customer_text(lang, "out_of_stock"), parse_mode=ParseMode.HTML)
-            return
-        db.audit_event("offer.preordered", details={"user_id": uid, "offer_id": oid, "qty": qty, "offer_name": off["name"]})
-        user_name = q.from_user.full_name or "Client"
-        username = f"@{q.from_user.username}" if q.from_user.username else str(uid)
-        user_info = f"{user_name} ({username})"
-        with contextlib.suppress(Exception):
-            await context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=t(lang, "preorder_admin_notification", user=user_info, user_id=uid, offer=off["name"], qty=qty),
-                parse_mode=ParseMode.MARKDOWN,
-            )
-        await q.edit_message_text(
-            t(lang, "preorder_success", offer=off["name"], qty=qty),
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.home_keyboard(lang, uid),
-        )
+        await send_buy_confirmation(q.edit_message_text, uid, oid, qty, lang, is_preorder=True)
         return
 
     if data.startswith("off:"):
@@ -1650,30 +1663,35 @@ async def handle_quantity_selection(update, context, lang):
     offer_id = int(parts[1])
     offer = db.get_offer(offer_id)
 
-    if not offer or offer["price"] is None or not db.offer_has_stock(offer):
+    if not offer or offer.get("price") is None:
         await q.answer(t(lang, "out_of_stock"), show_alert=True)
         return
 
-    PENDING[q.from_user.id] = ("await_quantity", offer_id)
-    send_quantity_prompt = q.message.reply_text if q.message.photo else q.edit_message_text
+    is_preorder = not db.offer_has_stock(offer)
+    PENDING[q.from_user.id] = ("await_quantity", offer_id, is_preorder)
+    send_quantity_prompt = q.message.reply_text if (q.message and q.message.photo) else q.edit_message_text
+    stock_display = "📦 Pre-order (Rupture)" if is_preorder else ("∞" if offer.get("unlimited_stock") else offer["stock"])
     await send_quantity_prompt(
         t(
             lang,
             "choose_quantity",
-            offer=offer["name"],
-            stock="∞" if offer.get("unlimited_stock") else offer["stock"],
+            offer=f"{offer['name']} (Précommande)" if is_preorder else offer["name"],
+            stock=stock_display,
             price=f"{offer['price']:.2f}",
             cur=CURRENCY,
         ),
         parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.quantity_keyboard(lang, offer, page=0),
     )
 
 
-async def send_buy_confirmation(send, uid, offer_id, qty, lang):
-    """Validate a typed quantity and display the purchase summary."""
+async def send_buy_confirmation(send, uid, offer_id, qty, lang, is_preorder=False):
+    """Validate a quantity and display the purchase or pre-order summary."""
     offer = db.get_offer(offer_id)
-    if not offer or offer["price"] is None or not db.offer_has_stock(offer, qty):
+    if not offer or offer.get("price") is None:
         return False
+    if not is_preorder and not db.offer_has_stock(offer, qty):
+        is_preorder = True
     svc = db.get_service(offer["service_id"])
     gross_total = round(offer["price"] * qty, 2)
     referral_discount = loyalty_service.discount_for_order(uid, gross_total)
@@ -1685,10 +1703,15 @@ async def send_buy_confirmation(send, uid, offer_id, qty, lang):
             percent=referral_discount["discount_percent"],
             amount=f"{referral_discount['amount']:.2f}", cur=CURRENCY,
         )
+    if is_preorder:
+        pre_notice = t(lang, "preorder_confirm_notice")
+        discount_line = f"{pre_notice}\n{discount_line}".strip()
+
     await send(
         t(lang, "confirm_purchase",
           emoji=svc["emoji"] if svc else "📦", service=svc["name"] if svc else "",
-          offer=offer["name"], price=f"{offer['price']:.2f}", cur=CURRENCY, qty=qty,
+          offer=f"{offer['name']} (Précommande)" if is_preorder else offer["name"],
+          price=f"{offer['price']:.2f}", cur=CURRENCY, qty=qty,
           total=f"{gross_total - referral_discount['amount']:.2f}", discount_line=discount_line),
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=kb.confirm_buy_keyboard(lang, offer_id, qty),
@@ -1697,13 +1720,18 @@ async def send_buy_confirmation(send, uid, offer_id, qty, lang):
 
 
 async def handle_buy_confirmation(update, context, lang):
-    """Affiche un r?sum? avant de cr?er la commande."""
+    """Affiche un résumé avant de créer la commande / précommande."""
     q = update.callback_query
     uid = q.from_user.id
     parts = q.data.split(":")
     offer_id = int(parts[1])
     qty = int(parts[2]) if len(parts) > 2 else 1
-    if not await send_buy_confirmation(q.edit_message_text, uid, offer_id, qty, lang):
+    pending = PENDING.get(uid)
+    is_preorder = (pending and pending[0] == "await_quantity" and len(pending) > 2 and pending[2])
+    offer = db.get_offer(offer_id)
+    if offer and not db.offer_has_stock(offer, qty):
+        is_preorder = True
+    if not await send_buy_confirmation(q.edit_message_text, uid, offer_id, qty, lang, is_preorder=is_preorder):
         await q.message.reply_text(t(lang, "out_of_stock"))
 
 
@@ -1779,20 +1807,27 @@ async def handle_pending_input(update, context, lang):
     text = update.message.text.strip()
 
     if kind == "await_quantity":
-        offer = db.get_offer(int(ref))
+        pending_val = PENDING.get(uid)
+        ref_id = ref
+        is_preorder = False
+        if isinstance(pending_val, (tuple, list)) and len(pending_val) > 2:
+            is_preorder = bool(pending_val[2])
+        offer = db.get_offer(int(ref_id))
         try:
             qty = int(text)
         except ValueError:
             qty = 0
         stock = "∞" if (offer or {}).get("unlimited_stock") else int((offer or {}).get("stock") or 0)
-        if not db.offer_has_stock(offer, qty):
+        if not is_preorder and not db.offer_has_stock(offer, qty):
+            is_preorder = True
+        if qty < 1 or qty > 500:
             await update.message.reply_text(
                 t(lang, "quantity_invalid", stock=stock),
                 parse_mode=ParseMode.MARKDOWN,
             )
             return
         PENDING.pop(uid, None)
-        await send_buy_confirmation(update.message.reply_text, uid, int(ref), qty, lang)
+        await send_buy_confirmation(update.message.reply_text, uid, int(ref_id), qty, lang, is_preorder=is_preorder)
         return
 
     if kind == "otp_service":
