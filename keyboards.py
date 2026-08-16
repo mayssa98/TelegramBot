@@ -337,7 +337,7 @@ def format_split_button_texts(name, price_str, right_text):
 
 
 def catalog_offers_keyboard(lang):
-    """Show flat list of offer buttons followed by request and navigation buttons."""
+    """Show grouped category buttons (Adobe, ChatGPT, Telegram, VPNs, Netflix) AT THE TOP in a 2-column grid, followed by individual offer buttons."""
     buttons = []
     db.preload_text_overrides(
         (
@@ -351,28 +351,81 @@ def catalog_offers_keyboard(lang):
     stock_icon = db.get_text_override_icon("stock_label", lang) or None
 
     all_offers = db.list_catalog_offers()
+
+    # Group offers by service_id
+    service_offers = {}
     for offer in all_offers:
-        safe_offer = dict(offer)
-        safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
-        stock = int(offer.get("stock") or 0)
-        is_out = not offer.get("unlimited_stock") and stock <= 0
-        cb_data = f"off:{offer['id']}"
-        btn_style = "danger" if is_out else ("success" if offer.get("unlimited_stock") else stock_button_style(stock))
-        buttons.append([InlineKeyboardButton(
-            offer_button_label(
-                lang, safe_offer,
-                stock_label=stock_label,
-                price_tbd=price_tbd,
-            ),
-            callback_data=cb_data,
-            style=btn_style,
-            icon_custom_emoji_id=(
-                stock_icon
-                or offer.get("custom_emoji_id")
-                or offer.get("service_custom_emoji_id")
-                or None
-            ),
-        )])
+        sid = offer.get("service_id")
+        if sid not in service_offers:
+            service_offers[sid] = []
+        service_offers[sid].append(offer)
+
+    grouped_category_buttons = []
+    regular_offer_buttons = []
+    added_services = set()
+
+    for offer in all_offers:
+        sid = offer.get("service_id")
+        offers_in_service = service_offers.get(sid, [])
+        s_name = (offer.get("service_name") or "").lower()
+
+        # Group if service has multiple offers OR matches Adobe/ChatGPT/Telegram/VPN/Netflix
+        is_target_group = any(k in s_name for k in ("adobe", "chatgpt", "gpt", "telegram", "vpn", "netfli"))
+        should_group = len(offers_in_service) > 1 or is_target_group
+
+        if should_group:
+            if sid not in added_services:
+                added_services.add(sid)
+                total_stock = sum(int(o.get("stock") or 0) for o in offers_in_service)
+                has_unlimited = any(o.get("unlimited_stock") for o in offers_in_service)
+                service_emoji = get_service_emoji(
+                    offer.get("service_name"),
+                    offer.get("service_emoji"),
+                )
+                service_name = (offer.get("service_name") or f"Service #{sid}").strip()
+                clean_name = clean_button_name(service_name) or service_name
+                label = f"{service_emoji} {clean_name}".strip() if service_emoji and not service_name.startswith(service_emoji) else service_name
+                cat_style = "success" if (has_unlimited or total_stock > 3) else ("primary" if total_stock > 0 else "danger")
+                grouped_category_buttons.append(InlineKeyboardButton(
+                    label,
+                    callback_data=f"svc:{sid}",
+                    style=cat_style,
+                ))
+        else:
+            safe_offer = dict(offer)
+            safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
+            stock = int(offer.get("stock") or 0)
+            is_out = not offer.get("unlimited_stock") and stock <= 0
+            cb_data = f"preorder_start:{offer['id']}" if is_out else f"off:{offer['id']}"
+            btn_style = "danger" if is_out else ("success" if offer.get("unlimited_stock") else stock_button_style(stock))
+            regular_offer_buttons.append([InlineKeyboardButton(
+                offer_button_label(
+                    lang, safe_offer,
+                    stock_label=stock_label,
+                    price_tbd=price_tbd,
+                ),
+                callback_data=cb_data,
+                style=btn_style,
+                icon_custom_emoji_id=(
+                    stock_icon
+                    or offer.get("custom_emoji_id")
+                    or offer.get("service_custom_emoji_id")
+                    or None
+                ),
+            )])
+
+    # 1. Place grouped category buttons (Adobe, ChatGPT, Telegram, VPNs, Netflix) AT THE TOP in rows of 2
+    row = []
+    for btn in grouped_category_buttons:
+        row.append(btn)
+        if len(row) == 2:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+
+    # 2. Add individual offer buttons below
+    buttons.extend(regular_offer_buttons)
 
     buttons.append([
         translated_button(lang, "catalog_request_button", callback_data="catalog_request"),
