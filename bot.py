@@ -2795,19 +2795,65 @@ def order_service_groups(orders):
 
 
 def orders_text_export(lang, orders, title):
-    lines = [title, "=" * max(24, len(title)), ""]
+    lines = [
+        f"PURCHASE HISTORY — {title}",
+        "=" * max(32, len(title) + 19),
+        "",
+    ]
     for order in orders:
         created_at = order.get("created_at")
-        date = datetime.fromtimestamp(created_at, UTC).strftime("%Y-%m-%d %H:%M UTC") if created_at else "—"
+        delivered_at = order.get("delivered_at")
+        purchase_date = (
+            datetime.fromtimestamp(created_at, UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+            if created_at else "—"
+        )
+        delivery_date = (
+            datetime.fromtimestamp(delivered_at, UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+            if delivered_at else "—"
+        )
+        qty = max(1, int(order.get("qty") or 1))
+        unit_price = float(order.get("unit_price") or 0)
+        wallet_amount = float(order.get("wallet_amount") or 0)
+        external_amount = float(order.get("total_price") or 0)
+        paid_total = round(wallet_amount + external_amount, 2)
+        gross_total = float(
+            order.get("gross_total")
+            if order.get("gross_total") is not None
+            else unit_price * qty if unit_price else paid_total
+        )
+        offer = db.get_offer(order.get("offer_id")) if order.get("offer_id") else None
+        warranty = str(
+            order.get("warranty")
+            or (offer or {}).get("note")
+            or "No warranty information recorded"
+        ).strip()
+        delivered_content = order_service.delivery_content_for_order(order)
+        payment_method = str(
+            order.get("verify_method") or order.get("payment_method") or "—"
+        )
+        txid = str(order.get("txid") or "—")
         lines.extend([
-            f"Order #{order['id']}",
+            f"ORDER #{order['id']}",
+            "-" * 32,
             f"Service: {order.get('service_name') or '—'}",
             f"Offer: {order.get('offer_name') or '—'}",
-            f"Quantity: {order.get('qty', 1)}",
-            f"Total: {float(order.get('total_price') or 0):.2f} {order.get('currency', CURRENCY)}",
+            f"Quantity: {qty}",
+            f"Unit price: {unit_price:.2f} {order.get('currency', CURRENCY)}",
+            f"Catalog total: {gross_total:.2f} {order.get('currency', CURRENCY)}",
+            f"Total paid: {paid_total:.2f} {order.get('currency', CURRENCY)}",
             f"Status: {status_label(lang, order.get('status', ''))}",
-            f"Date: {date}",
+            f"Purchase date: {purchase_date}",
+            f"Delivery date: {delivery_date}",
+            f"Payment method: {payment_method}",
+            f"Transaction ID: {txid}",
+            f"Warranty: {warranty}",
+            "",
+            "PURCHASE CONTENT",
             "-" * 32,
+            delivered_content or "Content not delivered or no longer available.",
+            "",
+            "=" * 48,
+            "",
         ])
     return "\n".join(lines)
 

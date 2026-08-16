@@ -1042,23 +1042,37 @@ def test_orders_are_grouped_by_service_with_counts(monkeypatch):
     assert groups[0]["emoji"] == "🤖"
 
 
-def test_orders_export_contains_summary_without_delivery_secret():
+def test_orders_export_contains_complete_purchase_and_delivery_content(monkeypatch):
+    monkeypatch.setattr("bot.db.get_offer", lambda _offer_id: {
+        "note": "Replacement warranty for 30 days",
+    })
     content = orders_text_export("en", [{
         "id": 7,
+        "offer_id": 70,
         "service_name": "ChatGPT",
         "offer_name": "Plus",
         "qty": 2,
+        "unit_price": 9.0,
+        "gross_total": 18.0,
         "total_price": 18.0,
         "currency": "USDT",
         "status": "delivered",
         "created_at": 1_700_000_000,
+        "delivered_at": 1_700_000_060,
+        "payment_method": "binance",
+        "txid": "TXID-123456",
         "delivery_text": "SECRET-CREDENTIAL",
     }], "ChatGPT")
 
-    assert "Order #7" in content
+    assert "ORDER #7" in content
     assert "ChatGPT" in content
     assert "18.00 USDT" in content
-    assert "SECRET-CREDENTIAL" not in content
+    assert "Replacement warranty for 30 days" in content
+    assert "Purchase date: 2023-11-14 22:13:20 UTC" in content
+    assert "Delivery date: 2023-11-14 22:14:20 UTC" in content
+    assert "Transaction ID: TXID-123456" in content
+    assert "PURCHASE CONTENT" in content
+    assert "SECRET-CREDENTIAL" in content
 
 
 def test_catalog_request_button_supports_admin_premium_emoji(mock_mongodb):

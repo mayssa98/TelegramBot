@@ -97,6 +97,7 @@ def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = 
         "offer_id": offer["id"],
         "service_name": service["name"] if service else "",
         "offer_name": offer["name"],
+        "warranty": str(offer.get("note") or "").strip(),
         "qty": qty,
         "unit_price": unit_price,
         "gross_total": gross_total,
@@ -136,6 +137,47 @@ def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = 
     )
     log.info("Commande #%d créée pour user %d (offre %s)", order_id, user_id, offer["name"])
     return db.get_order(order_id)
+
+
+def delivery_content_for_order(order: dict) -> str:
+    """Resolve content delivered to an order owner, including encrypted stock."""
+    stored = str(order.get("delivery_text") or "").strip()
+    encrypted_markers = {
+        "[encrypted automatic delivery]",
+        "[encrypted reseller delivery]",
+    }
+    if stored and stored not in encrypted_markers:
+        return stored
+
+    order_id = order.get("id")
+    if order_id is None:
+        return ""
+    rows = list(db.get_conn().inventory.find({
+        "$or": [
+            {"delivered_order_id": int(order_id)},
+            {"order_id": int(order_id), "status": "sold"},
+        ]
+    }).sort("id", 1))
+    if not rows:
+        return ""
+
+    cipher = db._fernet()
+    values: list[str] = []
+    for row in rows:
+        payload = row.get("payload")
+        if not payload:
+            continue
+        try:
+            value = cipher.decrypt(str(payload).encode()).decode().strip()
+        except Exception:
+            log.warning(
+                "Impossible de déchiffrer le contenu livré de la commande #%s",
+                order_id,
+            )
+            continue
+        if value:
+            values.append(value)
+    return "\n\n".join(values)
 
 
 # ---------------------------------------------------------------------------

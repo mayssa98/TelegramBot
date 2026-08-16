@@ -28,6 +28,40 @@ def test_create_order_success(mock_mongodb):
     assert order["expires_at"] > order["created_at"]
 
 
+def test_order_snapshots_warranty_at_purchase(mock_mongodb):
+    service_id = db.add_service("AI", "T")
+    offer_id = db.add_offer(
+        service_id, "ChatGPT Plus", 9.99, 1,
+        note="30-day replacement warranty",
+    )
+
+    order = order_service.create_order(42, db.get_offer(offer_id))
+    db.update_offer(offer_id, note="Changed later")
+
+    assert order["warranty"] == "30-day replacement warranty"
+
+
+def test_delivery_content_resolves_encrypted_inventory_for_order_owner(mock_mongodb):
+    service_id = db.add_service("AI", "T")
+    offer_id = db.add_offer(service_id, "ChatGPT Plus", 9.99, 0)
+    db.add_inventory_items(offer_id, ["login@example.com:secret-password"])
+    item = mock_mongodb.inventory.find_one({"offer_id": offer_id})
+    mock_mongodb.inventory.update_one(
+        {"_id": item["_id"]},
+        {"$set": {
+            "status": "delivered",
+            "delivered_order_id": 77,
+        }},
+    )
+
+    content = order_service.delivery_content_for_order({
+        "id": 77,
+        "delivery_text": "[encrypted automatic delivery]",
+    })
+
+    assert content == "login@example.com:secret-password"
+
+
 def test_flash_sale_price_is_used_then_regular_price_is_restored(mock_mongodb, monkeypatch):
     service_id = db.add_service("AI", "⚡")
     offer_id = db.add_offer(service_id, "Gemini Pro", 8.0, 5)
