@@ -370,7 +370,8 @@ def offer_detail_keyboard(lang, offer):
     buttons = []
     if offer["price"] is not None and db.offer_has_stock(offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
-    buttons.append([translated_button(lang, "btn_back", callback_data="catalog")])
+    back_data = f"svc:{offer['service_id']}" if offer.get("service_id") else "catalog"
+    buttons.append([translated_button(lang, "btn_back", callback_data=back_data)])
     return InlineKeyboardMarkup(buttons)
 
 
