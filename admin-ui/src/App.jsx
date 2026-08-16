@@ -15,10 +15,12 @@ import {
   MessageSquareText,
   PackageSearch,
   RefreshCw,
+  Search,
+  ShieldCheck,
   Settings,
   ShoppingBag,
-  Store,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
 
@@ -79,7 +81,7 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate }) {
       />
       <aside className={`sidebar ${mobileOpen ? "is-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark"><Store size={22} /></div>
+          <div className="brand-mark">{initials(data?.shop_name || "BlackMarket")}</div>
           <div><strong>{data?.shop_name || "BlackMarket"}</strong><span>Control Center</span></div>
           <button className="icon-button mobile-only" onClick={onClose} aria-label="Fermer"><X size={20} /></button>
         </div>
@@ -111,7 +113,7 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate }) {
   );
 }
 
-function Header({ activePage, alertCount, isRefreshing, onMenu, onRefresh }) {
+function Header({ activePage, alertCount, busyAction, isRefreshing, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance }) {
   const current = NAV_ITEMS.find((item) => item.id === activePage) || NAV_ITEMS[0];
   return (
     <header className="topbar">
@@ -119,11 +121,22 @@ function Header({ activePage, alertCount, isRefreshing, onMenu, onRefresh }) {
         <button className="icon-button menu-button" onClick={onMenu} aria-label="Ouvrir le menu"><Menu size={21} /></button>
         <div><span>Administration</span><h1>{current.label}</h1></div>
       </div>
+      <button className="global-search-trigger" onClick={onSearch}>
+        <Search size={17} />
+        <span>Rechercher commandes, produits ou clients…</span>
+        <kbd>Ctrl K</kbd>
+      </button>
       <div className="topbar-actions">
-        <button className="icon-button" onClick={onRefresh} aria-label="Actualiser">
+        <button className="header-action" onClick={onRepairTelegram} disabled={Boolean(busyAction)}>
+          <Wrench size={16} className={busyAction === "telegram" ? "spin" : ""} /><span>Réparer Telegram</span>
+        </button>
+        <button className="header-action" onClick={onTestBinance} disabled={Boolean(busyAction)}>
+          <ShieldCheck size={16} className={busyAction === "binance" ? "spin" : ""} /><span>Tester Binance</span>
+        </button>
+        <button className="icon-button" onClick={onRefresh} aria-label="Actualiser" title="Actualiser les données">
           <RefreshCw size={19} className={isRefreshing ? "spin" : ""} />
         </button>
-        <button className="icon-button notification-button" aria-label={`${alertCount} alertes`}>
+        <button className="icon-button notification-button" onClick={onNotifications} aria-label={`${alertCount} alertes`}>
           <Bell size={19} />{alertCount > 0 && <span>{Math.min(alertCount, 9)}</span>}
         </button>
         <div className="avatar">AD</div>
@@ -132,10 +145,10 @@ function Header({ activePage, alertCount, isRefreshing, onMenu, onRefresh }) {
   );
 }
 
-function StatCard({ label, value, detail, trend, icon: Icon, tone = "cyan" }) {
+function StatCard({ label, value, detail, trend, icon: Icon, onClick, tone = "cyan" }) {
   const isPositive = Number(trend) >= 0;
   return (
-    <article className="stat-card">
+    <button className="stat-card" onClick={onClick}>
       <div className={`stat-icon ${tone}`}><Icon size={21} /></div>
       <div className="stat-copy">
         <span>{label}</span>
@@ -147,7 +160,8 @@ function StatCard({ label, value, detail, trend, icon: Icon, tone = "cyan" }) {
           {detail}
         </small>
       </div>
-    </article>
+      <ChevronRight className="stat-arrow" size={17} />
+    </button>
   );
 }
 
@@ -188,7 +202,7 @@ function RevenueChart({ data, currency }) {
   );
 }
 
-function AlertsPanel({ alerts = [] }) {
+function AlertsPanel({ alerts = [], onSelect }) {
   return (
     <section className="panel alerts-panel">
       <div className="panel-heading"><div><span className="eyebrow">À surveiller</span><h2>Alertes actives</h2></div><span className="count-chip">{alerts.length}</span></div>
@@ -196,10 +210,11 @@ function AlertsPanel({ alerts = [] }) {
         {alerts.length === 0 ? (
           <div className="healthy-state"><div>✓</div><strong>Tout fonctionne normalement</strong><span>Aucune intervention requise.</span></div>
         ) : alerts.slice(0, 5).map((alert, index) => (
-          <div className={`alert-row ${alert.severity || "warning"}`} key={`${alert.type}-${index}`}>
+          <button className={`alert-row ${alert.severity || "warning"}`} key={`${alert.type}-${index}`} onClick={() => onSelect(alert)}>
             <AlertTriangle size={18} />
             <div><strong>{alert.severity === "error" ? "Action requise" : "Attention"}</strong><span>{alert.message}</span></div>
-          </div>
+            <ChevronRight size={16} />
+          </button>
         ))}
       </div>
       {alerts.length > 5 && <button className="text-button">Voir toutes les alertes <ChevronRight size={16} /></button>}
@@ -207,11 +222,11 @@ function AlertsPanel({ alerts = [] }) {
   );
 }
 
-function RecentOrders({ orders = [], currency, onOpenLegacy }) {
+function RecentOrders({ orders = [], currency, onOpenLegacy, onSelectOrder }) {
   return (
     <section className="panel orders-panel">
       <div className="panel-heading">
-        <div><span className="eyebrow">Temps réel</span><h2>Commandes récentes</h2></div>
+        <div><span className="eyebrow">Activité récente</span><h2>Commandes récentes</h2></div>
         <button className="text-button" onClick={onOpenLegacy}>Tout afficher <ChevronRight size={16} /></button>
       </div>
       <div className="table-scroll">
@@ -219,7 +234,7 @@ function RecentOrders({ orders = [], currency, onOpenLegacy }) {
           <thead><tr><th>Commande</th><th>Client</th><th>Montant</th><th>Statut</th><th>Date</th></tr></thead>
           <tbody>
             {orders.slice(0, 6).map((order) => (
-              <tr key={order.id}>
+              <tr key={order.id} onClick={() => onSelectOrder(order)} tabIndex="0" onKeyDown={(event) => event.key === "Enter" && onSelectOrder(order)}>
                 <td><strong>#{order.id}</strong><span>{order.offer_name || order.service_name || "Commande"}</span></td>
                 <td>{order.username ? `@${order.username}` : order.user_id || "—"}</td>
                 <td><strong>{formatMoney(order.total_price, currency)}</strong></td>
@@ -235,7 +250,7 @@ function RecentOrders({ orders = [], currency, onOpenLegacy }) {
   );
 }
 
-function ServicePanel({ services = [], currency }) {
+function ServicePanel({ services = [], currency, onSelect }) {
   const ranked = [...services].sort((a, b) => Number(b.total_revenue || 0) - Number(a.total_revenue || 0)).slice(0, 5);
   const max = Math.max(...ranked.map((service) => Number(service.total_revenue || 0)), 1);
   return (
@@ -243,11 +258,12 @@ function ServicePanel({ services = [], currency }) {
       <div className="panel-heading"><div><span className="eyebrow">Catalogue</span><h2>Services performants</h2></div><PackageSearch size={20} /></div>
       <div className="service-list">
         {ranked.map((service) => (
-          <div className="service-row" key={service.id}>
+          <button className="service-row" key={service.id} onClick={() => onSelect(service)}>
             <div className="service-avatar">{initials(service.name)}</div>
             <div className="service-info"><strong>{service.name}</strong><span>{service.total_sales || 0} vente(s) · {service.total_stock || 0} en stock</span><div><i style={{ width: `${(Number(service.total_revenue || 0) / max) * 100}%` }} /></div></div>
             <strong>{formatMoney(service.total_revenue, currency)}</strong>
-          </div>
+            <ChevronRight size={15} />
+          </button>
         ))}
         {ranked.length === 0 && <div className="empty-cell">Aucun service configuré</div>}
       </div>
@@ -255,28 +271,28 @@ function ServicePanel({ services = [], currency }) {
   );
 }
 
-function Overview({ data, onLegacy }) {
+function Overview({ data, onNavigate, onOpenBot }) {
   const summary = data.summary || {};
   const currency = data.currency || "USDT";
   return (
     <>
       <div className="welcome-row">
         <div><span className="eyebrow">Centre de contrôle</span><h2>Bonjour, Admin</h2><p>Voici ce qui se passe dans votre boutique aujourd’hui.</p></div>
-        <a className="primary-button" href={`https://t.me/${data.bot_username || "blackmarketa_bot"}`} target="_blank" rel="noreferrer">Ouvrir le bot <ChevronRight size={17} /></a>
+        <button className="primary-button" onClick={onOpenBot}>Ouvrir le bot <ChevronRight size={17} /></button>
       </div>
 
       <div className="stats-grid">
-        <StatCard label="Revenu aujourd’hui" value={formatMoney(summary.revenue_today, currency)} detail=" vs hier" trend={summary.revenue_yesterday ? ((summary.revenue_day_delta / summary.revenue_yesterday) * 100).toFixed(1) : 0} icon={CircleDollarSign} tone="cyan" />
-        <StatCard label="Commandes" value={summary.orders_today || 0} detail=" aujourd’hui" trend={summary.orders_yesterday ? ((summary.orders_day_delta / summary.orders_yesterday) * 100).toFixed(1) : 0} icon={ShoppingBag} tone="violet" />
-        <StatCard label="Nouveaux clients" value={summary.new_users_today || 0} detail=" cette semaine" trend={summary.users_7d_change_pct || 0} icon={Users} tone="green" />
-        <StatCard label="Stock disponible" value={summary.available_inventory || 0} detail={`${summary.low_stock_offers || 0} offre(s) faible(s)`} icon={Database} tone="amber" />
+        <StatCard label="Revenu aujourd’hui" value={formatMoney(summary.revenue_today, currency)} detail=" vs hier" trend={summary.revenue_yesterday ? ((summary.revenue_day_delta / summary.revenue_yesterday) * 100).toFixed(1) : 0} icon={CircleDollarSign} onClick={() => onNavigate("orders")} tone="cyan" />
+        <StatCard label="Commandes" value={summary.orders_today || 0} detail=" aujourd’hui" trend={summary.orders_yesterday ? ((summary.orders_day_delta / summary.orders_yesterday) * 100).toFixed(1) : 0} icon={ShoppingBag} onClick={() => onNavigate("orders")} tone="violet" />
+        <StatCard label="Nouveaux clients" value={summary.new_users_today || 0} detail=" cette semaine" trend={summary.users_7d_change_pct || 0} icon={Users} onClick={() => onNavigate("customers")} tone="green" />
+        <StatCard label="Stock disponible" value={summary.available_inventory || 0} detail={`${summary.low_stock_offers || 0} offre(s) faible(s)`} icon={Database} onClick={() => onNavigate("inventory")} tone="amber" />
       </div>
 
       <div className="dashboard-grid">
         <RevenueChart data={summary} currency={currency} />
-        <AlertsPanel alerts={data.alerts} />
-        <RecentOrders orders={data.orders} currency={currency} onOpenLegacy={() => onLegacy("orders")} />
-        <ServicePanel services={data.services} currency={currency} />
+        <AlertsPanel alerts={data.alerts} onSelect={(alert) => onNavigate(alert.type?.includes("stock") ? "inventory" : alert.type?.includes("ticket") ? "support" : "orders")} />
+        <RecentOrders orders={data.orders} currency={currency} onOpenLegacy={() => onNavigate("orders")} onSelectOrder={() => onNavigate("orders")} />
+        <ServicePanel services={data.services} currency={currency} onSelect={() => onNavigate("catalog")} />
       </div>
     </>
   );
@@ -296,6 +312,67 @@ function MigrationPage({ page }) {
   );
 }
 
+function SearchDialog({ data, onClose, onNavigate }) {
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLowerCase();
+  const results = useMemo(() => {
+    if (!normalized) return [];
+    const orders = (data.orders || []).filter((item) => `${item.id} ${item.user_id} ${item.username || ""} ${item.offer_name || ""}`.toLowerCase().includes(normalized)).slice(0, 4).map((item) => ({ id: `order-${item.id}`, title: `Commande #${item.id}`, detail: item.offer_name || `Client ${item.user_id}`, page: "orders", icon: ClipboardList }));
+    const customers = (data.users || []).filter((item) => `${item.telegram_id || item.user_id || ""} ${item.username || ""} ${item.first_name || ""} ${item.last_name || ""}`.toLowerCase().includes(normalized)).slice(0, 4).map((item) => ({ id: `customer-${item.telegram_id || item.user_id}`, title: item.username ? `@${item.username}` : `Client ${item.telegram_id || item.user_id}`, detail: [item.first_name, item.last_name].filter(Boolean).join(" ") || "Client Telegram", page: "customers", icon: Users }));
+    const services = (data.services || []).filter((item) => `${item.name || ""} ${(item.offers || []).map((offer) => offer.name).join(" ")}`.toLowerCase().includes(normalized)).slice(0, 4).map((item) => ({ id: `service-${item.id}`, title: item.name, detail: `${item.offer_count || 0} offre(s)`, page: "catalog", icon: ShoppingBag }));
+    return [...orders, ...customers, ...services].slice(0, 8);
+  }, [data, normalized]);
+
+  useEffect(() => {
+    const closeOnEscape = (event) => event.key === "Escape" && onClose();
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <section className="search-dialog" role="dialog" aria-modal="true" aria-label="Recherche globale" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="search-dialog-input"><Search size={20} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Commande, produit, client…" /><button onClick={onClose}><X size={18} /></button></div>
+        <div className="search-results">
+          {!normalized && <div className="search-empty"><Search size={25} /><strong>Recherche globale</strong><span>Saisissez un identifiant, un nom ou un produit.</span></div>}
+          {normalized && results.length === 0 && <div className="search-empty"><strong>Aucun résultat</strong><span>Essayez un autre terme de recherche.</span></div>}
+          {results.map(({ id, title, detail, page, icon: Icon }) => (
+            <button key={id} onClick={() => { onNavigate(page); onClose(); }}><span><Icon size={17} /></span><div><strong>{title}</strong><small>{detail}</small></div><ChevronRight size={16} /></button>
+          ))}
+        </div>
+        <footer><span>↵ ouvrir</span><span>Échap fermer</span></footer>
+      </section>
+    </div>
+  );
+}
+
+function NotificationsDrawer({ alerts = [], onClose, onNavigate }) {
+  return (
+    <div className="drawer-backdrop" onMouseDown={onClose}>
+      <aside className="notifications-drawer" onMouseDown={(event) => event.stopPropagation()}>
+        <header><div><span className="eyebrow">Centre d’alertes</span><h2>Notifications</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></header>
+        <div className="drawer-alerts">
+          {alerts.length === 0 ? <div className="search-empty"><strong>Aucune alerte</strong><span>Votre boutique fonctionne normalement.</span></div> : alerts.map((alert, index) => (
+            <button key={`${alert.type}-${index}`} onClick={() => { onNavigate(alert.type?.includes("stock") ? "inventory" : alert.type?.includes("ticket") ? "support" : "orders"); onClose(); }} className={alert.severity || "warning"}>
+              <span><AlertTriangle size={17} /></span><div><strong>{alert.severity === "error" ? "Action requise" : "Attention"}</strong><small>{alert.message}</small></div><ChevronRight size={16} />
+            </button>
+          ))}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function Toast({ toast, onClose }) {
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timeout = window.setTimeout(onClose, 4500);
+    return () => window.clearTimeout(timeout);
+  }, [toast, onClose]);
+  if (!toast) return null;
+  return <div className={`toast ${toast.type || "success"}`}><span>{toast.type === "error" ? "!" : "✓"}</span><div><strong>{toast.title}</strong><small>{toast.message}</small></div><button onClick={onClose}><X size={15} /></button></div>;
+}
+
 function LoadingState() {
   return <div className="loading-state"><div className="loader" /><strong>Chargement du centre de contrôle…</strong><span>Connexion sécurisée aux données du bot.</span></div>;
 }
@@ -312,6 +389,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [busyAction, setBusyAction] = useState("");
+  const [toast, setToast] = useState(null);
 
   const loadData = useCallback(async (background = false) => {
     background ? setRefreshing(true) : setLoading(true);
@@ -330,6 +411,16 @@ export default function App() {
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => {
+    const openSearch = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", openSearch);
+    return () => window.removeEventListener("keydown", openSearch);
+  }, []);
+  useEffect(() => {
     const handlePopState = () => {
       const page = window.location.pathname.replace(/^\/admin-v2\/?/, "").split("/")[0] || "overview";
       setActivePage(NAV_ITEMS.some((item) => item.id === page) ? page : "overview");
@@ -344,17 +435,46 @@ export default function App() {
     window.history.pushState({}, "", page === "overview" ? "/admin-v2" : `/admin-v2/${page}`);
   };
 
+  const runHealthCheck = async (type) => {
+    setBusyAction(type);
+    try {
+      if (type === "telegram") {
+        const response = await fetch("/admin", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          body: new URLSearchParams({ action: "repair_telegram_webhook" }),
+        });
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) throw new Error(payload.message || payload.error || "Réparation refusée.");
+        setToast({ title: "Telegram réparé", message: payload.message || "Le webhook est correctement configuré." });
+      } else {
+        const response = await fetch("/admin/api/binance-health", { credentials: "same-origin", cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) throw new Error(payload.message || payload.error || "Connexion Binance indisponible.");
+        setToast({ title: "Binance opérationnel", message: payload.message || "La connexion API fonctionne correctement." });
+      }
+    } catch (actionError) {
+      setToast({ type: "error", title: type === "telegram" ? "Échec Telegram" : "Échec Binance", message: actionError.message });
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   const alertCount = useMemo(() => data?.alerts?.length || 0, [data]);
 
   return (
     <div className="app-shell">
       <Sidebar activePage={activePage} data={data} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={navigate} />
       <div className="main-shell">
-        <Header activePage={activePage} alertCount={alertCount} isRefreshing={refreshing} onMenu={() => setMobileOpen(true)} onRefresh={() => loadData(true)} />
+        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} isRefreshing={refreshing} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} />
         <main className="content">
-          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onLegacy={(page) => window.location.assign(NAV_ITEMS.find((item) => item.id === page)?.legacy || "/admin")} /> : <MigrationPage page={activePage} />}
+          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <MigrationPage page={activePage} />}
         </main>
       </div>
+      {searchOpen && data && <SearchDialog data={data} onClose={() => setSearchOpen(false)} onNavigate={navigate} />}
+      {notificationsOpen && <NotificationsDrawer alerts={data?.alerts || []} onClose={() => setNotificationsOpen(false)} onNavigate={navigate} />}
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 }

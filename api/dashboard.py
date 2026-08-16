@@ -568,9 +568,6 @@ def render_dashboard(
             border-left-color: var(--danger);
         }
 
-        .realtime-chip { display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 12px; border:1px solid var(--border-color); border-radius:999px; background:rgba(15,29,48,.75); color:var(--text-muted); font-size:12px; white-space:nowrap; }
-        .realtime-dot { width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 12px var(--success); }
-        .realtime-chip.offline .realtime-dot { background:var(--danger); box-shadow:0 0 12px var(--danger); }
         .notification-center { position:relative; }
         .notification-button { width:42px; height:42px; display:grid; place-items:center; border:1px solid var(--border-color); border-radius:12px; background:rgba(15,29,48,.78); color:var(--text-main); cursor:pointer; position:relative; }
         .notification-button:hover { border-color:var(--cyan); }
@@ -2450,7 +2447,6 @@ def render_dashboard(
                 <span class="search-shortcut">CTRL K</span>
             </label>
             <div class="merchant-account">
-                <span class="realtime-chip" id="realtime-chip"><span class="realtime-dot"></span><span id="realtime-copy">Temps réel actif</span></span>
                 <div class="notification-center">
                     <button class="notification-button" id="notification-button" type="button" onclick="toggleNotificationCenter(event)" aria-label="Centre de notifications" aria-expanded="false">🔔<span class="notification-badge" id="notification-badge">0</span></button>
                     <div class="notification-panel" id="notification-panel">
@@ -3122,7 +3118,6 @@ def render_dashboard(
         let apiWorkspaceStep = "overview";
         let selectedApiProductId = null;
         let activeApiProvider = "mailreader";
-        let realtimeTimer = null;
         let realtimeRequestRunning = false;
         let adminNotifications = loadAdminNotifications();
         let notificationSnapshot = snapshotDashboard(dashboardData);
@@ -3182,15 +3177,6 @@ def render_dashboard(
             if (document.getElementById("api-products")?.classList.contains("active")) {
                 loadApiProducts();
                 loadBuyerApiKeys();
-            }
-            startRealtimeUpdates();
-        });
-
-        document.addEventListener("visibilitychange", () => {
-            if (document.hidden) stopRealtimeUpdates();
-            else {
-                refreshDashboardData(true);
-                startRealtimeUpdates();
             }
         });
 
@@ -3284,16 +3270,6 @@ def render_dashboard(
             const copy = document.getElementById("realtime-copy");
             chip?.classList.toggle("offline", !online);
             if (copy) copy.textContent = online ? "Temps réel actif" : "Connexion interrompue";
-        }
-
-        function startRealtimeUpdates() {
-            stopRealtimeUpdates();
-            if (!document.hidden) realtimeTimer = setInterval(() => refreshDashboardData(true), 15000);
-        }
-
-        function stopRealtimeUpdates() {
-            if (realtimeTimer) clearInterval(realtimeTimer);
-            realtimeTimer = null;
         }
 
         function setupTabNavigation() {

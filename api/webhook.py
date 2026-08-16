@@ -400,7 +400,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
-        if path == "/admin-v2" or path.startswith("/admin-v2/"):
+        if path == "/admin" or path == "/admin-v2" or path.startswith("/admin-v2/"):
             if not self._dashboard_authorized():
                 self.send_response(401)
                 self.send_header("WWW-Authenticate", 'Basic realm="TelegramBot Admin"')

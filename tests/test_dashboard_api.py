@@ -261,16 +261,15 @@ def test_dashboard_uses_midnight_merchant_command_center():
     assert "syncSupplierCatalog" in page
 
 
-def test_dashboard_has_realtime_updates_and_notification_center():
+def test_dashboard_has_notification_center_without_auto_refresh():
     page = render_dashboard({"summary": {}, "alerts": []})
 
     assert 'id="notification-panel"' in page
     assert 'id="notification-badge"' in page
-    assert 'id="realtime-chip"' in page
     assert "admin-notifications-v1" in page
     assert "Notification.requestPermission()" in page
-    assert "setInterval(() => refreshDashboardData(true), 15000)" in page
-    assert 'document.addEventListener("visibilitychange"' in page
+    assert "setInterval(() => refreshDashboardData(true), 15000)" not in page
+    assert 'document.addEventListener("visibilitychange"' not in page
 
 
 def test_dashboard_contains_binance_health_test():
