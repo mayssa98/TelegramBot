@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock3,
   FileCheck2,
+  Eye,
   Globe2,
   Headphones,
   Menu,
@@ -31,7 +32,7 @@ const COPY = {
     products: "Nos services", productsLead: "Tous les produits disponibles dans le bot, maintenant accessibles en dinars tunisiens.",
     search: "Rechercher un service ou un produit…", all: "Tous", available: "Disponible", unavailable: "Épuisé",
     trending: "Sélection du moment", trendingLead: "Les outils numériques les plus demandés en Tunisie.", category: "Catégorie", noProducts: "Aucun produit ne correspond à votre recherche.",
-    buy: "Commander", from: "à partir de", how: "Commander en trois étapes",
+    buy: "Commander", view: "Voir", details: "Détails du produit", description: "Description complète", service: "Service", price: "Prix", verified: "Service numérique vérifié", from: "à partir de", how: "Commander en trois étapes",
     step1: "Choisissez", step1Text: "Sélectionnez le service adapté à votre besoin.",
     step2: "Payez", step2Text: "Utilisez D17, Flouci, ISI ou un virement.",
     step3: "Recevez", step3Text: "L’admin vérifie le reçu puis lance la livraison.",
@@ -53,7 +54,7 @@ const COPY = {
     products: "خدماتنا", productsLead: "كل منتجات البوت متوفرة الآن بالدينار التونسي.",
     search: "ابحث عن خدمة أو منتج…", all: "الكل", available: "متوفر", unavailable: "غير متوفر",
     trending: "مختاراتنا", trendingLead: "أكثر الأدوات الرقمية طلباً في تونس.", category: "الفئة", noProducts: "لا توجد منتجات مطابقة لبحثك.",
-    buy: "اطلب الآن", from: "ابتداءً من", how: "اطلب في ثلاث خطوات",
+    buy: "اطلب الآن", view: "التفاصيل", details: "تفاصيل المنتج", description: "الوصف الكامل", service: "الخدمة", price: "السعر", verified: "خدمة رقمية موثوقة", from: "ابتداءً من", how: "اطلب في ثلاث خطوات",
     step1: "اختر", step1Text: "اختر الخدمة التي تناسب احتياجاتك.",
     step2: "ادفع", step2Text: "استعمل D17 أو Flouci أو ISI أو التحويل.",
     step3: "استلم", step3Text: "يتحقق المسؤول من الوصل ثم يبدأ التسليم.",
@@ -71,7 +72,7 @@ function money(value) {
   return `${new Intl.NumberFormat("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number(value || 0))} TND`;
 }
 
-function ProductCard({ product, t, onCheckout, delay = 0, featured = false }) {
+function ProductCard({ product, t, onCheckout, onDetails, delay = 0, featured = false }) {
   const visualUrl = product.image_url || product.logo_url;
   return (
     <article className={`product-card ${featured ? "featured-product" : ""}`} style={{ "--delay": `${delay}ms` }}>
@@ -83,8 +84,8 @@ function ProductCard({ product, t, onCheckout, delay = 0, featured = false }) {
       <div className="product-copy">
         <div className="product-meta"><span>{product.category_label}</span><small>{product.serviceName}</small></div>
         <h3>{product.name}</h3>
-        <p>{product.description || product.warranty || "Service numérique vérifié"}</p>
-        <div className="product-footer"><div><small>{t.from}</small><strong>{money(product.price)}</strong></div><button disabled={!product.available} onClick={() => onCheckout(product)}>{t.buy}<ChevronRight size={17} /></button></div>
+        <p>{product.description || product.warranty || t.verified}</p>
+        <div className="product-footer"><div><small>{t.from}</small><strong>{money(product.price)}</strong></div><div className="product-actions"><button className="view-product" onClick={() => onDetails(product)}><Eye size={15} />{t.view}</button><button disabled={!product.available} onClick={() => onCheckout(product)}>{t.buy}<ChevronRight size={17} /></button></div></div>
       </div>
     </article>
   );
@@ -99,6 +100,7 @@ function App() {
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState("all");
   const [checkout, setCheckout] = useState(null);
+  const [details, setDetails] = useState(null);
   const t = COPY[lang];
   const isAr = lang === "ar";
 
@@ -172,11 +174,11 @@ function App() {
 
         <section className="catalog-section" id="catalog">
           <div className="section-heading"><div><span className="eyebrow">Trust Market Selection</span><h2>{t.products}</h2><p>{t.productsLead}</p></div><label className="search-box"><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} /></label></div>
-          {!loading && highlights.length > 0 && <div className="featured-block"><div className="featured-heading"><div><Sparkles /><span><strong>{t.trending}</strong><small>{t.trendingLead}</small></span></div></div><div className="featured-grid">{highlights.map((product, index) => <ProductCard product={product} t={t} onCheckout={setCheckout} delay={index * 45} featured key={`featured-${product.id}`} />)}</div></div>}
+          {!loading && highlights.length > 0 && <div className="featured-block"><div className="featured-heading"><div><Sparkles /><span><strong>{t.trending}</strong><small>{t.trendingLead}</small></span></div></div><div className="featured-grid">{highlights.map((product, index) => <ProductCard product={product} t={t} onCheckout={setCheckout} onDetails={setDetails} delay={index * 45} featured key={`featured-${product.id}`} />)}</div></div>}
           <div className="category-tabs"><button className={categoryId === "all" ? "active" : ""} onClick={() => setCategoryId("all")}>{t.all}</button>{(data.categories || []).map((category) => <button className={categoryId === category.id ? "active" : ""} onClick={() => setCategoryId(category.id)} key={category.id}>{category.label}</button>)}</div>
           <div className="product-grid">
             {loading ? Array.from({ length: 6 }).map((_, index) => <div className="product-card skeleton" key={index} />) : visible.map((product, index) => (
-              <ProductCard product={product} t={t} onCheckout={setCheckout} delay={index * 45} key={product.id} />
+              <ProductCard product={product} t={t} onCheckout={setCheckout} onDetails={setDetails} delay={index * 45} key={product.id} />
             ))}
           </div>
           {!loading && visible.length === 0 && <div className="catalog-empty"><Search /><strong>{t.noProducts}</strong></div>}
@@ -187,9 +189,20 @@ function App() {
 
       <footer><div className="logo"><img className="logo-mark" src="/storefront/trust-market-logo.png" alt="Trust Market TN" /><div><strong>Trust Market</strong><small>TN</small></div></div><p>{t.footer}</p><small>© {new Date().getFullYear()} Trust Market TN · {t.rights}</small></footer>
       <a className="whatsapp-float" href={whatsappUrl} target="_blank" rel="noreferrer" aria-label="WhatsApp"><MessageCircle /></a>
+      {details && <ProductDetails product={details} t={t} onClose={() => setDetails(null)} onCheckout={() => { setDetails(null); setCheckout(details); }} />}
       {checkout && <Checkout product={checkout} methods={data.payment_methods} lang={lang} copy={t} whatsapp={data.whatsapp} onClose={() => setCheckout(null)} />}
     </div>
   );
+}
+
+function ProductDetails({ product, t, onClose, onCheckout }) {
+  const visualUrl = product.image_url || product.logo_url;
+  useEffect(() => {
+    const closeOnEscape = (event) => event.key === "Escape" && onClose();
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+  return <div className="modal-backdrop" onMouseDown={onClose}><section className="product-details-modal" role="dialog" aria-modal="true" aria-label={`${t.details} ${product.name}`} onMouseDown={(event) => event.stopPropagation()}><button className="details-close" onClick={onClose} aria-label={t.close}><X /></button><div className={`details-visual ${product.image_url ? "has-image" : "has-logo"}`}>{visualUrl ? <img src={visualUrl} alt={product.name} onError={(event) => { if (!event.currentTarget.src.endsWith("/storefront/service-fallback.png")) event.currentTarget.src = "/storefront/service-fallback.png"; else event.currentTarget.style.display = "none"; }} /> : <span>{product.emoji}</span>}{product.badge && <b className="product-badge">{product.badge}</b>}</div><div className="details-content"><span className="eyebrow">{t.details}</span><h2>{product.name}</h2><div className="details-tags"><span>{product.category_label}</span><span className={product.available ? "available" : "unavailable"}>{product.available ? t.available : t.unavailable}</span></div><div className="details-description"><strong>{t.description}</strong><p>{product.description || product.warranty || t.verified}</p></div>{product.warranty && product.warranty !== product.description && <div className="details-warranty"><ShieldCheck /><span>{product.warranty}</span></div>}<dl><div><dt>{t.service}</dt><dd>{product.serviceName}</dd></div><div><dt>{t.price}</dt><dd>{money(product.price)}</dd></div></dl><button className="details-order" disabled={!product.available} onClick={onCheckout}>{t.buy}<ChevronRight /></button></div></section></div>;
 }
 
 function Checkout({ product, methods, lang, copy: t, whatsapp, onClose }) {
