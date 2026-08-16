@@ -57,14 +57,42 @@ def compact_offer_name(name, max_len=34):
     return clean_name[: max_len - 3].rstrip() + "..."
 
 
-def stock_badge(stock):
-    """Return Telegram's closest visual equivalent to a colored button."""
+KNOWN_SERVICE_EMOJIS = {
+    "chatgpt": "🤖", "gpt": "🤖", "openai": "🤖",
+    "adobe": "🅰️",
+    "lovable": "💜",
+    "vpn": "🛡️", "vpns": "🛡️",
+    "telegram": "✈️",
+    "netflix": "🍿",
+    "canva": "🎨",
+    "capcut": "✂️",
+    "youtube": "📺",
+    "linkedin": "💼",
+    "outlook": "✉️",
+    "gemini": "✨",
+}
+
+
+def get_service_emoji(name, current_emoji=""):
+    emoji = str(current_emoji or "").strip()
+    if emoji and emoji != "📦":
+        return emoji
+    name_lower = str(name or "").lower()
+    for key, val in KNOWN_SERVICE_EMOJIS.items():
+        if key in name_lower:
+            return val
+    return "🟢"
+
+
+def stock_badge(stock, unlimited=False):
+    if unlimited:
+        return "🟢"
     stock = int(stock or 0)
     if stock > 3:
-        return "🟩"
+        return "🟢"
     if stock > 0:
-        return "🟦"
-    return "🟥"
+        return "🔵"
+    return "🔴"
 
 
 def stock_button_style(stock):
@@ -74,8 +102,6 @@ def stock_button_style(stock):
         return "success"
     if stock > 0:
         return "primary"
-    if stock == 0:
-        return "danger"
     return "danger"
 
 
@@ -95,9 +121,8 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
         price_text = f"${amount}" if currency in {"USD", "USDT"} else f"{amount} {currency}"
 
     if offer.get("unlimited_stock"):
-        label = stock_label if stock_label is not None else t(lang, "stock_label")
-        stock_text = f"{label.title()}: ∞"
-        suffix = f"{price_text} | {stock_text}"
+        badge = "🟢"
+        suffix = f"{price_text} | {badge}: ∞"
         max_name_length = max(8, 64 - len(suffix) - 3)
         name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
         return f"{name} | {suffix}"
@@ -105,14 +130,14 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
     stock = int(offer.get("stock") or 0)
     if stock <= 0:
         preorder_text = t(lang, "btn_preorder")
-        suffix = f"{price_text} | {preorder_text}"
+        badge = "🔴"
+        suffix = f"{price_text} | {badge} {preorder_text}"
         max_name_length = max(8, 64 - len(suffix) - 3)
         name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
         return f"{name} | {suffix}"
 
-    label = stock_label if stock_label is not None else t(lang, "stock_label")
-    stock_text = f"{label.title()}: {stock}"
-    suffix = f"{price_text} | {stock_text}"
+    badge = stock_badge(stock)
+    suffix = f"{price_text} | {badge}: {stock}"
     max_name_length = max(8, 64 - len(suffix) - 3)
     name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
     return f"{name} | {suffix}"
@@ -344,7 +369,10 @@ def catalog_offers_keyboard(lang):
                 added_services.add(sid)
                 total_stock = sum(int(o.get("stock") or 0) for o in offers_in_service)
                 has_unlimited = any(o.get("unlimited_stock") for o in offers_in_service)
-                service_emoji = (offer.get("service_emoji") or "📦").strip()
+                service_emoji = get_service_emoji(
+                    offer.get("service_name"),
+                    offer.get("service_emoji"),
+                )
                 service_name = (offer.get("service_name") or f"Service #{sid}").strip()
                 clean_name = clean_button_name(service_name) or service_name
                 label = f"{service_emoji} {clean_name}".strip() if service_emoji and not service_name.startswith(service_emoji) else service_name
