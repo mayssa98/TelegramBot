@@ -461,6 +461,39 @@ def test_flat_catalog_keyboard_contains_only_offer_callbacks(monkeypatch):
     assert len(product_callbacks) >= 1
 
 
+def test_premium_service_icon_replaces_unicode_emoji_in_catalog_button(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [{
+        "id": 11,
+        "name": "Chat GPT Plus",
+        "price": 5.0,
+        "stock": 8,
+        "service_id": 3,
+        "service_name": "Chat GPT",
+        "service_emoji": "🤖",
+        "service_custom_emoji_id": "premium-chatgpt",
+    }])
+
+    button = kb.catalog_offers_keyboard("en").inline_keyboard[0][0]
+
+    assert button.text == "Chat GPT"
+    assert button.icon_custom_emoji_id == "premium-chatgpt"
+
+
+def test_premium_offer_icon_replaces_unicode_emoji_in_offer_button(monkeypatch):
+    monkeypatch.setattr(kb.db, "get_service", lambda _service_id: {
+        "emoji": "🤖", "custom_emoji_id": "premium-chatgpt",
+    })
+    monkeypatch.setattr(kb.db, "list_offers", lambda _service_id: [{
+        "id": 11, "name": "Chat GPT Plus", "price": 5.0, "stock": 8,
+    }])
+    monkeypatch.setattr(kb.db, "get_text_override_icon", lambda *_args: "")
+
+    button = kb.offers_keyboard("en", 3).inline_keyboard[0][0]
+
+    assert button.text == "Chat GPT Plus | $5 | Stock: 8"
+    assert button.icon_custom_emoji_id == "premium-chatgpt"
+
+
 def test_ticket_conversation_keyboard_can_close_or_go_home():
     keyboard = kb.ticket_conversation_keyboard("en", 17)
 

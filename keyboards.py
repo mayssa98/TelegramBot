@@ -371,17 +371,22 @@ def catalog_offers_keyboard(lang):
                 )
                 service_name = (offer.get("service_name") or f"Service #{sid}").strip()
                 clean_name = clean_button_name(service_name) or service_name
-                label = f"{service_emoji} {clean_name}".strip() if service_emoji else clean_name
+                service_icon = (
+                    offer.get("service_custom_emoji_id")
+                    or offer.get("custom_emoji_id")
+                    or None
+                )
+                # Telegram renders the custom icon before the text.  Do not also
+                # put the service's Unicode emoji in the label or two icons appear.
+                label = clean_name if service_icon else (
+                    f"{service_emoji} {clean_name}".strip() if service_emoji else clean_name
+                )
                 cat_style = "success" if (has_unlimited or total_stock > 3) else ("primary" if total_stock > 0 else "danger")
                 grouped_category_buttons.append(InlineKeyboardButton(
                     label,
                     callback_data=f"svc:{sid}",
                     style=cat_style,
-                    icon_custom_emoji_id=(
-                        offer.get("service_custom_emoji_id")
-                        or offer.get("custom_emoji_id")
-                        or None
-                    ),
+                    icon_custom_emoji_id=service_icon,
                 ))
         else:
             safe_offer = dict(offer)
@@ -448,10 +453,16 @@ def offers_keyboard(lang, service_id):
         off_name = (off.get("name") or f"Offre #{off['id']}").strip()
         clean_name = clean_button_name(off_name) or off_name
         emoji = (safe_offer.get("emoji") or svc_emoji).strip()
-        if emoji and not off_name.startswith(emoji):
+        button_icon = (
+            db.get_text_override_icon("stock_label", lang)
+            or off.get("custom_emoji_id")
+            or (service.get("custom_emoji_id") if service else None)
+            or None
+        )
+        if emoji and not button_icon and not off_name.startswith(emoji):
             safe_offer["name"] = f"{emoji} {clean_name}"
         else:
-            safe_offer["name"] = off_name
+            safe_offer["name"] = clean_name
 
         stock = int(off.get("stock") or 0)
         is_out = not off.get("unlimited_stock") and stock <= 0
@@ -462,12 +473,7 @@ def offers_keyboard(lang, service_id):
             offer_button_label(lang, safe_offer),
             callback_data=cb_data,
             style=btn_style,
-            icon_custom_emoji_id=(
-                db.get_text_override_icon("stock_label", lang)
-                or off.get("custom_emoji_id")
-                or (service.get("custom_emoji_id") if service else None)
-                or None
-            ),
+            icon_custom_emoji_id=button_icon,
         )])
     buttons.append([translated_button(lang, "btn_back_services", callback_data="catalog")])
     return InlineKeyboardMarkup(buttons)

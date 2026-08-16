@@ -2225,7 +2225,9 @@ async def handle_pending_input(update, context, lang):
             )
             return
         elif kind == "adm_svcemoji":
-            raw_emoji = text.strip() if text else ""
+            # A Premium emoji is sent as both text and an entity. Keep only the
+            # entity-backed icon; otherwise Telegram displays two icons.
+            raw_emoji = "" if custom_emoji_id else (text.strip() if text else "")
             db.update_service(
                 ref,
                 emoji=raw_emoji[:12],
@@ -2253,7 +2255,7 @@ async def handle_pending_input(update, context, lang):
             )
             return
         elif kind == "adm_offemoji":
-            raw_emoji = text.strip() if text else ""
+            raw_emoji = "" if custom_emoji_id else (text.strip() if text else "")
             db.update_offer(
                 ref,
                 emoji=raw_emoji[:12],
