@@ -44,6 +44,19 @@ def test_order_search_matches_numeric_customer(mock_mongodb):
     assert result["total"] == 1
 
 
+def test_order_search_can_target_txid_or_product_name(mock_mongodb):
+    mock_mongodb.orders.insert_many([
+        {"id": 1, "user_id": 10, "offer_name": "ChatGPT Plus", "txid": "TX-ALPHA-99", "created_at": 1},
+        {"id": 2, "user_id": 20, "offer_name": "Canva Pro", "txid": "TX-BETA-12", "created_at": 2},
+    ])
+
+    by_txid = dashboard_api.list_orders({"search": ["alpha"], "search_field": ["txid"]})
+    by_name = dashboard_api.list_orders({"search": ["canva"], "search_field": ["name"]})
+
+    assert [item["id"] for item in by_txid["items"]] == [1]
+    assert [item["id"] for item in by_name["items"]] == [2]
+
+
 def test_order_date_service_and_amount_sort(mock_mongodb):
     mock_mongodb.offers.insert_many([{"id": 700, "service_id": 200}, {"id": 800, "service_id": 300}])
     mock_mongodb.orders.insert_many([
@@ -68,6 +81,17 @@ def test_ticket_filters(mock_mongodb):
 
     assert result["total"] == 1
     assert result["items"][0]["id"] == 1
+
+
+def test_ticket_search_uses_full_collection(mock_mongodb):
+    mock_mongodb.support_tickets.insert_many([
+        {"id": 4, "user_id": 10, "category": "Paiement", "message": "TXID manquant", "updated_at": 1},
+        {"id": 5, "user_id": 20, "category": "Stock", "message": "Produit absent", "updated_at": 2},
+    ])
+
+    result = dashboard_api.list_tickets({"search": ["txid"], "search_field": ["message"]})
+
+    assert [item["id"] for item in result["items"]] == [4]
 
 
 def test_inventory_never_exposes_encrypted_payload(mock_mongodb):

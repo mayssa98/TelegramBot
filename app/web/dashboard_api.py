@@ -49,13 +49,17 @@ def list_orders(params: dict[str, list[str]]) -> dict[str, Any]:
         query["created_at"] = date_filter
     search = _first(params, "search")
     if search:
-        clauses: list[dict[str, Any]] = [
-            {"offer_name": {"$regex": re.escape(search), "$options": "i"}},
-            {"service_name": {"$regex": re.escape(search), "$options": "i"}},
-            {"txid": {"$regex": re.escape(search), "$options": "i"}},
-        ]
-        if search.isdigit():
-            clauses.extend(({"id": int(search)}, {"user_id": int(search)}))
+        field = _first(params, "search_field") or "all"
+        pattern = {"$regex": re.escape(search), "$options": "i"}
+        clauses: list[dict[str, Any]] = []
+        if field in {"all", "name"}:
+            clauses.extend(({"offer_name": pattern}, {"service_name": pattern}))
+        if field in {"all", "txid"}:
+            clauses.append({"txid": pattern})
+        if search.isdigit() and field in {"all", "order_id"}:
+            clauses.append({"id": int(search)})
+        if search.isdigit() and field in {"all", "user_id"}:
+            clauses.append({"user_id": int(search)})
         query["$or"] = clauses
 
     collection = db.get_conn().orders
@@ -142,6 +146,20 @@ def list_tickets(params: dict[str, list[str]]) -> dict[str, Any]:
     user_id = _first(params, "user_id")
     if user_id and user_id.isdigit():
         query["user_id"] = int(user_id)
+    search = _first(params, "search")
+    if search:
+        field = _first(params, "search_field") or "all"
+        pattern = {"$regex": re.escape(search), "$options": "i"}
+        clauses: list[dict[str, Any]] = []
+        if field in {"all", "category"}:
+            clauses.append({"category": pattern})
+        if field in {"all", "message"}:
+            clauses.append({"message": pattern})
+        if search.isdigit() and field in {"all", "ticket_id"}:
+            clauses.append({"id": int(search)})
+        if search.isdigit() and field in {"all", "user_id"}:
+            clauses.append({"user_id": int(search)})
+        query["$or"] = clauses
 
     collection = db.get_conn().support_tickets
     total = collection.count_documents(query)
@@ -187,7 +205,18 @@ def list_inventory(params: dict[str, list[str]]) -> dict[str, Any]:
         query["status"] = status
     search = _first(params, "search")
     if search:
-        query["masked_preview"] = {"$regex": re.escape(search), "$options": "i"}
+        field = _first(params, "search_field") or "all"
+        pattern = {"$regex": re.escape(search), "$options": "i"}
+        clauses: list[dict[str, Any]] = []
+        if field in {"all", "preview"}:
+            clauses.append({"masked_preview": pattern})
+        if search.isdigit() and field in {"all", "reference_id"}:
+            clauses.append({"id": int(search)})
+        if search.isdigit() and field in {"all", "product_id"}:
+            clauses.append({"offer_id": int(search)})
+        if search.isdigit() and field in {"all", "order_id"}:
+            clauses.extend(({"reserved_order_id": int(search)}, {"delivered_order_id": int(search)}))
+        query["$or"] = clauses
 
     collection = db.get_conn().inventory
     total = collection.count_documents(query)
@@ -214,11 +243,14 @@ def list_customers(params: dict[str, list[str]]) -> dict[str, Any]:
     query: dict[str, Any] = {}
     search = _first(params, "search")
     if search:
-        clauses: list[dict[str, Any]] = [
-            {"username": {"$regex": re.escape(search), "$options": "i"}},
-            {"first_name": {"$regex": re.escape(search), "$options": "i"}},
-        ]
-        if search.isdigit():
+        field = _first(params, "search_field") or "all"
+        pattern = {"$regex": re.escape(search), "$options": "i"}
+        clauses: list[dict[str, Any]] = []
+        if field in {"all", "username"}:
+            clauses.append({"username": pattern})
+        if field in {"all", "name"}:
+            clauses.extend(({"first_name": pattern}, {"full_name": pattern}))
+        if search.isdigit() and field in {"all", "telegram_id"}:
             clauses.append({"telegram_id": int(search)})
         query["$or"] = clauses
     collection = db.get_conn().users

@@ -165,18 +165,33 @@ function FilterBar({
   setSearch,
   children,
   placeholder = "Rechercher…",
+  options = [],
+  searchField = "all",
+  setSearchField,
+  resultCount,
 }) {
   return (
-    <div className="filter-bar">
-      <label>
-        <Search size={16} />
+    <div className={`filter-bar ${search ? "has-search" : ""}`}>
+      <label className="smart-search">
+        <Search size={17} />
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder={placeholder}
+          aria-label={placeholder}
         />
+        {search && <button type="button" onClick={() => setSearch("")} title="Effacer la recherche" aria-label="Effacer la recherche"><X size={15} /></button>}
       </label>
+      {options.length > 0 && (
+        <label className="search-field-select">
+          <span>Rechercher par</span>
+          <select value={searchField} onChange={(event) => setSearchField?.(event.target.value)}>
+            {options.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          </select>
+        </label>
+      )}
       {children}
+      {search && resultCount !== undefined && <span className="search-result-count">{resultCount} résultat(s)</span>}
     </div>
   );
 }
@@ -217,10 +232,15 @@ function useRemoteList(endpoint, filters) {
       .filter(([, value]) => value !== "" && value != null)
       .map(([key, value]) => [key, String(value)]),
   ).toString();
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch(`${endpoint}?${query}`, {
+    fetch(`${endpoint}?${debouncedQuery}`, {
       credentials: "same-origin",
       cache: "no-store",
     })
@@ -236,7 +256,7 @@ function useRemoteList(endpoint, filters) {
     return () => {
       active = false;
     };
-  }, [endpoint, query]);
+  }, [endpoint, debouncedQuery]);
   return [result, loading];
 }
 
@@ -376,6 +396,7 @@ function OrderEditor({ order, onAction, onClose, currency }) {
 
 function OrdersPage({ data, onAction }) {
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState("date");
@@ -383,6 +404,7 @@ function OrdersPage({ data, onAction }) {
   const [selected, setSelected] = useState(null);
   const [result, loading] = useRemoteList("/admin/api/orders", {
     search,
+    search_field: searchField,
     status,
     page,
     per_page: 25,
@@ -466,11 +488,15 @@ function OrdersPage({ data, onAction }) {
       </section>
       <FilterBar
         search={search}
+        searchField={searchField}
+        setSearchField={(value) => { setSearchField(value); setPage(1); }}
+        options={[["all", "Tout"], ["name", "Produit / service"], ["txid", "TXID"], ["order_id", "ID commande"], ["user_id", "ID client"]]}
+        resultCount={result.total}
         setSearch={(value) => {
           setSearch(value);
           setPage(1);
         }}
-        placeholder="ID, client, produit ou transaction…"
+        placeholder="Nom, TXID, ID commande ou client…"
       >
         <select
           value={status}
@@ -687,6 +713,8 @@ function OfferForm({ services, offer, onAction, onClose }) {
 }
 
 function CatalogPage({ data, onAction }) {
+  const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [offer, setOffer] = useState(undefined);
   const [showOffer, setShowOffer] = useState(false);
   const [showService, setShowService] = useState(false);
@@ -706,6 +734,23 @@ function CatalogPage({ data, onAction }) {
     )
       setShowService(false);
   };
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleServices = (data.services || []).map((service) => {
+    const serviceMatch = `${service.name || ""} ${service.id || ""}`.toLowerCase().includes(normalizedSearch);
+    const offers = (service.offers || []).filter((item) => {
+      if (!normalizedSearch) return true;
+      if (searchField === "service") return serviceMatch;
+      const searchable = {
+        product: `${item.name || ""} ${item.id || ""}`,
+        provider: `${item.supplier_provider || ""} ${providerLabel(item.supplier_provider)}`,
+      };
+      const haystack = searchField === "all"
+        ? `${service.name || ""} ${Object.values(searchable).join(" ")}`
+        : searchable[searchField] || "";
+      return haystack.toLowerCase().includes(normalizedSearch);
+    });
+    return { ...service, offers, searchMatch: serviceMatch || offers.length > 0 };
+  }).filter((service) => !normalizedSearch || service.searchMatch);
   return (
     <>
       <PageHeader
@@ -733,8 +778,17 @@ function CatalogPage({ data, onAction }) {
           </>
         }
       />
+      <FilterBar
+        search={search}
+        setSearch={setSearch}
+        searchField={searchField}
+        setSearchField={setSearchField}
+        options={[["all", "Tout"], ["service", "Service"], ["product", "Produit"], ["provider", "API fournisseur"]]}
+        resultCount={visibleServices.length}
+        placeholder="Nom du service, produit ou API…"
+      />
       <div className="catalog-react-grid">
-        {data.services?.map((service, serviceIndex) => {
+        {visibleServices.map((service, serviceIndex) => {
           const providers = [...new Set((service.offers || []).map((item) => item.supplier_provider || "").filter(Boolean))];
           return (
           <section className="catalog-service" key={service.id} style={{ "--service-accent": SERVICE_COLORS[serviceIndex % SERVICE_COLORS.length] }}>
@@ -832,11 +886,11 @@ function CatalogPage({ data, onAction }) {
           );
         })}
       </div>
-      {!data.services?.length && (
+      {!visibleServices.length && (
         <Empty
           icon={ShoppingBag}
-          title="Catalogue vide"
-          text="Créez votre premier service puis ajoutez des produits."
+          title={search ? "Aucun résultat" : "Catalogue vide"}
+          text={search ? "Essayez un autre nom, produit ou fournisseur API." : "Créez votre premier service puis ajoutez des produits."}
         />
       )}
       {showOffer && (
@@ -946,6 +1000,8 @@ function ApiProductsPage({ data, onAction, setToast }) {
   const [catalog, setCatalog] = useState(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const load = async () => {
     setLoading(true);
     try {
@@ -970,6 +1026,15 @@ function ApiProductsPage({ data, onAction, setToast }) {
   useEffect(() => {
     load();
   }, [provider]);
+  const visibleProducts = (catalog?.products || []).filter((product) => {
+    const searchable = {
+      name: `${product.display_name || ""} ${product.name || ""}`,
+      product_id: `${product.id || ""}`,
+      description: product.description || "",
+    };
+    const haystack = searchField === "all" ? Object.values(searchable).join(" ") : searchable[searchField] || "";
+    return !search || haystack.toLowerCase().includes(search.toLowerCase());
+  });
   return (
     <>
       <PageHeader
@@ -1016,9 +1081,18 @@ function ApiProductsPage({ data, onAction, setToast }) {
           </div>
         </div>
       )}
+      <FilterBar
+        search={search}
+        setSearch={setSearch}
+        searchField={searchField}
+        setSearchField={setSearchField}
+        options={[["all", "Tout"], ["name", "Nom du produit"], ["product_id", "ID fournisseur"], ["description", "Description"]]}
+        resultCount={visibleProducts.length}
+        placeholder="Nom, ID fournisseur ou description…"
+      />
       <section className="data-panel">
         <div className="product-api-grid">
-          {catalog?.products?.map((product) => (
+          {visibleProducts.map((product) => (
             <article key={product.id}>
               <header>
                 <span
@@ -1044,11 +1118,11 @@ function ApiProductsPage({ data, onAction, setToast }) {
         {loading && (
           <div className="table-loading">Connexion au fournisseur…</div>
         )}
-        {!loading && !catalog?.products?.length && (
+        {!loading && !visibleProducts.length && (
           <Empty
             icon={Cloud}
-            title="Aucun produit API"
-            text="Vérifiez la configuration de ce fournisseur."
+            title={search ? "Aucun résultat" : "Aucun produit API"}
+            text={search ? "Essayez un autre nom ou identifiant fournisseur." : "Vérifiez la configuration de ce fournisseur."}
           />
         )}
       </section>
@@ -1289,12 +1363,14 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
 
 function InventoryPage({ data, onAction }) {
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [status, setStatus] = useState("");
   const [offerId, setOfferId] = useState("");
   const [page, setPage] = useState(1);
   const [revealed, setRevealed] = useState(null);
   const [result, loading] = useRemoteList("/admin/api/inventory", {
     search,
+    search_field: searchField,
     status,
     offer_id: offerId,
     page,
@@ -1333,11 +1409,15 @@ function InventoryPage({ data, onAction }) {
       />
       <FilterBar
         search={search}
+        searchField={searchField}
+        setSearchField={(value) => { setSearchField(value); setPage(1); }}
+        options={[["all", "Tout"], ["preview", "Aperçu masqué"], ["reference_id", "ID référence"], ["product_id", "ID produit"], ["order_id", "ID commande"]]}
+        resultCount={result.total}
         setSearch={(value) => {
           setSearch(value);
           setPage(1);
         }}
-        placeholder="Référence masquée…"
+        placeholder="Référence, produit, commande ou aperçu…"
       >
         <select
           value={offerId}
@@ -1540,6 +1620,7 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
 
 function CustomersPage({ data, onAction }) {
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -1547,6 +1628,7 @@ function CustomersPage({ data, onAction }) {
   const [confirmation, setConfirmation] = useState("");
   const [result, loading] = useRemoteList("/admin/api/customers", {
     search,
+    search_field: searchField,
     page,
     per_page: 25,
   });
@@ -1574,11 +1656,15 @@ function CustomersPage({ data, onAction }) {
       />
       <FilterBar
         search={search}
+        searchField={searchField}
+        setSearchField={(value) => { setSearchField(value); setPage(1); }}
+        options={[["all", "Tout"], ["name", "Nom / prénom"], ["username", "Username"], ["telegram_id", "Telegram ID"]]}
+        resultCount={result.total}
         setSearch={(value) => {
           setSearch(value);
           setPage(1);
         }}
-        placeholder="ID Telegram, username ou prénom…"
+        placeholder="Nom, username ou Telegram ID…"
       />
       <section className="data-panel">
         <div className="responsive-table">
@@ -1771,22 +1857,18 @@ function TicketDialog({ ticket, onAction, onClose }) {
 
 function SupportPage({ onAction }) {
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [ticket, setTicket] = useState(null);
   const [result, loading] = useRemoteList("/admin/api/tickets", {
     status,
-    user_id: search.match(/^\d+$/)?.[0] || "",
+    search,
+    search_field: searchField,
     page,
     per_page: 25,
   });
-  const items = result.items.filter(
-    (item) =>
-      !search ||
-      `${item.id} ${item.user_id} ${item.category || ""}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
+  const items = result.items;
   return (
     <>
       <PageHeader
@@ -1796,8 +1878,12 @@ function SupportPage({ onAction }) {
       />
       <FilterBar
         search={search}
-        setSearch={setSearch}
-        placeholder="Ticket ou client…"
+        setSearch={(value) => { setSearch(value); setPage(1); }}
+        searchField={searchField}
+        setSearchField={(value) => { setSearchField(value); setPage(1); }}
+        options={[["all", "Tout"], ["ticket_id", "ID ticket"], ["user_id", "ID client"], ["category", "Catégorie"], ["message", "Message"]]}
+        resultCount={result.total}
+        placeholder="Ticket, client, catégorie ou message…"
       >
         <select
           value={status}
@@ -1875,14 +1961,18 @@ function InteractionsPage({ data }) {
   const analytics = data.interactions || {};
   const summary = analytics.summary || {};
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [type, setType] = useState("");
   const events = (analytics.events || []).filter(
-    (event) =>
-      (!type || event.interaction_type === type) &&
-      (!search ||
-        `${event.full_name || ""} ${event.username || ""} ${event.user_id || ""} ${event.action || ""} ${event.content || ""}`
-          .toLowerCase()
-          .includes(search.toLowerCase())),
+    (event) => {
+      const searchable = {
+        user: `${event.full_name || ""} ${event.username || ""} ${event.user_id || ""}`,
+        action: event.action || "",
+        content: `${event.content || ""} ${event.screen || ""}`,
+      };
+      const haystack = searchField === "all" ? Object.values(searchable).join(" ") : searchable[searchField] || "";
+      return (!type || event.interaction_type === type) && (!search || haystack.toLowerCase().includes(search.toLowerCase()));
+    },
   );
   const max = Math.max(
     ...(analytics.daily || []).map((point) => point.count),
@@ -1931,7 +2021,11 @@ function InteractionsPage({ data }) {
       <FilterBar
         search={search}
         setSearch={setSearch}
-        placeholder="Utilisateur, message ou action…"
+        searchField={searchField}
+        setSearchField={setSearchField}
+        options={[["all", "Tout"], ["user", "Utilisateur"], ["action", "Action"], ["content", "Message / écran"]]}
+        resultCount={events.length}
+        placeholder="Nom, utilisateur, message ou action…"
       >
         <select value={type} onChange={(event) => setType(event.target.value)}>
           <option value="">Tous les types</option>
@@ -1984,12 +2078,17 @@ function InteractionsPage({ data }) {
 
 function ActivityPage({ data }) {
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const events = (data.audits || []).filter(
-    (item) =>
-      !search ||
-      `${item.action} ${item.actor_id || ""} ${JSON.stringify(item.details || {})}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
+    (item) => {
+      const searchable = {
+        action: item.action || "",
+        actor: `${item.actor_id || ""} ${item.user_id || ""}`,
+        details: JSON.stringify(item.details || {}),
+      };
+      const haystack = searchField === "all" ? Object.values(searchable).join(" ") : searchable[searchField] || "";
+      return !search || haystack.toLowerCase().includes(search.toLowerCase());
+    },
   );
   return (
     <>
@@ -2001,7 +2100,11 @@ function ActivityPage({ data }) {
       <FilterBar
         search={search}
         setSearch={setSearch}
-        placeholder="Action, acteur ou détail…"
+        searchField={searchField}
+        setSearchField={setSearchField}
+        options={[["all", "Tout"], ["action", "Action"], ["actor", "Acteur / utilisateur"], ["details", "Détails"]]}
+        resultCount={events.length}
+        placeholder="Action, acteur, utilisateur ou détail…"
       />
       <section className="data-panel">
         <div className="responsive-table">
