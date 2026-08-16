@@ -947,15 +947,22 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         PENDING.pop(u.id, None)
     await register_start_referral(context, u.id, referrer_id)
 
-    if is_new:
+    if is_new and not context.args:
         await send_channel_member_welcome(update.message.reply_text, context, u.id, lang)
-    elif context.args and context.args[0].startswith("offer_"):
+    elif context.args and (context.args[0].startswith("offer_") or context.args[0].startswith("off_")):
         try:
             offer_id = int(context.args[0].split("_", 1)[1])
         except (ValueError, IndexError):
             await show_catalog(update, context, lang)
         else:
             await show_deep_link_offer(update, lang, offer_id)
+    elif context.args and context.args[0].startswith("svc_"):
+        try:
+            service_id = int(context.args[0].split("_", 1)[1])
+        except (ValueError, IndexError):
+            await show_catalog(update, context, lang)
+        else:
+            await show_service_offers(update, context, lang, service_id)
     elif context.args and context.args[0] == "catalog":
         await show_catalog(update, context, lang)
     elif context.args and context.args[0] == "orders":

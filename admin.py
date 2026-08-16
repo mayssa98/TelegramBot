@@ -271,11 +271,69 @@ def offer_admin_keyboard(offer_id):
     ])
 
 
+import html
+import logging
+import os
+from telegram.constants import ParseMode
+
+log = logging.getLogger("admin")
+
+async def post_purchase_to_channel(context, order):
+    """Post an anonymized purchase notification to @blackmarketBotChannel with a 'Buy Now' button."""
+    try:
+        channel_id = os.environ.get("HP_REQUIRED_CHANNEL", "@blackmarketBotChannel").strip()
+        if not channel_id:
+            return
+
+        bot = context.bot
+        bot_info = await bot.get_me()
+        bot_username = bot_info.username
+
+        service_name = str(order.get("service_name") or "Service").strip()
+        offer_name = str(order.get("offer_name") or "Offre").strip()
+        qty = int(order.get("qty") or 1)
+        total_price = float(order.get("total_price") or 0.0)
+
+        offer_id = order.get("offer_id")
+        service_id = order.get("service_id")
+        if offer_id:
+            start_param = f"off_{offer_id}"
+        elif service_id:
+            start_param = f"svc_{service_id}"
+        else:
+            start_param = "catalog"
+
+        buy_url = f"https://t.me/{bot_username}?start={start_param}"
+
+        message_text = (
+            "🔥 <b>NOUVELLE COMMANDE EFFECTUÉE !</b> 🔥\n\n"
+            f"🛒 <b>Produit :</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
+            f"📦 <b>Quantité :</b> <code>{qty}</code>\n"
+            f"💰 <b>Prix Total :</b> <code>${total_price:.2f} USDT</code>\n"
+            f"⚡ <b>Statut :</b> <code>Payé & Confirmé 🟢</code>\n\n"
+            "✨ <i>Achetez le vôtre directement sur le bot BlackMarket !</i>"
+        )
+
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🛒 Acheter maintenant", url=buy_url, style="success")
+        ]])
+
+        await bot.send_message(
+            chat_id=channel_id,
+            text=message_text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=reply_markup,
+        )
+    except Exception as exc:
+        log.warning("Channel purchase broadcast failed: %s", exc)
+
+
 async def notify_new_order(context, order):
     await context.bot.send_message(
         ADMIN_ID, order_detail_text(order), parse_mode="Markdown",
         reply_markup=order_detail_keyboard(order),
     )
+    await post_purchase_to_channel(context, order)
 
 
 async def notify_manual_delivery_request(context, order):
@@ -289,3 +347,4 @@ async def notify_manual_delivery_request(context, order):
         parse_mode="Markdown",
         reply_markup=manual_delivery_request_keyboard(order["id"]),
     )
+    await post_purchase_to_channel(context, order)
