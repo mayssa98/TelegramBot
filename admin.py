@@ -296,6 +296,14 @@ async def post_purchase_to_channel(context, order):
 
         offer_id = order.get("offer_id")
         service_id = order.get("service_id")
+
+        rem_stock_text = "∞ (Unlimited)"
+        if offer_id:
+            offer = db.get_offer(int(offer_id))
+            if offer and not offer.get("unlimited_stock"):
+                rem_stock = int(offer.get("stock") or 0)
+                rem_stock_text = f"{rem_stock} left" if rem_stock > 0 else "0 (Pre-order available)"
+
         if offer_id:
             start_param = f"off_{offer_id}"
         elif service_id:
@@ -308,7 +316,8 @@ async def post_purchase_to_channel(context, order):
         message_text = (
             "🔥 <b>NEW ORDER COMPLETED!</b> 🔥\n\n"
             f"🛒 <b>Product:</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
-            f"📦 <b>Quantity:</b> <code>{qty}</code>\n"
+            f"📦 <b>Quantity Ordered:</b> <code>{qty}</code>\n"
+            f"📊 <b>Remaining Stock:</b> <code>{rem_stock_text}</code>\n"
             f"💰 <b>Total Price:</b> <code>${total_price:.2f} USDT</code>\n"
             f"⚡ <b>Status:</b> <code>Paid & Confirmed 🟢</code>\n\n"
             "✨ <i>Get yours directly on BlackMarket Bot!</i>"
