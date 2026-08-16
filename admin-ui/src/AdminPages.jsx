@@ -693,6 +693,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
   const [form, setForm] = useState({
     service_id: offer?.service_id || services[0]?.id || "",
     name: offer?.name || "",
+    emoji: offer?.custom_emoji_id || offer?.emoji || "",
     price: offer?.price ?? "",
     description: offer?.description || "",
     note: offer?.note || "",
@@ -723,6 +724,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
     const payload = {
       ...form,
       action,
+      custom_emoji_id: form.emoji,
       ...(offer
         ? { offer_id: offer.id, sort_order: offer.sort_order || 0 }
         : {}),
@@ -758,6 +760,14 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
               required
               value={form.name}
               onChange={(event) => set("name", event.target.value)}
+            />
+          </Field>
+          <Field label="Emoji / Icône">
+            <input
+              value={form.emoji}
+              onChange={(event) => set("emoji", event.target.value)}
+              placeholder="Ex: 🤖, 🍿, ✈️..."
+              style={{ maxWidth: 100, textAlign: "center", fontSize: "1.2rem" }}
             />
           </Field>
           <Field label="Canal de vente">
@@ -1657,6 +1667,7 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
     display_name: product.display_name || product.name,
     retail_price: product.retail_price || "",
     service_id: product.service_id || services[0]?.id || "",
+    emoji: product.service_emoji || product.custom_emoji_id || product.emoji || "📦",
     enabled: Boolean(product.enabled),
     description: product.description || "",
     warranty: product.warranty || "",
@@ -1679,6 +1690,7 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
 
   const handlePublish = async () => {
     let serviceId = form.service_id;
+    const activeEmoji = isNewService ? (newServiceEmoji || "📦") : (form.emoji || "📦");
     if (isNewService) {
       if (!newServiceName.trim()) return;
       setCreatingSvc(true);
@@ -1686,7 +1698,7 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
         const result = await onAction({
           action: "add_service",
           name: newServiceName.trim(),
-          emoji: newServiceEmoji || "📦",
+          emoji: activeEmoji,
         });
         if (!result) { setCreatingSvc(false); return; }
         serviceId = result.service_id || result.id || "";
@@ -1704,6 +1716,9 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
         product_id: product.id,
         ...form,
         service_id: serviceId,
+        service_emoji: activeEmoji,
+        custom_emoji_id: activeEmoji,
+        emoji: activeEmoji,
         enabled: form.enabled ? "1" : "0",
       })
     )
@@ -1760,6 +1775,16 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
             <option value="__new__">＋ Nouvelle catégorie…</option>
           </select>
         </Field>
+        {!isNewService && (
+          <Field label="Emoji / Icône">
+            <input
+              value={form.emoji}
+              onChange={(event) => set("emoji", event.target.value)}
+              placeholder="Ex: 🤖, 🍿, ✈️..."
+              style={{ maxWidth: 90, textAlign: "center", fontSize: "1.2rem" }}
+            />
+          </Field>
+        )}
         {isNewService && (
           <>
             <Field label="Nom de la catégorie">

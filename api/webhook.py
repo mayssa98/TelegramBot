@@ -1046,12 +1046,27 @@ class handler(BaseHTTPRequestHandler):
                 note = form.get("note", "")[:250]
                 description = form.get("description", "").strip()[:1000]
                 auto_delivery = form.get("auto_delivery", "") == "on"
+                if service_id_raw:
+                    sid = int(service_id_raw)
+                else:
+                    default_service = db.get_conn().services.find_one({"name": "Catalogue"})
+                    if default_service:
+                        sid = int(default_service["id"])
+                    else:
+                        sid = db.add_service("Catalogue", "🛒")
+                        db.audit_event("service.created", details={"service_id": sid, "name": "Catalogue"})
+                name = form["name"].strip()[:120]
+                price = float(form["price"])
+                note = form.get("note", "")[:250]
+                description = form.get("description", "").strip()[:1000]
+                auto_delivery = form.get("auto_delivery", "") == "on"
                 low_stock_threshold = max(0, int(form.get("low_stock_threshold", 5)))
                 delivery_delay = form.get("delivery_delay", "").strip()[:120]
                 channel = form.get("sales_channel", "both")
                 channels = ["bot", "tn_site"] if channel == "both" else [channel]
                 tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
                 tn_price_millimes = round(float(tn_price_raw) * 1000) if tn_price_raw else None
+                emoji_val = form.get("custom_emoji_id", form.get("emoji", "")).strip()
                 oid = db.add_offer(
                     sid,
                     name,
@@ -1062,6 +1077,7 @@ class handler(BaseHTTPRequestHandler):
                     auto_delivery=auto_delivery,
                     low_stock_threshold=low_stock_threshold,
                     delivery_delay=delivery_delay,
+                    custom_emoji_id=emoji_val,
                     sales_channels=channels,
                     tn_price_millimes=tn_price_millimes,
                     name_ar=form.get("name_ar", "").strip(),
@@ -1074,6 +1090,8 @@ class handler(BaseHTTPRequestHandler):
                     site_badge_ar=form.get("site_badge_ar", "").strip(),
                     site_featured=form.get("site_featured", "") == "on",
                 )
+                if emoji_val and sid:
+                    db.update_service(sid, emoji=emoji_val)
                 initial_inventory_text = form.get("initial_inventory", "").strip()
                 if initial_inventory_text:
                     inventory_service.add_items(
@@ -1100,6 +1118,7 @@ class handler(BaseHTTPRequestHandler):
                 channel = form.get("sales_channel", "both")
                 channels = ["bot", "tn_site"] if channel == "both" else [channel]
                 tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
+                emoji_val = form.get("custom_emoji_id", form.get("emoji", "")).strip()
                 db.update_offer(
                     oid,
                     price=price,
@@ -1110,6 +1129,7 @@ class handler(BaseHTTPRequestHandler):
                     auto_delivery=form.get("auto_delivery", "") == "on",
                     low_stock_threshold=max(0, int(form.get("low_stock_threshold", 5))),
                     delivery_delay=form.get("delivery_delay", "").strip()[:120],
+                    custom_emoji_id=emoji_val,
                     sales_channels=channels,
                     tn_price_millimes=(round(float(tn_price_raw) * 1000) if tn_price_raw else None),
                     name_ar=form.get("name_ar", "").strip(),
@@ -1122,6 +1142,9 @@ class handler(BaseHTTPRequestHandler):
                     site_badge_ar=form.get("site_badge_ar", "").strip(),
                     site_featured=form.get("site_featured", "") == "on",
                 )
+                existing_offer = db.get_offer(oid)
+                if emoji_val and existing_offer and existing_offer.get("service_id"):
+                    db.update_service(int(existing_offer["service_id"]), emoji=emoji_val)
                 db.audit_event("offer.updated", details={"offer_id": oid, "name": name})
                 if form.get("site_image_data"):
                     storefront_service.save_product_image(

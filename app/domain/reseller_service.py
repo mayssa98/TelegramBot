@@ -683,6 +683,9 @@ def save_catalog_product(
     if not service:
         raise ValueError("Choisissez un service existant ou créez-en un nouveau.")
 
+    if service_emoji and service_id is not None:
+        db.update_service(int(service_id), emoji=service_emoji)
+
     local_offer_id = existing.get("local_offer_id")
     local_offer = db.get_offer(int(local_offer_id)) if local_offer_id else None
     if local_offer:
@@ -699,6 +702,7 @@ def save_catalog_product(
             auto_delivery=not bool(product.get("manual_delivery")),
             low_stock_threshold=low_stock_threshold,
             delivery_delay=delivery_delay,
+            custom_emoji_id=service_emoji,
             unlimited_stock=False,
             manual_stock=False,
             supplier_provider=provider,
@@ -722,6 +726,7 @@ def save_catalog_product(
             auto_delivery=not bool(product.get("manual_delivery")),
             low_stock_threshold=low_stock_threshold,
             delivery_delay=delivery_delay,
+            custom_emoji_id=service_emoji,
             unlimited_stock=False,
             manual_stock=False,
             supplier_provider=provider,
