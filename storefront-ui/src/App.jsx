@@ -110,7 +110,7 @@ function App() {
   return (
     <div className="site-shell">
       <header className="topbar">
-        <a className="logo" href={`/${lang}`}><span>TM</span><div><strong>Trust Market</strong><small>TN</small></div></a>
+        <a className="logo" href={`/${lang}`}><img className="logo-mark" src="/storefront/trust-market-logo.png" alt="Trust Market TN" /><div><strong>Trust Market</strong><small>TN</small></div></a>
         <nav className={menuOpen ? "open" : ""}>
           <a href="#catalog" onClick={() => setMenuOpen(false)}>{t.navCatalog}</a>
           <a href="#how" onClick={() => setMenuOpen(false)}>{t.navHow}</a>
@@ -163,7 +163,7 @@ function App() {
         <section className="how-section" id="how"><div className="section-heading centered"><div><span className="eyebrow">Simple & transparent</span><h2>{t.how}</h2></div></div><div className="steps"><article><span>01</span><ShoppingBag /><h3>{t.step1}</h3><p>{t.step1Text}</p></article><article><span>02</span><FileCheck2 /><h3>{t.step2}</h3><p>{t.step2Text}</p></article><article><span>03</span><Check /><h3>{t.step3}</h3><p>{t.step3Text}</p></article></div></section>
       </main>
 
-      <footer><div className="logo"><span>TM</span><div><strong>Trust Market</strong><small>TN</small></div></div><p>{t.footer}</p><small>© {new Date().getFullYear()} Trust Market TN · {t.rights}</small></footer>
+      <footer><div className="logo"><img className="logo-mark" src="/storefront/trust-market-logo.png" alt="Trust Market TN" /><div><strong>Trust Market</strong><small>TN</small></div></div><p>{t.footer}</p><small>© {new Date().getFullYear()} Trust Market TN · {t.rights}</small></footer>
       <a className="whatsapp-float" href={whatsappUrl} target="_blank" rel="noreferrer" aria-label="WhatsApp"><MessageCircle /></a>
       {checkout && <Checkout product={checkout} methods={data.payment_methods} lang={lang} copy={t} whatsapp={data.whatsapp} onClose={() => setCheckout(null)} />}
     </div>
