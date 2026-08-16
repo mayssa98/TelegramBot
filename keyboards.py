@@ -325,14 +325,11 @@ def services_keyboard(lang):
 
 
 def format_split_button_texts(name, price_str, right_text):
-    """Format left and right button texts to achieve a precise 75% / 25% width ratio on Telegram clients."""
-    right_label = f"📦 {right_text}".strip()
-    right_len = len(right_label)
-    target_left_len = max(24, right_len * 3)
+    """Format left and right button texts cleanly without duplicate emojis or artificial truncation."""
+    clean_r = str(right_text or "").replace("📦", "").strip()
+    right_label = f"📦 {clean_r}" if clean_r else "📦 Pre-order"
     p_part = f" | {price_str}" if price_str else ""
-    allowed_name_len = max(8, target_left_len - len(p_part))
-    clean_name = compact_offer_name(name, allowed_name_len)
-    left_label = f"{clean_name}{p_part}".ljust(target_left_len)
+    left_label = f"{clean_button_name(name)}{p_part}"
     return left_label, right_label
 
 
