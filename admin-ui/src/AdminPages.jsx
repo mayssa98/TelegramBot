@@ -17,6 +17,7 @@ import {
   Download,
   Edit3,
   Eye,
+  Globe2,
   Headphones,
   KeyRound,
   MessageSquareText,
@@ -1127,6 +1128,7 @@ function ApiProductsPage({ data, onAction, setToast }) {
         )}
       </section>
       <BuyerKeys setToast={setToast} />
+      <CustomExternalApis setToast={setToast} />
       {editing && (
         <ApiProductEditor
           product={editing}
@@ -1260,6 +1262,122 @@ function BuyerKeys({ setToast }) {
               Créer
             </ActionButton>
           </div>
+        </Modal>
+      )}
+    </section>
+  );
+}
+
+function CustomExternalApis({ setToast }) {
+  const emptyForm = {
+    name: "",
+    endpoint: "https://",
+    method: "GET",
+    auth_type: "none",
+    auth_header: "X-API-Key",
+    secret: "",
+    headers: "{}",
+    body_template: "",
+  };
+  const [connectors, setConnectors] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [editing, setEditing] = useState(false);
+  const [running, setRunning] = useState(null);
+  const [runBody, setRunBody] = useState("");
+  const [runResult, setRunResult] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => fetch("/admin/api/external-connectors", {
+    credentials: "same-origin",
+    cache: "no-store",
+  }).then((response) => response.json()).then((payload) => setConnectors(payload.connectors || []));
+  useEffect(() => { load(); }, []);
+  const post = async (payload) => {
+    setBusy(true);
+    try {
+      const response = await fetch("/admin", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body: new URLSearchParams(Object.entries(payload).map(([key, value]) => [key, value == null ? "" : String(value)])),
+      });
+      const result = await response.json();
+      if (!response.ok || result.ok === false) {
+        const error = new Error(result.message || result.error || `Erreur HTTP ${response.status}`);
+        error.payload = result;
+        throw error;
+      }
+      return result;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const openEditor = (connector = null) => {
+    setForm(connector ? {
+      connector_id: connector.id,
+      name: connector.name,
+      endpoint: connector.endpoint,
+      method: connector.method,
+      auth_type: connector.auth_type,
+      auth_header: connector.auth_header || "X-API-Key",
+      secret: "",
+      headers: JSON.stringify(connector.headers || {}, null, 2),
+      body_template: connector.body_template || "",
+    } : emptyForm);
+    setEditing(true);
+  };
+  return (
+    <section className="data-panel custom-apis">
+      <header>
+        <div><span className="eyebrow">Connexion libre</span><h3>API personnalisées</h3><p>Ajoutez et utilisez manuellement un endpoint externe sécurisé.</p></div>
+        <ActionButton icon={Plus} onClick={() => openEditor()}>Ajouter une API</ActionButton>
+      </header>
+      <div className="custom-api-grid">
+        {connectors.map((connector) => (
+          <article key={connector.id}>
+            <div className="custom-api-icon"><Globe2 size={20} /></div>
+            <div className="custom-api-copy">
+              <div><strong>{connector.name}</strong><span className={`method-badge ${connector.method.toLowerCase()}`}>{connector.method}</span></div>
+              <code>{connector.endpoint}</code>
+              <small>{connector.auth_type === "none" ? "Sans authentification" : connector.auth_type === "bearer" ? "Bearer token chiffré" : `${connector.auth_header} chiffrée`}</small>
+            </div>
+            <div className="custom-api-actions">
+              <button title="Exécuter" onClick={() => { setRunning(connector); setRunBody(connector.body_template || ""); setRunResult(null); }}><Send size={15} /></button>
+              <button title="Modifier" onClick={() => openEditor(connector)}><Edit3 size={15} /></button>
+              <button className="danger" title="Supprimer" onClick={() => setDeleting(connector)}><Trash2 size={15} /></button>
+            </div>
+          </article>
+        ))}
+      </div>
+      {!connectors.length && <Empty icon={Globe2} title="Aucune API personnalisée" text="Ajoutez votre premier endpoint HTTPS directement depuis le site." />}
+      {editing && (
+        <Modal title={form.connector_id ? "Modifier l’API externe" : "Ajouter une API externe"} onClose={() => setEditing(false)} wide>
+          <div className="form-grid">
+            <Field label="Nom"><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Mon fournisseur" /></Field>
+            <Field label="Méthode"><select value={form.method} onChange={(event) => setForm({ ...form, method: event.target.value })}>{["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => <option key={method}>{method}</option>)}</select></Field>
+            <Field label="Endpoint HTTPS" wide><input value={form.endpoint} onChange={(event) => setForm({ ...form, endpoint: event.target.value })} placeholder="https://api.example.com/v1/products" /></Field>
+            <Field label="Authentification"><select value={form.auth_type} onChange={(event) => setForm({ ...form, auth_type: event.target.value })}><option value="none">Aucune</option><option value="bearer">Bearer token</option><option value="api_key">Clé API</option></select></Field>
+            {form.auth_type === "api_key" && <Field label="Nom de l’en-tête"><input value={form.auth_header} onChange={(event) => setForm({ ...form, auth_header: event.target.value })} /></Field>}
+            {form.auth_type !== "none" && <Field label={form.connector_id ? "Nouvelle clé (laisser vide pour conserver)" : "Clé ou token"} wide><input type="password" value={form.secret} onChange={(event) => setForm({ ...form, secret: event.target.value })} autoComplete="new-password" /></Field>}
+            <Field label="En-têtes JSON" wide><textarea value={form.headers} onChange={(event) => setForm({ ...form, headers: event.target.value })} placeholder={'{"Accept": "application/json"}'} /></Field>
+            <Field label="Corps JSON par défaut" wide><textarea value={form.body_template} onChange={(event) => setForm({ ...form, body_template: event.target.value })} placeholder={'{"product_id": "123", "quantity": 1}'} /></Field>
+          </div>
+          <div className="external-api-notice"><ShieldCheck size={16} /><span>HTTPS public uniquement. Les clés sont chiffrées et ne seront jamais réaffichées.</span></div>
+          <div className="dialog-actions"><ActionButton secondary onClick={() => setEditing(false)}>Annuler</ActionButton><ActionButton icon={Check} disabled={busy} onClick={async () => { try { await post({ action: "save_external_connector", ...form }); await load(); setEditing(false); setToast({ title: "API enregistrée", message: "La connexion externe est prête à être testée." }); } catch (error) { setToast({ type: "error", title: "API refusée", message: error.message }); } }}>Enregistrer</ActionButton></div>
+        </Modal>
+      )}
+      {running && (
+        <Modal title={`Exécuter · ${running.name}`} onClose={() => setRunning(null)} wide>
+          <div className="external-run-meta"><span className={`method-badge ${running.method.toLowerCase()}`}>{running.method}</span><code>{running.endpoint}</code></div>
+          {running.method !== "GET" && <Field label="Corps JSON"><textarea value={runBody} onChange={(event) => setRunBody(event.target.value)} /></Field>}
+          {runResult && <div className={`external-response ${runResult.ok ? "success" : "error"}`}><header><strong>HTTP {runResult.status}</strong><span>{runResult.duration_ms} ms</span></header><pre>{JSON.stringify(runResult.response, null, 2)}</pre></div>}
+          <div className="dialog-actions"><ActionButton icon={Send} disabled={busy} onClick={async () => { try { const result = await post({ action: "run_external_connector", connector_id: running.id, body: runBody }); setRunResult(result); } catch (error) { if (error.payload?.status) setRunResult(error.payload); setToast({ type: "error", title: "Appel API échoué", message: error.message }); } }}>Envoyer la requête</ActionButton></div>
+        </Modal>
+      )}
+      {deleting && (
+        <Modal title="Supprimer la connexion API" onClose={() => setDeleting(null)}>
+          <div className="delete-confirmation"><span><Trash2 size={22} /></span><div><h4>Supprimer « {deleting.name} » ?</h4><p>L’endpoint et sa clé chiffrée seront définitivement supprimés.</p></div></div>
+          <div className="dialog-actions"><ActionButton secondary onClick={() => setDeleting(null)}>Annuler</ActionButton><ActionButton danger icon={Trash2} disabled={busy} onClick={async () => { try { await post({ action: "delete_external_connector", connector_id: deleting.id }); await load(); setDeleting(null); setToast({ title: "API supprimée", message: "La connexion externe a été retirée." }); } catch (error) { setToast({ type: "error", title: "Suppression impossible", message: error.message }); } }}>Supprimer</ActionButton></div>
         </Modal>
       )}
     </section>

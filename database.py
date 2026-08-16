@@ -163,6 +163,7 @@ def init_db():
     db.bulk_wallet_credits.create_index("operation_id", unique=True)
     db.buyer_api_keys.create_index("id", unique=True)
     db.buyer_api_keys.create_index("key_hash", unique=True)
+    db.external_api_connectors.create_index("id", unique=True)
     db.buyer_api_purchases.create_index(
         [("buyer_key_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True,
     )

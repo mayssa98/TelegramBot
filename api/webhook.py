@@ -34,6 +34,7 @@ from api.public_site import render_public_site
 from app import __version__
 from app.domain import (
     buyer_api_service,
+    external_api_service,
     inventory_service,
     order_service,
     reseller_service,
@@ -553,6 +554,13 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
                 return
             self._reply(200, {"ok": True, "keys": buyer_api_service.list_keys()})
+            return
+
+        elif path == "/admin/api/external-connectors":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, {"ok": True, "connectors": external_api_service.list_connectors()})
             return
 
         elif path == "/admin/api/ticket-messages":
@@ -1139,6 +1147,30 @@ class handler(BaseHTTPRequestHandler):
                     },
                 )
                 self._reply(200, {"ok": True, "product": saved})
+                return
+
+            elif action == "save_external_connector":
+                connector = external_api_service.save_connector(form)
+                db.audit_event("external_api.saved", details={"connector_id": connector["id"], "name": connector["name"]})
+                self._reply(200, {"ok": True, "connector": connector, "message": "Connexion API enregistrée."})
+                return
+
+            elif action == "delete_external_connector":
+                connector_id = int(form["connector_id"])
+                if not external_api_service.delete_connector(connector_id):
+                    raise ValueError("Connexion API introuvable")
+                db.audit_event("external_api.deleted", details={"connector_id": connector_id})
+                self._reply(200, {"ok": True, "message": "Connexion API supprimée."})
+                return
+
+            elif action == "run_external_connector":
+                connector_id = int(form["connector_id"])
+                result = external_api_service.execute(connector_id, form.get("body"))
+                db.audit_event(
+                    "external_api.executed",
+                    details={"connector_id": connector_id, "status": result["status"], "duration_ms": result["duration_ms"]},
+                )
+                self._reply(200 if result["ok"] else 502, result)
                 return
 
             elif action == "repair_telegram_webhook":
