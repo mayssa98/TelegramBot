@@ -1805,6 +1805,10 @@ function PendingWalletTopups({ onAction }) {
 function CustomersPage({ data, onAction }) {
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [walletFilter, setWalletFilter] = useState("all");
+  const [ordersFilter, setOrdersFilter] = useState("all");
+  const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -1813,6 +1817,10 @@ function CustomersPage({ data, onAction }) {
   const [result, loading] = useRemoteList("/admin/api/customers", {
     search,
     search_field: searchField,
+    status: statusFilter,
+    wallet: walletFilter,
+    orders: ordersFilter,
+    sort,
     page,
     per_page: 25,
   });
@@ -1850,7 +1858,30 @@ function CustomersPage({ data, onAction }) {
           setPage(1);
         }}
         placeholder="Nom, username ou Telegram ID…"
-      />
+      >
+        <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} aria-label="Filtrer par statut">
+          <option value="all">Tous les statuts</option>
+          <option value="active">Clients actifs</option>
+          <option value="banned">Clients bloqués</option>
+        </select>
+        <select value={walletFilter} onChange={(event) => { setWalletFilter(event.target.value); setPage(1); }} aria-label="Filtrer par portefeuille">
+          <option value="all">Tous les portefeuilles</option>
+          <option value="funded">Solde positif</option>
+          <option value="empty">Solde vide</option>
+        </select>
+        <select value={ordersFilter} onChange={(event) => { setOrdersFilter(event.target.value); setPage(1); }} aria-label="Filtrer par commandes">
+          <option value="all">Tous les clients</option>
+          <option value="with_orders">Avec commandes</option>
+          <option value="without_orders">Sans commande</option>
+        </select>
+        <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} aria-label="Trier les clients">
+          <option value="newest">Plus récents</option>
+          <option value="oldest">Plus anciens</option>
+          <option value="balance">Solde le plus élevé</option>
+          <option value="spent">Dépenses les plus élevées</option>
+          <option value="orders">Plus de commandes</option>
+        </select>
+      </FilterBar>
       <section className="data-panel">
         <div className="responsive-table">
           <table>

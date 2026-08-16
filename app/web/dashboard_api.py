@@ -241,6 +241,7 @@ def list_customers(params: dict[str, list[str]]) -> dict[str, Any]:
     page = _bounded_int(_first(params, "page"), 1, 1, 100_000)
     per_page = _bounded_int(_first(params, "per_page"), 25, 1, 100)
     query: dict[str, Any] = {}
+    conn = db.get_conn()
     search = _first(params, "search")
     if search:
         field = _first(params, "search_field") or "all"
@@ -253,11 +254,52 @@ def list_customers(params: dict[str, list[str]]) -> dict[str, Any]:
         if search.isdigit() and field in {"all", "telegram_id"}:
             clauses.append({"telegram_id": int(search)})
         query["$or"] = clauses
-    collection = db.get_conn().users
-    total = collection.count_documents(query)
-    users = collection.find(query).sort("created_at", DESCENDING).skip((page - 1) * per_page).limit(per_page)
+    status = _first(params, "status") or "all"
+    if status == "active":
+        query["banned"] = {"$ne": True}
+    elif status == "banned":
+        query["banned"] = True
+
+    eligible_ids: set[int] | None = None
+    all_user_ids = set(conn.users.distinct("telegram_id"))
+    wallet_filter = _first(params, "wallet") or "all"
+    if wallet_filter in {"funded", "empty"}:
+        funded_ids = set(conn.wallets.distinct("user_id", {"balance_cents": {"$gt": 0}}))
+        eligible_ids = funded_ids if wallet_filter == "funded" else all_user_ids - funded_ids
+
+    orders_filter = _first(params, "orders") or "all"
+    if orders_filter in {"with_orders", "without_orders"}:
+        customer_ids = set(conn.orders.distinct("user_id"))
+        order_ids = customer_ids if orders_filter == "with_orders" else all_user_ids - customer_ids
+        eligible_ids = order_ids if eligible_ids is None else eligible_ids & order_ids
+    if eligible_ids is not None:
+        query["telegram_id"] = {"$in": list(eligible_ids)}
+
+    collection = conn.users
+    sort = _first(params, "sort") or "newest"
+    if sort in {"balance", "spent", "orders"}:
+        summaries = [_customer_summary(user) for user in collection.find(query)]
+        sort_key = {
+            "balance": "wallet_balance",
+            "spent": "total_spent",
+            "orders": "order_count",
+        }[sort]
+        summaries.sort(
+            key=lambda item: (
+                float(item.get(sort_key) or 0),
+                int(item.get("telegram_id") or 0),
+            ),
+            reverse=True,
+        )
+        total = len(summaries)
+        items = summaries[(page - 1) * per_page:page * per_page]
+    else:
+        total = collection.count_documents(query)
+        direction = 1 if sort == "oldest" else DESCENDING
+        users = collection.find(query).sort("created_at", direction).skip((page - 1) * per_page).limit(per_page)
+        items = [_customer_summary(user) for user in users]
     return {
-        "items": [_customer_summary(user) for user in users],
+        "items": items,
         "page": page,
         "per_page": per_page,
         "total": total,

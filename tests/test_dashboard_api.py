@@ -63,6 +63,34 @@ def test_pending_onchain_topups_include_customer_and_explorer(mock_mongodb):
     assert result["items"][0]["explorer_url"].startswith("https://bscscan.com/tx/")
 
 
+def test_customer_filters_and_metric_sort(mock_mongodb):
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 10, "username": "active", "banned": False, "created_at": 10},
+        {"telegram_id": 20, "username": "blocked", "banned": True, "created_at": 20},
+        {"telegram_id": 30, "username": "empty", "banned": False, "created_at": 30},
+    ])
+    mock_mongodb.wallets.insert_many([
+        {"user_id": 10, "balance_cents": 500},
+        {"user_id": 20, "balance_cents": 1200},
+    ])
+    mock_mongodb.orders.insert_many([
+        {"id": 1, "user_id": 10, "status": "delivered", "total_price": 4},
+        {"id": 2, "user_id": 20, "status": "delivered", "total_price": 9},
+        {"id": 3, "user_id": 20, "status": "delivered", "total_price": 3},
+    ])
+
+    active_funded = dashboard_api.list_customers({
+        "status": ["active"],
+        "wallet": ["funded"],
+    })
+    without_orders = dashboard_api.list_customers({"orders": ["without_orders"]})
+    by_balance = dashboard_api.list_customers({"sort": ["balance"]})
+
+    assert [item["telegram_id"] for item in active_funded["items"]] == [10]
+    assert [item["telegram_id"] for item in without_orders["items"]] == [30]
+    assert [item["telegram_id"] for item in by_balance["items"]] == [20, 10, 30]
+
+
 def test_order_search_matches_numeric_customer(mock_mongodb):
     mock_mongodb.orders.insert_one({
         "id": 9,
