@@ -1,13 +1,28 @@
 # Railway deployment
 
-The production service now runs entirely on Railway: Telegram webhook, admin
-dashboard, public assets, buyer API, restock checks, and supplier price checks.
+The production service runs two isolated HTTP surfaces in one Railway service:
+
+- Trust Market TN storefront on Railway's injected `PORT` (default locally: 8080)
+- Admin dashboard and operational endpoints on `ADMIN_PORT` (default: 8081)
+
+Telegram webhook, buyer API, restock checks, and supplier price checks remain in
+the same process.
 
 ## 1. Generate the public domain
 
 In the Railway service, open **Settings > Networking > Public Networking** and
 select **Generate Domain**. The application automatically reads Railway's
 `RAILWAY_PUBLIC_DOMAIN`; `HP_PUBLIC_BASE_URL` can remain unset.
+
+Configure two target ports under **Settings > Networking > Public Networking**:
+
+1. Public store domain → target port shown by `PORT`.
+2. Admin domain → target port `8081` (or the value of `ADMIN_PORT`).
+
+Set `HP_ADMIN_BASE_URL=https://YOUR-ADMIN-DOMAIN` so an accidental `/admin`
+visit on the store domain redirects to the isolated dashboard. Set
+`HP_PUBLIC_BASE_URL` to the public domain that should receive Telegram's
+`/api/webhook`; both HTTP surfaces support that endpoint.
 
 ## 2. Configure variables
 
@@ -23,6 +38,8 @@ Required variables:
 - `HP_WEBHOOK_SECRET` (letters, numbers, `_` and `-` only)
 - `CRON_SECRET` (a different random value, at least 24 characters)
 - `HP_DASHBOARD_PASSWORD`
+- `ADMIN_PORT=8081`
+- `HP_ADMIN_BASE_URL=https://YOUR-ADMIN-DOMAIN`
 - `HP_INVENTORY_KEY` when encrypted inventory is enabled
 - Provider API keys used by the active catalog
 - `HP_REQUIRED_CHANNEL=@blackmarketBotChannel`
@@ -45,9 +62,11 @@ service registers `${RAILWAY_PUBLIC_DOMAIN}/api/webhook` with Telegram.
 
 After deployment, confirm:
 
-- `https://YOUR-DOMAIN/health` returns `{"ok": true, ...}`.
-- `https://YOUR-DOMAIN/` opens the public bot page.
-- `https://YOUR-DOMAIN/admin` requests the dashboard password.
+- `https://YOUR-STORE-DOMAIN/health` returns `{"ok": true, ...}`.
+- `https://YOUR-STORE-DOMAIN/` opens Trust Market TN.
+- `https://YOUR-STORE-DOMAIN/admin` redirects to the admin domain.
+- `https://YOUR-ADMIN-DOMAIN/` redirects to `/admin`.
+- `https://YOUR-ADMIN-DOMAIN/admin` requests the dashboard password.
 - Railway logs contain `Telegram webhook registered`.
 
 The process runs its own restock and supplier-price scheduler, replacing the

@@ -10,6 +10,7 @@ import threading
 import time
 from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 import config
@@ -24,6 +25,50 @@ class RailwayHTTPServer(ThreadingHTTPServer):
 
     allow_reuse_address = True
     daemon_threads = True
+
+
+_ADMIN_PREFIXES = ("/admin", "/admin-v2", "/admin-legacy")
+
+
+class StorefrontHandler(webhook.handler):
+    """Public storefront surface with every dashboard route blocked."""
+
+    def _block_admin(self) -> None:
+        admin_url = config.env_value("HP_ADMIN_BASE_URL").rstrip("/")
+        if admin_url:
+            self.send_response(302)
+            self.send_header("Location", admin_url + "/admin")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self._reply(404, {"ok": False, "error": "NOT_FOUND"})
+
+    def do_GET(self) -> None:
+        if urlsplit(self.path).path.startswith(_ADMIN_PREFIXES):
+            self._block_admin()
+            return
+        super().do_GET()
+
+    def do_POST(self) -> None:
+        if urlsplit(self.path).path.startswith(_ADMIN_PREFIXES):
+            self._block_admin()
+            return
+        super().do_POST()
+
+
+class AdminHandler(webhook.handler):
+    """Administration, Telegram webhook and operational API surface."""
+
+    def do_GET(self) -> None:
+        if urlsplit(self.path).path == "/":
+            self.send_response(302)
+            self.send_header("Location", "/admin")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        super().do_GET()
 
 
 def deployment_issues() -> list[str]:
@@ -112,12 +157,16 @@ def main() -> None:
 
     try:
         port = int(os.environ.get("PORT", "8080"))
+        admin_port = int(os.environ.get("ADMIN_PORT", "8081"))
     except ValueError as exc:
-        raise RuntimeError("PORT must be an integer") from exc
-    if not 1 <= port <= 65535:
-        raise RuntimeError("PORT must be between 1 and 65535")
+        raise RuntimeError("PORT and ADMIN_PORT must be integers") from exc
+    if not 1 <= port <= 65535 or not 1 <= admin_port <= 65535:
+        raise RuntimeError("PORT and ADMIN_PORT must be between 1 and 65535")
+    if port == admin_port:
+        raise RuntimeError("PORT and ADMIN_PORT must be different")
 
-    server = RailwayHTTPServer(("0.0.0.0", port), webhook.handler)
+    storefront_server = RailwayHTTPServer(("0.0.0.0", port), StorefrontHandler)
+    admin_server = RailwayHTTPServer(("0.0.0.0", admin_port), AdminHandler)
     try:
         # Initialize MongoDB and Telegram before Railway marks the deployment healthy.
         webhook._application()
@@ -127,13 +176,14 @@ def main() -> None:
                 result.get("message") or "Telegram webhook registration failed"
             )
     except Exception:
-        server.server_close()
+        storefront_server.server_close()
+        admin_server.server_close()
         raise
 
     stop_event = threading.Event()
     scheduler = threading.Thread(
         target=scheduler_loop,
-        args=(stop_event, port),
+        args=(stop_event, admin_port),
         name="railway-scheduler",
         daemon=True,
     )
@@ -141,21 +191,33 @@ def main() -> None:
 
     def request_shutdown(_signum, _frame) -> None:
         stop_event.set()
-        threading.Thread(target=server.shutdown, daemon=True).start()
+        threading.Thread(target=storefront_server.shutdown, daemon=True).start()
+        threading.Thread(target=admin_server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, request_shutdown)
     signal.signal(signal.SIGINT, request_shutdown)
     log.info(
-        "Railway HTTP service listening on 0.0.0.0:%s (public URL: %s)",
+        "Trust Market storefront listening on 0.0.0.0:%s (public URL: %s)",
         port,
         config.public_base_url_from_environment(),
     )
+    log.info("Admin dashboard listening on 0.0.0.0:%s", admin_port)
+    admin_thread = threading.Thread(
+        target=admin_server.serve_forever,
+        kwargs={"poll_interval": 0.5},
+        name="railway-admin-http",
+        daemon=True,
+    )
+    admin_thread.start()
     try:
-        server.serve_forever(poll_interval=0.5)
+        storefront_server.serve_forever(poll_interval=0.5)
     finally:
         stop_event.set()
+        admin_server.shutdown()
+        admin_thread.join(timeout=5)
         scheduler.join(timeout=5)
-        server.server_close()
+        storefront_server.server_close()
+        admin_server.server_close()
 
 
 if __name__ == "__main__":

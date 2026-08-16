@@ -2,8 +2,26 @@
 
 from __future__ import annotations
 
+import http.client
+import threading
+from contextlib import contextmanager
+from http.server import HTTPServer
+
 import config
 import railway_server
+
+
+@contextmanager
+def running_surface(handler):
+    server = HTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_port
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
 
 
 def test_deployment_requires_a_generated_railway_domain(monkeypatch):
@@ -46,3 +64,41 @@ def test_webhook_registration_retries_transient_failure(monkeypatch):
     result = railway_server.register_telegram_webhook(attempts=2, retry_seconds=0)
 
     assert result["ok"] is True
+
+
+def test_storefront_port_blocks_admin_without_admin_domain(monkeypatch):
+    monkeypatch.delenv("HP_ADMIN_BASE_URL", raising=False)
+    with running_surface(railway_server.StorefrontHandler) as port:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request("GET", "/admin")
+        response = connection.getresponse()
+        body = response.read()
+        connection.close()
+
+    assert response.status == 404
+    assert b"NOT_FOUND" in body
+
+
+def test_storefront_port_redirects_admin_to_isolated_domain(monkeypatch):
+    monkeypatch.setenv("HP_ADMIN_BASE_URL", "https://admin.trustmarket.tn/")
+    with running_surface(railway_server.StorefrontHandler) as port:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request("GET", "/admin/orders")
+        response = connection.getresponse()
+        response.read()
+        connection.close()
+
+    assert response.status == 302
+    assert response.headers["Location"] == "https://admin.trustmarket.tn/admin"
+
+
+def test_admin_port_root_redirects_to_dashboard():
+    with running_surface(railway_server.AdminHandler) as port:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request("GET", "/")
+        response = connection.getresponse()
+        response.read()
+        connection.close()
+
+    assert response.status == 302
+    assert response.headers["Location"] == "/admin"
