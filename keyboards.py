@@ -293,7 +293,7 @@ def services_keyboard(lang):
 
 
 def catalog_offers_keyboard(lang):
-    """Show every active offer directly, but group ChatGPT offers under a single service button."""
+    """Show active offers directly, but group services with multiple offers (e.g. Telegram, ChatGPT) under a single service button."""
     buttons = []
     db.preload_text_overrides(
         (
@@ -307,30 +307,36 @@ def catalog_offers_keyboard(lang):
     stock_icon = db.get_text_override_icon("stock_label", lang) or None
 
     all_offers = db.list_catalog_offers()
-    chatgpt_offers = [
-        o for o in all_offers
-        if "chatgpt" in (o.get("service_name") or "").lower()
-        or "gpt" in (o.get("service_name") or "").lower()
-        or "chatgpt" in (o.get("name") or "").lower()
-    ]
 
-    chatgpt_added = False
+    # Group offers by service_id
+    service_offers = {}
     for offer in all_offers:
-        s_name = (offer.get("service_name") or "").lower()
-        o_name = (offer.get("name") or "").lower()
-        is_chatgpt = "chatgpt" in s_name or "gpt" in s_name or "chatgpt" in o_name
+        sid = offer.get("service_id")
+        if sid not in service_offers:
+            service_offers[sid] = []
+        service_offers[sid].append(offer)
 
-        if is_chatgpt:
-            if not chatgpt_added:
-                chatgpt_added = True
-                total_stock = sum(int(o.get("stock") or 0) for o in chatgpt_offers)
-                has_unlimited = any(o.get("unlimited_stock") for o in chatgpt_offers)
-                service_emoji = (offer.get("service_emoji") or "🤖").strip()
-                service_name = offer.get("service_name") or "ChatGPT"
-                label = f"{service_emoji} {service_name}".strip()
+    added_services = set()
+
+    for offer in all_offers:
+        sid = offer.get("service_id")
+        offers_in_service = service_offers.get(sid, [])
+
+        # Group if the service has multiple offers (e.g. Telegram 3m/6m/12m, ChatGPT, etc.)
+        should_group = len(offers_in_service) > 1
+
+        if should_group:
+            if sid not in added_services:
+                added_services.add(sid)
+                total_stock = sum(int(o.get("stock") or 0) for o in offers_in_service)
+                has_unlimited = any(o.get("unlimited_stock") for o in offers_in_service)
+                service_emoji = (offer.get("service_emoji") or "📦").strip()
+                service_name = (offer.get("service_name") or f"Service #{sid}").strip()
+                clean_name = clean_button_name(service_name) or service_name
+                label = f"{service_emoji} {clean_name}".strip() if service_emoji and not service_name.startswith(service_emoji) else service_name
                 buttons.append([InlineKeyboardButton(
                     label,
-                    callback_data=f"svc:{offer['service_id']}",
+                    callback_data=f"svc:{sid}",
                     style="success" if (has_unlimited or total_stock > 0) else "danger",
                 )])
         else:
