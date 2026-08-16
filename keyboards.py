@@ -371,7 +371,7 @@ def catalog_offers_keyboard(lang):
                 )
                 service_name = (offer.get("service_name") or f"Service #{sid}").strip()
                 clean_name = clean_button_name(service_name) or service_name
-                label = f"{service_emoji} {clean_name}".strip() if service_emoji and not service_name.startswith(service_emoji) else service_name
+                label = f"{service_emoji} {clean_name}".strip() if service_emoji else clean_name
                 cat_style = "success" if (has_unlimited or total_stock > 3) else ("primary" if total_stock > 0 else "danger")
                 grouped_category_buttons.append(InlineKeyboardButton(
                     label,
