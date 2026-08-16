@@ -325,6 +325,12 @@ td strong { color: #e6edf6; }
 .api-offline { color:var(--red); background:rgba(251,113,133,.08); }
 .secret-preview { max-height:280px; overflow:auto; padding:14px; border:1px solid var(--line); border-radius:9px; color:#c4b5fd; background:#07111e; font-size:11px; white-space:pre-wrap; }
 .warning-box { margin-bottom:14px; padding:11px; border:1px solid rgba(251,191,36,.18); border-radius:9px; color:#d5b75e; background:rgba(251,191,36,.05); font-size:9px; line-height:1.5; }
+.pending-topups { margin-bottom:13px; border-color:rgba(251,191,36,.2); }
+.pending-topups > header { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:15px 16px; border-bottom:1px solid var(--line); background:linear-gradient(90deg,rgba(251,191,36,.06),transparent); }
+.pending-topups h3 { margin:4px 0 2px; font-size:13px; }.pending-topups header p { margin:0; color:var(--muted); font-size:8px; }
+.pending-topup-count { min-width:30px; height:30px; display:grid; place-items:center; border-radius:10px; color:#fcd34d; background:rgba(251,191,36,.1); font-size:11px; font-weight:800; }
+.txid-link { color:#67e8f9; font-family:monospace; font-size:9px; text-decoration:none; }.txid-link:hover { text-decoration:underline; }
+.topup-actions { display:flex; gap:6px; }.topup-actions .action-button { min-height:31px; padding:0 9px; font-size:8px; }
 .ticket-thread { max-height:330px; display:flex; flex-direction:column; gap:8px; margin-bottom:14px; overflow-y:auto; }
 .ticket-message { max-width:82%; align-self:flex-start; padding:10px 12px; border:1px solid var(--line); border-radius:12px 12px 12px 3px; background:#0a1624; }
 .ticket-message.admin { align-self:flex-end; border-color:rgba(167,139,250,.18); border-radius:12px 12px 3px 12px; background:rgba(124,58,237,.1); }

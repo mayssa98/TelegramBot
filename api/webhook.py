@@ -51,6 +51,7 @@ from config import (
     env_value,
     public_base_url_from_environment,
 )
+from i18n import t
 from payment_verifier import binance_healthcheck
 
 _loop = asyncio.new_event_loop()
@@ -241,6 +242,63 @@ def _application():
             _run_async(candidate.initialize())
             _app = candidate
         return _app
+
+
+def _notify_wallet_adjustment(result: dict, reason: str = "") -> bool:
+    """Notify a customer after an admin wallet adjustment without undoing it on failure."""
+    amount = float(result.get("amount") or 0)
+    if amount <= 0:
+        return False
+    user_id = int(result["user_id"])
+    balance = float(result.get("balance") or 0)
+    safe_reason = html.escape(str(reason or "Crédit ajouté par l’administrateur").strip()[:500])
+    message = (
+        "💰 <b>Votre solde a été crédité</b>\n\n"
+        f"Montant ajouté : <b>+{amount:.2f} {html.escape(CURRENCY)}</b>\n"
+        f"Nouveau solde : <b>{balance:.2f} {html.escape(CURRENCY)}</b>\n"
+        f"Motif : {safe_reason}\n\n"
+        "Le crédit est disponible immédiatement dans votre portefeuille."
+    )
+    try:
+        _run_async(
+            _application().bot.send_message(
+                chat_id=user_id,
+                text=message,
+                parse_mode=ParseMode.HTML,
+            )
+        )
+        return True
+    except Exception:
+        log.exception("Unable to notify user %s about wallet credit", user_id)
+        return False
+
+
+def _notify_onchain_topup(topup: dict, approved: bool) -> bool:
+    """Tell the customer about the administrator's on-chain top-up decision."""
+    user_id = int(topup["user_id"])
+    lang = db.get_user_lang(user_id) or "fr"
+    if approved:
+        amount = int(topup.get("amount_cents") or 0) / 100
+        text = t(
+            lang,
+            "topup_onchain_approved",
+            amount=f"{amount:.2f}",
+            balance=f"{float(topup.get('balance') or 0):.2f}",
+        )
+    else:
+        text = t(lang, "topup_onchain_rejected")
+    try:
+        _run_async(
+            _application().bot.send_message(
+                chat_id=user_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        )
+        return True
+    except Exception:
+        log.exception("Unable to notify user %s about on-chain top-up", user_id)
+        return False
 
 
 class handler(BaseHTTPRequestHandler):
@@ -561,6 +619,13 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
                 return
             self._reply(200, {"ok": True, "connectors": external_api_service.list_connectors()})
+            return
+
+        elif path == "/admin/api/wallet-topups":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, dashboard_api.list_wallet_topups(parse_qs(url.query)))
             return
 
         elif path == "/admin/api/ticket-messages":
@@ -946,10 +1011,51 @@ class handler(BaseHTTPRequestHandler):
             elif action == "adjust_user_wallet":
                 uid = int(form["user_id"])
                 amount = float(form.get("amount", "0").strip().replace(",", "."))
+                reason = form.get("reason", "")
                 result = wallet_service.adjust_balance(
-                    uid, amount, ADMIN_ID, form.get("reason", ""),
+                    uid, amount, ADMIN_ID, reason,
                 )
-                self._reply(200, {"ok": True, **result})
+                notification_sent = _notify_wallet_adjustment(result, reason)
+                if amount > 0:
+                    message = (
+                        "Solde crédité et notification Telegram envoyée au client."
+                        if notification_sent
+                        else "Solde crédité, mais la notification Telegram n’a pas pu être envoyée."
+                    )
+                else:
+                    message = "Solde débité avec succès."
+                self._reply(200, {
+                    "ok": True,
+                    **result,
+                    "notification_sent": notification_sent,
+                    "message": message,
+                })
+                return
+
+            elif action in {"approve_wallet_topup", "reject_wallet_topup"}:
+                topup_id = int(form["topup_id"])
+                approved = action == "approve_wallet_topup"
+                topup = (
+                    wallet_service.approve_onchain_topup(topup_id, ADMIN_ID)
+                    if approved
+                    else wallet_service.reject_onchain_topup(topup_id, ADMIN_ID)
+                )
+                if not topup:
+                    raise ValueError("Ce rechargement a déjà été traité ou n’existe plus.")
+                notification_sent = _notify_onchain_topup(topup, approved)
+                decision = "accepté et crédité" if approved else "refusé"
+                suffix = (
+                    "Le client a été notifié sur Telegram."
+                    if notification_sent
+                    else "La décision est enregistrée, mais Telegram n’a pas pu notifier le client."
+                )
+                self._reply(200, {
+                    "ok": True,
+                    "topup_id": topup_id,
+                    "status": "confirmed" if approved else "rejected",
+                    "notification_sent": notification_sent,
+                    "message": f"Rechargement {decision}. {suffix}",
+                })
                 return
 
             elif action == "close_ticket":

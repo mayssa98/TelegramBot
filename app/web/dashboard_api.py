@@ -278,6 +278,43 @@ def customer_detail(user_id: int) -> dict[str, Any] | None:
     return result
 
 
+def list_wallet_topups(params: dict[str, list[str]]) -> dict[str, Any]:
+    """Return manual on-chain top-ups awaiting an administrator decision."""
+    status = _first(params, "status") or "manual_review"
+    allowed_statuses = {"manual_review", "confirmed", "rejected"}
+    if status not in allowed_statuses:
+        status = "manual_review"
+    query: dict[str, Any] = {
+        "verification_method": "manual_onchain",
+        "status": status,
+    }
+    search = _first(params, "search")
+    if search:
+        pattern = {"$regex": re.escape(search), "$options": "i"}
+        clauses: list[dict[str, Any]] = [{"txid": pattern}, {"network": pattern}]
+        if search.isdigit():
+            clauses.extend(({"id": int(search)}, {"user_id": int(search)}))
+        query["$or"] = clauses
+
+    conn = db.get_conn()
+    rows = conn.wallet_topups.find(query).sort("created_at", DESCENDING).limit(100)
+    items = []
+    for row in rows:
+        item = db._public(row)
+        user = conn.users.find_one(
+            {"telegram_id": int(item["user_id"])},
+            {"username": 1, "first_name": 1},
+        ) or {}
+        item["username"] = user.get("username") or ""
+        item["first_name"] = user.get("first_name") or ""
+        item["amount"] = round(float(item.get("amount_cents") or 0) / 100, 2)
+        txid = str(item.get("txid") or "")
+        explorer = "https://bscscan.com/tx/" if item.get("network") == "bsc" else "https://polygonscan.com/tx/"
+        item["explorer_url"] = f"{explorer}{txid}"
+        items.append(item)
+    return {"items": items, "total": len(items), "status": status}
+
+
 def _customer_summary(user: dict[str, Any]) -> dict[str, Any]:
     conn = db.get_conn()
     user_id = user["telegram_id"]

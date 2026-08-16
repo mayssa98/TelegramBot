@@ -29,6 +29,40 @@ def test_order_filters_and_pagination(mock_mongodb):
     assert result["analytics"]["statuses"] == {"pending_payment": 1, "delivered": 2}
 
 
+def test_pending_onchain_topups_include_customer_and_explorer(mock_mongodb):
+    mock_mongodb.users.insert_one({"telegram_id": 42, "username": "buyer", "first_name": "Buyer"})
+    mock_mongodb.wallet_topups.insert_many([
+        {
+            "id": 7,
+            "user_id": 42,
+            "txid": "0xabcdef1234567890",
+            "amount_cents": 1250,
+            "currency": "USDT",
+            "network": "bsc",
+            "verification_method": "manual_onchain",
+            "status": "manual_review",
+            "created_at": 10,
+        },
+        {
+            "id": 8,
+            "user_id": 42,
+            "txid": "ignored",
+            "amount_cents": 500,
+            "network": "polygon",
+            "verification_method": "manual_onchain",
+            "status": "confirmed",
+            "created_at": 20,
+        },
+    ])
+
+    result = dashboard_api.list_wallet_topups({})
+
+    assert result["total"] == 1
+    assert result["items"][0]["username"] == "buyer"
+    assert result["items"][0]["amount"] == 12.5
+    assert result["items"][0]["explorer_url"].startswith("https://bscscan.com/tx/")
+
+
 def test_order_search_matches_numeric_customer(mock_mongodb):
     mock_mongodb.orders.insert_one({
         "id": 9,
