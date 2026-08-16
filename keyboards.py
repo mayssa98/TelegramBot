@@ -293,7 +293,7 @@ def services_keyboard(lang):
 
 
 def catalog_offers_keyboard(lang):
-    """Show every active offer directly, without the service/category layer."""
+    """Show every active offer directly, but group ChatGPT offers under a single service button."""
     buttons = []
     db.preload_text_overrides(
         (
@@ -305,28 +305,57 @@ def catalog_offers_keyboard(lang):
     stock_label = t(lang, "stock_label")
     price_tbd = t(lang, "price_tbd")
     stock_icon = db.get_text_override_icon("stock_label", lang) or None
-    for offer in db.list_catalog_offers():
-        safe_offer = dict(offer)
-        safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
-        buttons.append([InlineKeyboardButton(
-            offer_button_label(
-                lang, safe_offer,
-                stock_label=stock_label,
-                price_tbd=price_tbd,
-            ),
-            callback_data=f"off:{offer['id']}",
-            style=(
-                "success"
-                if offer.get("unlimited_stock")
-                else stock_button_style(offer.get("stock"))
-            ),
-            icon_custom_emoji_id=(
-                stock_icon
-                or offer.get("custom_emoji_id")
-                or offer.get("service_custom_emoji_id")
-                or None
-            ),
-        )])
+
+    all_offers = db.list_catalog_offers()
+    chatgpt_offers = [
+        o for o in all_offers
+        if "chatgpt" in (o.get("service_name") or "").lower()
+        or "gpt" in (o.get("service_name") or "").lower()
+        or "chatgpt" in (o.get("name") or "").lower()
+    ]
+
+    chatgpt_added = False
+    for offer in all_offers:
+        s_name = (offer.get("service_name") or "").lower()
+        o_name = (offer.get("name") or "").lower()
+        is_chatgpt = "chatgpt" in s_name or "gpt" in s_name or "chatgpt" in o_name
+
+        if is_chatgpt:
+            if not chatgpt_added:
+                chatgpt_added = True
+                total_stock = sum(int(o.get("stock") or 0) for o in chatgpt_offers)
+                has_unlimited = any(o.get("unlimited_stock") for o in chatgpt_offers)
+                service_emoji = (offer.get("service_emoji") or "🤖").strip()
+                service_name = offer.get("service_name") or "ChatGPT"
+                label = f"{service_emoji} {service_name}".strip()
+                buttons.append([InlineKeyboardButton(
+                    label,
+                    callback_data=f"svc:{offer['service_id']}",
+                    style="success" if (has_unlimited or total_stock > 0) else "danger",
+                )])
+        else:
+            safe_offer = dict(offer)
+            safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
+            buttons.append([InlineKeyboardButton(
+                offer_button_label(
+                    lang, safe_offer,
+                    stock_label=stock_label,
+                    price_tbd=price_tbd,
+                ),
+                callback_data=f"off:{offer['id']}",
+                style=(
+                    "success"
+                    if offer.get("unlimited_stock")
+                    else stock_button_style(offer.get("stock"))
+                ),
+                icon_custom_emoji_id=(
+                    stock_icon
+                    or offer.get("custom_emoji_id")
+                    or offer.get("service_custom_emoji_id")
+                    or None
+                ),
+            )])
+
     buttons.append([
         translated_button(lang, "catalog_request_button", callback_data="catalog_request"),
     ])
@@ -349,16 +378,25 @@ def onboarding_keyboard(lang, step):
 
 def offers_keyboard(lang, service_id):
     buttons = []
+    service = db.get_service(service_id)
+    svc_emoji = (service.get("emoji") or "").strip() if service else ""
     for off in db.list_offers(service_id):
         safe_offer = dict(off)
-        safe_offer["name"] = clean_button_name(off.get("name")) or f"Offre #{off['id']}"
+        off_name = (off.get("name") or f"Offre #{off['id']}").strip()
+        clean_name = clean_button_name(off_name) or off_name
+        emoji = (safe_offer.get("emoji") or svc_emoji).strip()
+        if emoji and not off_name.startswith(emoji):
+            safe_offer["name"] = f"{emoji} {clean_name}"
+        else:
+            safe_offer["name"] = off_name
         buttons.append([InlineKeyboardButton(
             offer_button_label(lang, safe_offer),
             callback_data=f"off:{off['id']}",
-            style="success" if off.get("unlimited_stock") else stock_button_style(off.get("stock")),
+            style="success" if (off.get("unlimited_stock") or int(off.get("stock") or 0) > 0) else stock_button_style(off.get("stock")),
             icon_custom_emoji_id=(
                 db.get_text_override_icon("stock_label", lang)
                 or off.get("custom_emoji_id")
+                or (service.get("custom_emoji_id") if service else None)
                 or None
             ),
         )])
@@ -370,7 +408,8 @@ def offer_detail_keyboard(lang, offer):
     buttons = []
     if offer["price"] is not None and db.offer_has_stock(offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
-    buttons.append([translated_button(lang, "btn_back", callback_data="catalog")])
+    back_data = f"svc:{offer['service_id']}" if offer.get("service_id") else "catalog"
+    buttons.append([translated_button(lang, "btn_back", callback_data=back_data)])
     return InlineKeyboardMarkup(buttons)
 
 

@@ -1358,10 +1358,21 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     if data.startswith("svc:"):
+        sid = int(data.split(":")[1])
+        service = db.get_service(sid)
+        if not service:
+            await show_callback_screen(
+                q,
+                t(lang, "catalog_flat_title", shop=SHOP_NAME),
+                reply_markup=kb.catalog_offers_keyboard(lang),
+            )
+            return
+        emoji = service.get("emoji", "📦")
+        name = service.get("name", "")
         await show_callback_screen(
             q,
-            t(lang, "catalog_flat_title", shop=SHOP_NAME),
-            reply_markup=kb.catalog_offers_keyboard(lang),
+            t(lang, "service_title", emoji=emoji, name=name),
+            reply_markup=kb.offers_keyboard(lang, sid),
         )
         return
     if data.startswith("off:"):
