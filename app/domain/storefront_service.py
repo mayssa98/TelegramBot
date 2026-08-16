@@ -21,6 +21,7 @@ from app.domain import inventory_service
 from config import TN_TND_PER_USDT, TN_WHATSAPP_NUMBER
 
 MAX_PROOF_BYTES = 4_000_000
+MAX_PRODUCT_IMAGE_BYTES = 1_200_000
 PAYMENT_METHODS = {
     "d17": {"fr": "D17", "ar": "D17"},
     "flouci": {"fr": "Flouci", "ar": "Flouci"},
@@ -32,6 +33,11 @@ ALLOWED_PROOF_TYPES = {
     "image/jpeg": (b"\xff\xd8\xff",),
     "image/png": (b"\x89PNG\r\n\x1a\n",),
     "application/pdf": (b"%PDF-",),
+}
+ALLOWED_PRODUCT_IMAGE_TYPES = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/webp": (b"RIFF",),
 }
 CATEGORY_LABELS = {
     "ai": {"fr": "Outils IA", "ar": "أدوات الذكاء الاصطناعي"},
@@ -119,9 +125,67 @@ def _safe_image_url(value: Any) -> str:
     parsed = urlsplit(url)
     if parsed.scheme == "https" and parsed.netloc:
         return url
-    if url.startswith("/storefront/"):
+    if url.startswith("/storefront/") or url.startswith("/api/storefront/product-image"):
         return url
     return ""
+
+
+def validate_product_image(encoded: str, mime_type: str) -> tuple[bytes, str]:
+    """Decode and validate an uploaded product image without changing state."""
+    mime_type = str(mime_type or "").strip().lower()
+    if mime_type not in ALLOWED_PRODUCT_IMAGE_TYPES:
+        raise StorefrontError("L’image doit être au format JPG, PNG ou WebP.")
+    encoded = str(encoded or "")
+    if encoded.startswith("data:") and "," in encoded:
+        encoded = encoded.split(",", 1)[1]
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise StorefrontError("Le fichier image est invalide.") from exc
+    if not raw or len(raw) > MAX_PRODUCT_IMAGE_BYTES:
+        raise StorefrontError("L’image optimisée doit faire moins de 1,2 Mo.")
+    signatures = ALLOWED_PRODUCT_IMAGE_TYPES[mime_type]
+    if not any(raw.startswith(signature) for signature in signatures):
+        raise StorefrontError("Le contenu du fichier ne correspond pas à son format.")
+    if mime_type == "image/webp" and (len(raw) < 12 or raw[8:12] != b"WEBP"):
+        raise StorefrontError("Le fichier WebP est invalide.")
+    return raw, mime_type
+
+
+def save_product_image(offer_id: int, encoded: str, mime_type: str, *, admin_id: int) -> str:
+    """Validate and persist one public storefront product image in MongoDB."""
+    offer_id = int(offer_id)
+    if not db.get_offer(offer_id):
+        raise StorefrontError("Produit introuvable.")
+    raw, mime_type = validate_product_image(encoded, mime_type)
+    now = int(time.time())
+    db.get_conn().storefront_product_images.update_one(
+        {"offer_id": offer_id},
+        {"$set": {
+            "payload": raw,
+            "mime_type": mime_type,
+            "size": len(raw),
+            "updated_at": now,
+            "updated_by": int(admin_id),
+        }},
+        upsert=True,
+    )
+    url = f"/api/storefront/product-image?offer_id={offer_id}&v={now}"
+    db.update_offer(offer_id, site_image_url=url)
+    db.audit_event(
+        "storefront.product_image_updated",
+        actor_id=admin_id,
+        details={"offer_id": offer_id, "mime_type": mime_type, "size": len(raw)},
+    )
+    return url
+
+
+def product_image(offer_id: int) -> tuple[bytes, str]:
+    """Return one admin-uploaded product image for the public catalog."""
+    row = db.get_conn().storefront_product_images.find_one({"offer_id": int(offer_id)})
+    if not row:
+        raise StorefrontError("Image introuvable.")
+    return bytes(row.get("payload") or b""), str(row.get("mime_type") or "image/jpeg")
 
 
 def _site_category(service: dict[str, Any], offer: dict[str, Any]) -> str:

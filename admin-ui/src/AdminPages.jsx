@@ -33,6 +33,7 @@ import {
   ToggleRight,
   TrendingUp,
   Trash2,
+  Upload,
   UserRound,
   Users,
   X,
@@ -654,6 +655,39 @@ function OrdersPage({ data, onAction }) {
   );
 }
 
+async function optimizeProductImage(file) {
+  const allowed = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowed.includes(file.type)) throw new Error("Choisissez une image JPG, PNG ou WebP.");
+  if (file.size > 8_000_000) throw new Error("L’image originale doit faire moins de 8 Mo.");
+  const source = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Cette image ne peut pas être lue."));
+      element.src = source;
+    });
+    const scale = Math.min(1, 1400 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+    const makeBlob = (quality) => new Promise((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+    let blob = await makeBlob(0.84);
+    if (blob?.size > 1_100_000) blob = await makeBlob(0.68);
+    if (!blob || blob.size > 1_200_000) throw new Error("L’image reste trop volumineuse après optimisation.");
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Impossible de lire l’image."));
+      reader.readAsDataURL(blob);
+    });
+    return { data, type: blob.type || "image/png", size: blob.size };
+  } finally {
+    URL.revokeObjectURL(source);
+  }
+}
+
 function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both" }) {
   const currentChannels = offer?.sales_channels || (defaultChannel === "both" ? ["bot", "tn_site"] : [defaultChannel]);
   const [form, setForm] = useState({
@@ -678,6 +712,9 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
     site_badge_ar: offer?.site_badge_ar || "",
     site_featured: Boolean(offer?.site_featured),
   });
+  const [imageUpload, setImageUpload] = useState(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageError, setImageError] = useState("");
   const set = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
   const submit = async (event) => {
@@ -691,6 +728,8 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
         : {}),
       auto_delivery: form.auto_delivery ? "on" : "",
       site_featured: form.site_featured ? "on" : "",
+      site_image_data: imageUpload?.data || "",
+      site_image_type: imageUpload?.type || "",
     };
     if (await onAction(payload)) onClose();
   };
@@ -755,9 +794,14 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
             </select>
           </Field>
           <Field label="Image du produit (URL HTTPS)" wide>
-            <input type="url" value={form.site_image_url} onChange={(event) => set("site_image_url", event.target.value)} placeholder="https://…/produit.webp" />
+            <input type="url" value={form.site_image_url} onChange={(event) => { set("site_image_url", event.target.value); setImageUpload(null); setImageError(""); }} placeholder="https://…/produit.webp" />
           </Field>
-          {form.site_image_url && <div className="product-image-preview"><img src={form.site_image_url} alt="Aperçu du produit" onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Aperçu de l’image</strong><span>Cette image sera utilisée sur Trust Market TN.</span></div></div>}
+          <div className="product-image-upload">
+            <label className={imageBusy ? "busy" : ""}><Upload size={19} /><strong>{imageBusy ? "Optimisation…" : "Importer une image"}</strong><span>JPG, PNG ou WebP · 8 Mo maximum</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={imageBusy} onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setImageBusy(true); setImageError(""); try { const optimized = await optimizeProductImage(file); setImageUpload(optimized); set("site_image_url", ""); } catch (error) { setImageError(error.message); } finally { setImageBusy(false); event.target.value = ""; } }} /></label>
+            <span>ou utilisez une URL HTTPS dans le champ ci-dessus.</span>
+          </div>
+          {imageError && <div className="form-error wide">{imageError}</div>}
+          {(imageUpload?.data || form.site_image_url) && <div className="product-image-preview"><img src={imageUpload?.data || form.site_image_url} alt="Aperçu du produit" onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Aperçu de l’image</strong><span>{imageUpload ? `${Math.round(imageUpload.size / 1024)} Ko · prête à être enregistrée` : "Cette image sera utilisée sur Trust Market TN."}</span></div></div>}
           <Field label="Badge français">
             <input value={form.site_badge} onChange={(event) => set("site_badge", event.target.value)} placeholder="Populaire, Nouveau…" />
           </Field>
@@ -833,7 +877,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
           <ActionButton secondary onClick={onClose} type="button">
             Annuler
           </ActionButton>
-          <ActionButton icon={Check} type="submit">
+          <ActionButton icon={Check} type="submit" disabled={imageBusy}>
             Enregistrer
           </ActionButton>
         </div>

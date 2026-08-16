@@ -340,6 +340,15 @@ class handler(BaseHTTPRequestHandler):
             self._reply(200, storefront_service.catalog(lang))
             return
 
+        if path == "/api/storefront/product-image":
+            try:
+                offer_id = int(parse_qs(url.query).get("offer_id", [0])[0])
+                body, content_type = storefront_service.product_image(offer_id)
+                self._reply_bytes(200, body, content_type)
+            except (TypeError, ValueError, storefront_service.StorefrontError) as exc:
+                self._reply(404, {"ok": False, "error": str(exc)})
+            return
+
         if path == "/api/storefront/order":
             params = parse_qs(url.query)
             try:
@@ -968,7 +977,7 @@ class handler(BaseHTTPRequestHandler):
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
-            if size > 500000:
+            if size > 2_000_000:
                 raise ValueError("Request too large")
             form = {k: v[0] for k, v in parse_qs(self.rfile.read(size).decode(), keep_blank_values=True).items()}
             action = form.get("action")
@@ -1008,6 +1017,10 @@ class handler(BaseHTTPRequestHandler):
                 db.audit_event("service.archived", details={"service_id": sid, "name": service.get("name", "")})
 
             elif action == "add_offer":
+                if form.get("site_image_data"):
+                    storefront_service.validate_product_image(
+                        form["site_image_data"], form.get("site_image_type", ""),
+                    )
                 service_id_raw = form.get("service_id", "").strip()
                 if service_id_raw:
                     sid = int(service_id_raw)
@@ -1057,8 +1070,19 @@ class handler(BaseHTTPRequestHandler):
                         oid, inventory_service.parse_bulk_inventory(initial_inventory_text),
                     )
                 db.audit_event("offer.created", details={"offer_id": oid, "name": name})
+                if form.get("site_image_data"):
+                    storefront_service.save_product_image(
+                        oid,
+                        form["site_image_data"],
+                        form.get("site_image_type", ""),
+                        admin_id=ADMIN_ID,
+                    )
 
             elif action == "update_offer":
+                if form.get("site_image_data"):
+                    storefront_service.validate_product_image(
+                        form["site_image_data"], form.get("site_image_type", ""),
+                    )
                 oid = int(form["offer_id"])
                 name = form["name"].strip()[:120]
                 price = None if form.get("price", "") == "" else float(form["price"])
@@ -1089,6 +1113,13 @@ class handler(BaseHTTPRequestHandler):
                     site_featured=form.get("site_featured", "") == "on",
                 )
                 db.audit_event("offer.updated", details={"offer_id": oid, "name": name})
+                if form.get("site_image_data"):
+                    storefront_service.save_product_image(
+                        oid,
+                        form["site_image_data"],
+                        form.get("site_image_type", ""),
+                        admin_id=ADMIN_ID,
+                    )
 
             elif action == "toggle_offer":
                 oid = int(form["offer_id"])

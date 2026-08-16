@@ -88,6 +88,37 @@ def test_catalog_uses_site_visual_content_and_cleans_telegram_markup(mock_mongod
     assert arabic["badge"] == "الأكثر طلباً"
 
 
+def test_admin_can_upload_a_storefront_product_image(mock_mongodb):
+    offer_id = _product()
+    raw = b"RIFF" + (20).to_bytes(4, "little") + b"WEBP" + b"VP8 " + b"image-data"
+
+    image_url = storefront_service.save_product_image(
+        offer_id,
+        base64.b64encode(raw).decode(),
+        "image/webp",
+        admin_id=999,
+    )
+
+    assert image_url.startswith(f"/api/storefront/product-image?offer_id={offer_id}&v=")
+    product = storefront_service.catalog("fr")["services"][0]["products"][0]
+    assert product["image_url"] == image_url
+    stored, mime_type = storefront_service.product_image(offer_id)
+    assert stored == raw
+    assert mime_type == "image/webp"
+
+
+def test_product_image_upload_rejects_invalid_content(mock_mongodb):
+    offer_id = _product()
+
+    with pytest.raises(storefront_service.StorefrontError, match="contenu"):
+        storefront_service.save_product_image(
+            offer_id,
+            base64.b64encode(b"not-a-png").decode(),
+            "image/png",
+            admin_id=999,
+        )
+
+
 def test_storefront_order_requires_tunisian_phone_and_encrypts_receipt(mock_mongodb):
     offer_id = _product()
     payload = _payload(offer_id)
