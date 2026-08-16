@@ -307,6 +307,23 @@ def test_admin_catalog_button_uses_premium_emoji(monkeypatch):
     assert button.icon_custom_emoji_id == "admin-premium-id"
 
 
+def test_admin_service_ignores_unicode_stored_as_custom_emoji_id(monkeypatch):
+    monkeypatch.setattr(admin.db, "get_service", lambda _service_id: {
+        "id": 52, "name": "Cursor", "active": 1,
+    })
+    monkeypatch.setattr(admin.db, "list_offers", lambda *_args, **_kwargs: [{
+        "id": 84,
+        "name": "Cursor Pro 12m",
+        "active": 1,
+        "custom_emoji_id": "📦",
+    }])
+
+    button = admin.service_admin_keyboard(52).inline_keyboard[0][0]
+
+    assert button.callback_data == "adm_off:84"
+    assert button.icon_custom_emoji_id is None
+
+
 def test_admin_cannot_manually_modify_offer_stock(monkeypatch):
     monkeypatch.setattr(admin.db, "get_offer", lambda _offer_id: {
         "id": 4, "service_id": 1, "active": 1,
@@ -483,6 +500,24 @@ def test_flat_catalog_keyboard_contains_only_offer_callbacks(monkeypatch):
     ]
 
     assert len(product_callbacks) >= 1
+
+
+def test_flat_catalog_ignores_unicode_stored_as_custom_emoji_id(monkeypatch):
+    monkeypatch.setattr(kb.db, "get_text_override_icon", lambda *_args: "")
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [{
+        "id": 84,
+        "service_id": 52,
+        "service_name": "Cursor",
+        "name": "Cursor Pro 12m",
+        "price": 60.0,
+        "stock": 14,
+        "custom_emoji_id": "📦",
+    }])
+
+    button = kb.catalog_offers_keyboard("en").inline_keyboard[0][0]
+
+    assert button.callback_data == "off:84"
+    assert button.icon_custom_emoji_id is None
 
 
 def test_premium_service_icon_replaces_unicode_emoji_in_catalog_button(monkeypatch):

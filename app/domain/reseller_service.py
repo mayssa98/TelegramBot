@@ -702,7 +702,10 @@ def save_catalog_product(
             auto_delivery=not bool(product.get("manual_delivery")),
             low_stock_threshold=low_stock_threshold,
             delivery_delay=delivery_delay,
-            custom_emoji_id=service_emoji,
+            # ``service_emoji`` is a regular Unicode emoji.  Telegram's
+            # custom_emoji_id field only accepts a Premium emoji identifier.
+            # Preserve any separately configured Premium icon on updates.
+            custom_emoji_id=None,
             unlimited_stock=False,
             manual_stock=False,
             supplier_provider=provider,
@@ -726,7 +729,7 @@ def save_catalog_product(
             auto_delivery=not bool(product.get("manual_delivery")),
             low_stock_threshold=low_stock_threshold,
             delivery_delay=delivery_delay,
-            custom_emoji_id=service_emoji,
+            custom_emoji_id="",
             unlimited_stock=False,
             manual_stock=False,
             supplier_provider=provider,

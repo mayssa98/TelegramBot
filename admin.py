@@ -5,6 +5,13 @@ import database as db
 from config import ADMIN_ID, CURRENCY
 from i18n import TRANSLATIONS
 
+
+def _safe_custom_emoji_id(value):
+    """Ignore regular Unicode emoji accidentally stored as Premium icon IDs."""
+    normalized = str(value or "").strip()
+    return normalized if normalized and normalized.isascii() else None
+
+
 TEXT_CATEGORIES = [
     ("menus", "🏠 Menus et boutons"),
     ("payments", "💳 Paiements et Binance Pay"),
@@ -232,7 +239,7 @@ def catalog_admin_keyboard():
     rows = [[InlineKeyboardButton(
         s.get("name") or f"Service #{s['id']}",
         callback_data=f"adm_svc:{s['id']}",
-        icon_custom_emoji_id=s.get("custom_emoji_id") or None,
+        icon_custom_emoji_id=_safe_custom_emoji_id(s.get("custom_emoji_id")),
         style="success" if s["active"] else "danger",
     )] for s in db.list_services(active_only=False)]
     rows.append([InlineKeyboardButton("➕ Ajouter un service", callback_data="adm_addsvc")])
@@ -245,7 +252,7 @@ def service_admin_keyboard(service_id):
     rows = [[InlineKeyboardButton(
         o.get("name") or f"Offre #{o['id']}",
         callback_data=f"adm_off:{o['id']}",
-        icon_custom_emoji_id=o.get("custom_emoji_id") or None,
+        icon_custom_emoji_id=_safe_custom_emoji_id(o.get("custom_emoji_id")),
         style="success" if o["active"] else "danger",
     )] for o in db.list_offers(service_id, active_only=False)]
     rows.extend([

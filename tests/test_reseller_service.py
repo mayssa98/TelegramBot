@@ -160,6 +160,7 @@ def test_publish_product_creates_native_bot_service_and_offer(monkeypatch, mock_
     assert offer["price"] == 4.5
     assert offer["active"] == 1
     assert offer["sort_order"] == 7
+    assert offer["custom_emoji_id"] == ""
     assert saved["warranty"] == "Remplacement sous 24 heures"
 
 

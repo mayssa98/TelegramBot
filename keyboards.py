@@ -5,6 +5,17 @@ import re
 from telegram import InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 def InlineKeyboardButton(*args, style=None, **kwargs):
+    # Telegram expects ``icon_custom_emoji_id`` to be an ASCII identifier,
+    # not a regular Unicode emoji such as "📦".  A malformed icon makes
+    # Telegram reject the entire keyboard, so discard it defensively.
+    icon_custom_emoji_id = kwargs.get("icon_custom_emoji_id")
+    if icon_custom_emoji_id is not None:
+        normalized_icon_id = str(icon_custom_emoji_id).strip()
+        kwargs["icon_custom_emoji_id"] = (
+            normalized_icon_id
+            if normalized_icon_id and normalized_icon_id.isascii()
+            else None
+        )
     if style in {"primary", "success", "danger"}:
         api_kwargs = kwargs.pop("api_kwargs", None) or {}
         api_kwargs["style"] = style
