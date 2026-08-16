@@ -374,7 +374,7 @@ def test_admin_panel_has_custom_announcement_button():
     assert "adm_broadcast_message" in callbacks
 
 
-def test_home_menu_offers_optional_channel_and_group_links(mock_mongodb):
+def test_home_menu_hides_channel_link_but_keeps_optional_group(mock_mongodb):
     keyboard = kb.home_keyboard("en", 42)
     urls = {
         button.url
@@ -383,8 +383,11 @@ def test_home_menu_offers_optional_channel_and_group_links(mock_mongodb):
         if button.url
     }
 
-    assert "https://t.me/blackmarketBotChannel" in urls
+    assert "https://t.me/blackmarketBotChannel" not in urls
     assert "https://t.me/Blackmarketgrp" in urls
+
+    required_keyboard = kb.channel_join_keyboard("en")
+    assert required_keyboard.inline_keyboard[0][0].url == "https://t.me/blackmarketBotChannel"
 
 
 def test_admin_panel_has_persistent_maintenance_toggle(mock_mongodb):

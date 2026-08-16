@@ -226,10 +226,6 @@ def home_keyboard(lang, user_id):
         ],
         [
             translated_button(
-                lang, "btn_join_channel",
-                url=f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}",
-            ),
-            translated_button(
                 lang, "btn_join_group",
                 url=f"https://t.me/{REQUIRED_GROUP.lstrip('@')}",
             ),
