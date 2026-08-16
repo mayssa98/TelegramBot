@@ -1375,10 +1375,48 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=kb.offers_keyboard(lang, sid),
         )
         return
+    if data.startswith("preorder:"):
+        oid = int(data.split(":")[1])
+        off = db.get_offer(oid)
+        if not off:
+            await q.message.reply_text(premium_customer_text(lang, "out_of_stock"), parse_mode=ParseMode.HTML)
+            return
+        await q.edit_message_text(
+            t(lang, "preorder_prompt", offer=off["name"]),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.preorder_confirm_keyboard(lang, oid, 1),
+        )
+        return
+
+    if data.startswith("confirm_preorder:"):
+        parts = data.split(":")
+        oid = int(parts[1])
+        qty = int(parts[2]) if len(parts) > 2 else 1
+        off = db.get_offer(oid)
+        if not off:
+            await q.message.reply_text(premium_customer_text(lang, "out_of_stock"), parse_mode=ParseMode.HTML)
+            return
+        db.audit_event("offer.preordered", details={"user_id": uid, "offer_id": oid, "qty": qty, "offer_name": off["name"]})
+        user_name = q.from_user.full_name or "Client"
+        username = f"@{q.from_user.username}" if q.from_user.username else str(uid)
+        user_info = f"{user_name} ({username})"
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=t(lang, "preorder_admin_notification", user=user_info, user_id=uid, offer=off["name"], qty=qty),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        await q.edit_message_text(
+            t(lang, "preorder_success", offer=off["name"], qty=qty),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.home_keyboard(lang, uid),
+        )
+        return
+
     if data.startswith("off:"):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
-        if not off or not db.offer_has_stock(off):
+        if not off:
             await q.message.reply_text(
                 premium_customer_text(lang, "out_of_stock"),
                 parse_mode=ParseMode.HTML,

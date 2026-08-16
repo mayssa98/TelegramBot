@@ -15,7 +15,7 @@ BUTTON_TEXT_KEYS = {
     "topup_verify_txid", "topup_bsc", "topup_polygon",
     "topup_home_button",
     "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
-    "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
+    "onboarding_start", "btn_back_services", "btn_buy", "btn_preorder", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
     "btn_cancel", "btn_continue_payment", "btn_new_order",
@@ -414,9 +414,18 @@ def offer_detail_keyboard(lang, offer):
     buttons = []
     if offer["price"] is not None and db.offer_has_stock(offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
+    elif offer.get("price") is not None:
+        buttons.append([translated_button(lang, "btn_preorder", callback_data=f"preorder:{offer['id']}", style="warning")])
     back_data = f"svc:{offer['service_id']}" if offer.get("service_id") else "catalog"
     buttons.append([translated_button(lang, "btn_back", callback_data=back_data)])
     return InlineKeyboardMarkup(buttons)
+
+
+def preorder_confirm_keyboard(lang, offer_id, qty=1):
+    return InlineKeyboardMarkup([
+        [translated_button(lang, "btn_preorder", callback_data=f"confirm_preorder:{offer_id}:{qty}", style="success")],
+        [translated_button(lang, "btn_cancel_short", callback_data=f"off:{offer_id}")],
+    ])
 
 
 def quantity_keyboard(lang, offer, page=0, page_size=20):
