@@ -102,8 +102,7 @@ def clean_button_name(value):
         r"^[\s\W\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b00-\u2bff\u2000-\u206f]+|"
         r"[\s\W\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b00-\u2bff\u2000-\u206f]+$"
     )
-    cleaned = pattern.sub("", text).strip()
-    return cleaned if cleaned else text
+    return pattern.sub("", text).strip()
 
 
 def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
