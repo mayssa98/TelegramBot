@@ -9,7 +9,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 import database as db
-from payment_verifier import verify_incoming_transfer
+from payment_verifier import verify_bybit_incoming_transfer, verify_incoming_transfer
 
 
 def balance_cents(user_id: int) -> int:
@@ -17,14 +17,22 @@ def balance_cents(user_id: int) -> int:
     return max(0, int(wallet.get("balance_cents", 0)))
 
 
-def claim_transfer(user_id: int, txid: str) -> dict[str, Any]:
+def claim_transfer(user_id: int, txid: str, provider: str = "binance") -> dict[str, Any]:
     txid = (txid or "").strip()
+    provider = str(provider or "binance").strip().lower()
+    if provider not in {"binance", "bybit"}:
+        return {"status": "failed", "code": "invalid_provider", "message": "Fournisseur invalide."}
     if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
         return {"status": "failed", "code": "invalid_format", "message": "TXID invalide."}
     conn = db.get_conn()
     if conn.wallet_topups.find_one({"txid": txid}):
         return {"status": "failed", "code": "already_used", "message": "Ce TXID a déjà été crédité."}
-    verification = verify_incoming_transfer(txid, minimum_amount=1)
+    verifier = (
+        verify_bybit_incoming_transfer
+        if provider == "bybit"
+        else verify_incoming_transfer
+    )
+    verification = verifier(txid, minimum_amount=1)
     if verification["status"] != "confirmed":
         return {
             "status": verification["status"],
@@ -38,6 +46,7 @@ def claim_transfer(user_id: int, txid: str) -> dict[str, Any]:
             "user_id": user_id,
             "amount_cents": amount_cents,
             "currency": verification["currency"],
+            "provider": provider,
             "created_at": int(time.time()),
         })
     except DuplicateKeyError:
@@ -47,7 +56,7 @@ def claim_transfer(user_id: int, txid: str) -> dict[str, Any]:
         {"$inc": {"balance_cents": amount_cents}},
         upsert=True,
     )
-    db.audit_event("wallet.topup_confirmed", actor_id=user_id, details={"txid": txid, "amount_cents": amount_cents})
+    db.audit_event("wallet.topup_confirmed", actor_id=user_id, details={"txid": txid, "amount_cents": amount_cents, "provider": provider})
     return {"status": "confirmed", "amount": amount_cents / 100, "balance": balance_cents(user_id) / 100}
 
 

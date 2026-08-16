@@ -72,11 +72,12 @@ TRANSLATIONS = {
     "menu_account": {"fr": "👤 Mon compte", "en": "👤 My account", "ar": "👤 حسابي"},
     "menu_support": {"fr": "🛎️ Support", "en": "🛎️ Support", "ar": "🛎️ Support"},
     "topup_message": {
-        "fr": "✍️ *Envoyez le montant souhaité — minimum 1 USDT*\nLe même montant sera ajouté à votre portefeuille.\n\n🟡 *Rechargement Binance Pay*\n\nEnvoyez le paiement à notre identifiant Binance Pay :\n`{binance_id}`\n\nAprès le transfert, appuyez sur *Vérifier avec TXID* et envoyez l'identifiant de transaction ou l'Order ID affiché sur le reçu Binance.",
-        "en": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay Top Up*\n\nSend the payment to our Binance Pay ID:\n`{binance_id}`\n\nAfter transferring, tap *Verify with TXID* and send the Transaction ID or Order ID shown on your Binance receipt.",
-        "ar": "✍️ *أرسل أي مبلغ — الحد الأدنى 1 USDT*\nسيتم إضافة نفس المبلغ إلى محفظتك.\n\n🟡 *شحن Binance Pay*\n\nأرسل الدفع إلى معرف Binance Pay:\n`{binance_id}`\n\nبعد التحويل، اضغط *التحقق باستخدام TXID* وأرسل رقم المعاملة أو Order ID من إيصال Binance.",
+        "fr": "✍️ *Envoyez le montant souhaité — minimum 1 USDT*\nLe même montant sera ajouté à votre portefeuille.\n\n🟡 *Binance Pay*\nID : `{binance_id}`\n\n🟠 *Bybit Pay*\nUID : `{bybit_uid}`\n\nAprès le transfert, choisissez ci-dessous le fournisseur utilisé et envoyez le TXID affiché sur votre reçu.",
+        "en": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay*\nID: `{binance_id}`\n\n🟠 *Bybit Pay*\nUID: `{bybit_uid}`\n\nAfter transferring, choose the provider used below and send the TXID shown on your receipt.",
+        "ar": "✍️ *أرسل أي مبلغ — الحد الأدنى 1 USDT*\nسيتم إضافة نفس المبلغ إلى محفظتك.\n\n🟡 *Binance Pay*\nID: `{binance_id}`\n\n🟠 *Bybit Pay*\nUID: `{bybit_uid}`\n\nبعد التحويل، اختر مزود الدفع المستخدم وأرسل TXID الظاهر في الإيصال.",
     },
-    "topup_verify_txid": {"fr": "🧾 Verify with TXID", "en": "🧾 Verify with TXID", "ar": "🧾 Verify with TXID"},
+    "topup_verify_txid": {"fr": "🟡 Vérifier Binance TXID", "en": "🟡 Verify Binance TXID", "ar": "🟡 Verify Binance TXID"},
+    "topup_verify_bybit": {"fr": "🟠 Vérifier Bybit TXID", "en": "🟠 Verify Bybit TXID", "ar": "🟠 Verify Bybit TXID"},
     "topup_bsc": {
         "fr": "🟨 Recharger via USDT BSC",
         "en": "🟨 Top up via USDT BSC",
@@ -114,9 +115,14 @@ TRANSLATIONS = {
     },
     "topup_home_button": {"fr": "🏠 Home", "en": "🏠 Home", "ar": "🏠 Home"},
     "topup_ask_txid": {
-        "fr": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
-        "en": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
-        "ar": "🔎 Send the transfer *TXID* now. It will be verified before crediting.",
+        "fr": "🔎 Envoyez maintenant le *TXID Binance*. Il sera vérifié avant le crédit.",
+        "en": "🔎 Send the *Binance TXID* now. It will be verified before crediting.",
+        "ar": "🔎 Send the *Binance TXID* now. It will be verified before crediting.",
+    },
+    "topup_ask_bybit_txid": {
+        "fr": "🔎 Envoyez maintenant le *TXID Bybit*. Il sera vérifié avant le crédit.",
+        "en": "🔎 Send the *Bybit TXID* now. It will be verified before crediting.",
+        "ar": "🔎 Send the *Bybit TXID* now. It will be verified before crediting.",
     },
     "topup_success": {
         "fr": "✅ *Top up confirmed*\n\nAmount added: *{amount} USDT*\nNew balance: *{balance} USDT*",

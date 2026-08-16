@@ -261,6 +261,62 @@ def verify_bybit_payment(txid, amount, currency=None, created_at=None):
         }
 
 
+def verify_bybit_incoming_transfer(txid, minimum_amount=1, created_at=None):
+    """Verify a Bybit transfer and return its actual amount for wallet credit."""
+    del created_at
+    txid = (txid or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,128}", txid):
+        return {
+            "status": "failed", "code": "invalid_format",
+            "reason": "Format de transaction Bybit invalide",
+        }
+    if not BYBIT_API_KEY or not BYBIT_API_SECRET:
+        return {
+            "status": "failed", "code": "not_configured",
+            "reason": "Vérification Bybit non configurée",
+        }
+    try:
+        minimum = Decimal(str(minimum_amount))
+        for transaction in _fetch_bybit_internal_deposits(txid):
+            if str(transaction.get("txID") or "").strip() != txid:
+                continue
+            status = int(transaction.get("status") or 0)
+            if status != 2:
+                return {
+                    "status": "failed",
+                    "code": "payment_pending" if status == 1 else "not_confirmed",
+                    "reason": "Le transfert Bybit n'est pas encore confirmé",
+                }
+            amount = Decimal(str(transaction.get("amount", "0")))
+            asset = str(transaction.get("coin", "")).upper()
+            if asset != PAY_CURRENCY:
+                return {
+                    "status": "failed", "code": "wrong_currency",
+                    "reason": f"Devise reçue: {asset}",
+                }
+            if amount < minimum:
+                return {
+                    "status": "failed", "code": "below_minimum",
+                    "reason": f"Montant minimum: {minimum} {PAY_CURRENCY}",
+                }
+            return {
+                "status": "confirmed",
+                "code": "confirmed",
+                "amount": float(amount),
+                "currency": asset,
+                "reason": "Transfert Bybit entrant confirmé",
+            }
+        return {
+            "status": "failed", "code": "not_found",
+            "reason": "Transaction absente de l'historique Bybit",
+        }
+    except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError, InvalidOperation) as exc:
+        return {
+            "status": "failed", "code": "temporary_error",
+            "reason": f"API Bybit indisponible: {exc}",
+        }
+
+
 def verify_incoming_transfer(txid, minimum_amount=1, created_at=None):
     """Verify an incoming TXID and return its real amount for wallet top-ups."""
     txid = (txid or "").strip()

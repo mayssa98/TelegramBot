@@ -150,3 +150,23 @@ def test_bybit_payment_rejects_wrong_amount(monkeypatch):
 
     assert result["status"] == "failed"
     assert result["code"] == "wrong_amount"
+
+
+def test_bybit_incoming_transfer_returns_actual_topup_amount(monkeypatch):
+    monkeypatch.setattr(payment_verifier, "BYBIT_API_KEY", "key")
+    monkeypatch.setattr(payment_verifier, "BYBIT_API_SECRET", "secret")
+    monkeypatch.setattr(
+        payment_verifier,
+        "_fetch_bybit_internal_deposits",
+        lambda txid: [{
+            "txID": txid, "amount": "7.25", "coin": "USDT", "status": 2,
+        }],
+    )
+
+    result = payment_verifier.verify_bybit_incoming_transfer(
+        "BYBIT_TOPUP_123", minimum_amount=1,
+    )
+
+    assert result["status"] == "confirmed"
+    assert result["amount"] == 7.25
+    assert result["currency"] == "USDT"

@@ -1148,25 +1148,28 @@ def test_catalog_request_is_saved_and_sent_to_support_channel(monkeypatch, mock_
     assert "Request sent" in message.reply_text.await_args.args[0]
     message.delete.assert_awaited_once()
 
-def test_topup_keyboard_offers_bsc_and_polygon(mock_mongodb):
+def test_topup_keyboard_offers_binance_bybit_bsc_and_polygon(mock_mongodb):
     callbacks = [
         button.callback_data
         for row in kb.topup_keyboard("en").inline_keyboard
         for button in row
     ]
 
-    assert callbacks == ["topup_txid", "topup_bsc", "topup_polygon", "home"]
+    assert callbacks == ["topup_txid", "topup_bybit", "topup_bsc", "topup_polygon", "home"]
 
 
 def test_topup_instructions_are_txid_only(mock_mongodb):
-    message = t("en", "topup_message", binance_id="123")
+    message = t("en", "topup_message", binance_id="123", bybit_uid="456")
 
     assert "Memo" not in message
-    assert "Verify with TXID" in message
+    assert "Binance Pay" in message
+    assert "Bybit Pay" in message
+    assert "`456`" in message
 
 def test_every_topup_button_supports_exact_premium_emoji(mock_mongodb):
     overrides = {
-        "topup_verify_txid": ("Verify with TXID", "premium-topup-txid"),
+        "topup_verify_txid": ("Verify Binance TXID", "premium-topup-txid"),
+        "topup_verify_bybit": ("Verify Bybit TXID", "premium-topup-bybit"),
         "topup_home_button": ("Home", "premium-topup-home"),
     }
     for key, (label, emoji_id) in overrides.items():
@@ -1181,8 +1184,9 @@ def test_every_topup_button_supports_exact_premium_emoji(mock_mongodb):
     }
 
     assert buttons["topup_txid"].icon_custom_emoji_id == "premium-topup-txid"
+    assert buttons["topup_bybit"].icon_custom_emoji_id == "premium-topup-bybit"
     assert buttons["home"].icon_custom_emoji_id == "premium-topup-home"
-    assert buttons["topup_txid"].text == "Verify with TXID"
+    assert buttons["topup_txid"].text == "Verify Binance TXID"
 
 
 def test_empty_wallet_click_always_returns_a_visible_message(monkeypatch):

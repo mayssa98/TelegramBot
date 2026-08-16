@@ -158,7 +158,8 @@ def _interaction_button_name(query):
         "orders": "My orders", "account": "My account", "affiliate": "Affiliate program",
         "affiliate_copy": "Copy referral link", "support": "Support", "language": "Language",
         "topup": "Top up balance",
-        "topup_txid": "Verify top-up with TXID", "topup_bsc": "Top up with BSC",
+        "topup_txid": "Verify Binance top-up", "topup_bybit": "Verify Bybit top-up",
+        "topup_bsc": "Top up with BSC",
         "topup_polygon": "Top up with Polygon", "verify_channel_join": "Verify membership",
         "paid": "Verify payment with TXID",
         "paid_chain": "Submit blockchain TXID", "continue_pay": "Continue payment",
@@ -1062,7 +1063,9 @@ async def show_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     lang = lang_of(uid)
     await update.effective_message.reply_text(
-        premium_customer_text(lang, "topup_message", binance_id=BINANCE_PAY_ID),
+        premium_customer_text(
+            lang, "topup_message", binance_id=BINANCE_PAY_ID, bybit_uid=BYBIT_UID,
+        ),
         parse_mode=ParseMode.HTML,
         reply_markup=kb.topup_keyboard(lang),
     )
@@ -1313,12 +1316,16 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN,
         )
         return
-    if data in {"topup_txid", "topup_claim"}:
+    if data in {"topup_txid", "topup_claim", "topup_bybit"}:
         # Older messages used topup_claim for the removed automatic scan.
         # Keep them useful by routing directly to TXID entry.
-        PENDING[uid] = ("await_topup_txid", 0)
+        provider = "bybit" if data == "topup_bybit" else "binance"
+        PENDING[uid] = ("await_topup_txid", provider)
         await q.message.reply_text(
-            premium_customer_text(lang, "topup_ask_txid"),
+            premium_customer_text(
+                lang,
+                "topup_ask_bybit_txid" if provider == "bybit" else "topup_ask_txid",
+            ),
             parse_mode=ParseMode.HTML,
         )
         return
@@ -2139,7 +2146,10 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "await_topup_txid":
-        result = await asyncio.to_thread(wallet_service.claim_transfer, uid, text)
+        provider = "bybit" if ref == "bybit" else "binance"
+        result = await asyncio.to_thread(
+            wallet_service.claim_transfer, uid, text, provider,
+        )
         if result["status"] == "confirmed":
             PENDING.pop(uid, None)
             await update.message.reply_text(
