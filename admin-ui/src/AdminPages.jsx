@@ -2208,6 +2208,117 @@ function CustomersPage({ data, onAction }) {
   );
 }
 
+function SiteCustomersPage({ onAction }) {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [notes, setNotes] = useState("");
+  const [result, loading] = useRemoteList("/admin/api/storefront-customers", {
+    search,
+    status,
+    page,
+    per_page: 25,
+    refresh: refreshKey,
+  });
+  const open = (customer) => {
+    setSelected(customer);
+    setNotes(customer.notes || "");
+  };
+  const save = async (nextStatus = selected?.status || "active") => {
+    if (!selected) return;
+    if (await onAction({
+      action: "update_storefront_customer",
+      phone: selected.phone,
+      status: nextStatus,
+      notes,
+    })) {
+      setSelected(null);
+      setRefreshKey((value) => value + 1);
+    }
+  };
+  const activeCount = result.items.filter((customer) => customer.status !== "blocked").length;
+  const blockedCount = result.items.filter((customer) => customer.status === "blocked").length;
+  const pageRevenue = result.items.reduce((total, customer) => total + Number(customer.total_spent || 0), 0);
+  return (
+    <>
+      <PageHeader
+        eyebrow="CRM · Trust Market TN"
+        title="Clients du site"
+        description="Consultez les achats, ajoutez des notes et contrôlez l’accès aux commandes du site."
+        actions={<a className="action-button secondary" href="/fr" target="_blank" rel="noreferrer"><Globe2 size={16} />Voir la boutique</a>}
+      />
+      <section className="order-kpis" aria-label="Statistiques clients du site">
+        <article><span className="order-kpi-icon violet"><Users size={19} /></span><div><small>Clients trouvés</small><strong>{result.total || 0}</strong><em>Profils du site TN</em></div></article>
+        <article><span className="order-kpi-icon green"><CheckCircle2 size={19} /></span><div><small>Actifs sur cette page</small><strong>{activeCount}</strong><em>Peuvent commander</em></div></article>
+        <article><span className="order-kpi-icon amber"><Ban size={19} /></span><div><small>Bloqués sur cette page</small><strong>{blockedCount}</strong><em>Commande désactivée</em></div></article>
+        <article><span className="order-kpi-icon cyan"><CircleDollarSign size={19} /></span><div><small>Revenu affiché</small><strong>{money(pageRevenue, "TND")}</strong><em>Paiements validés</em></div></article>
+      </section>
+      <FilterBar
+        search={search}
+        setSearch={(value) => { setSearch(value); setPage(1); }}
+        placeholder="Nom, téléphone ou e-mail…"
+        resultCount={result.total}
+      >
+        <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} aria-label="Filtrer les clients du site">
+          <option value="all">Tous les clients</option>
+          <option value="active">Clients actifs</option>
+          <option value="blocked">Clients bloqués</option>
+        </select>
+      </FilterBar>
+      <section className="data-panel">
+        <div className="responsive-table">
+          <table>
+            <thead><tr><th>Client</th><th>Contact</th><th>Commandes</th><th>Validées</th><th>Dépensé</th><th>Dernière commande</th><th>Statut</th><th /></tr></thead>
+            <tbody>{result.items.map((customer) => (
+              <tr key={customer.phone} onClick={() => open(customer)}>
+                <td><strong>{customer.name || "Client du site"}</strong><small>{customer.email || "Sans e-mail"}</small></td>
+                <td><strong>{customer.phone}</strong></td>
+                <td>{customer.order_count || 0}</td>
+                <td>{customer.approved_order_count || 0}</td>
+                <td><strong>{money(customer.total_spent, "TND")}</strong></td>
+                <td>{date(customer.last_order_at)}</td>
+                <td><span className={`status ${customer.status === "blocked" ? "cancelled" : "delivered"}`}>{customer.status === "blocked" ? "Bloqué" : "Actif"}</span></td>
+                <td><button className="row-action" aria-label={`Gérer ${customer.name || customer.phone}`}><UserRound size={15} /></button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        {loading ? <div className="table-loading">Chargement des clients…</div> : !result.items.length && <Empty icon={Users} title="Aucun client trouvé" text="Les clients apparaissent dès leur première commande." />}
+        <Pagination value={result} onChange={setPage} />
+      </section>
+      {selected && (
+        <Modal title={selected.name || selected.phone} onClose={() => setSelected(null)} wide>
+          <div className="detail-grid">
+            <div><span>Téléphone</span><strong>{selected.phone}</strong></div>
+            <div><span>E-mail</span><strong>{selected.email || "—"}</strong></div>
+            <div><span>Commandes</span><strong>{selected.order_count || 0}</strong></div>
+            <div><span>Total dépensé</span><strong>{money(selected.total_spent, "TND")}</strong></div>
+          </div>
+          <Field label="Notes internes" wide>
+            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Préférences, suivi, incident de paiement…" rows="4" />
+          </Field>
+          <div className="dialog-actions wrap">
+            <a className="action-button secondary" href={`https://wa.me/${selected.phone.replace(/\D/g, "")}?text=${encodeURIComponent("Bonjour, Trust Market TN vous contacte concernant votre compte.")}`} target="_blank" rel="noreferrer"><Send size={16} />WhatsApp</a>
+            <ActionButton secondary icon={Check} onClick={() => save(selected.status)}>Enregistrer les notes</ActionButton>
+            <ActionButton danger={selected.status !== "blocked"} icon={selected.status === "blocked" ? CheckCircle2 : Ban} onClick={() => save(selected.status === "blocked" ? "active" : "blocked")}>{selected.status === "blocked" ? "Réactiver le client" : "Bloquer les commandes"}</ActionButton>
+          </div>
+          <section className="customer-orders">
+            <header><div><span className="eyebrow">Historique récent</span><h4>Commandes Trust Market TN</h4></div></header>
+            <div className="responsive-table">
+              <table>
+                <thead><tr><th>Commande</th><th>Produit</th><th>Montant</th><th>Statut</th><th>Date</th></tr></thead>
+                <tbody>{(selected.recent_orders || []).map((order) => <tr key={order.id}><td><strong>TN-{order.id}</strong></td><td>{order.offer_name}</td><td>{money(order.total, "TND")}</td><td><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></td><td>{date(order.created_at)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </section>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 function SiteOverviewPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2963,6 +3074,7 @@ export default function AdminPage({
   if (page === "api-products") return <ApiProductsPage {...props} />;
   if (page === "inventory") return <InventoryPage {...props} />;
   if (page === "customers") return <CustomersPage {...props} />;
+  if (page === "site-customers") return <SiteCustomersPage {...props} />;
   if (page === "tn-storefront") return <TunisiaStorefrontPage {...props} />;
   if (page === "support") return <SupportPage {...props} />;
   if (page === "interactions") return <InteractionsPage {...props} />;

@@ -484,7 +484,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
-        admin_tabs = {"overview", "site-overview", "orders", "catalog", "api-products", "inventory", "customers", "tn-storefront", "support", "interactions", "activity", "settings"}
+        admin_tabs = {"overview", "site-overview", "orders", "catalog", "api-products", "inventory", "customers", "site-customers", "tn-storefront", "support", "interactions", "activity", "settings"}
         react_admin_route = (
             path in {"/admin", "/admin-v2"}
             or path.startswith("/admin-v2/")
@@ -679,6 +679,23 @@ class handler(BaseHTTPRequestHandler):
                 return
             status = parse_qs(url.query).get("status", ["manual_review"])[0]
             self._reply(200, {"ok": True, "orders": storefront_service.list_admin_orders(status)})
+            return
+
+        elif path == "/admin/api/storefront-customers":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            query = parse_qs(url.query)
+            try:
+                result = storefront_service.list_admin_customers(
+                    search=query.get("search", [""])[0],
+                    status=query.get("status", ["all"])[0],
+                    page=int(query.get("page", [1])[0]),
+                    per_page=int(query.get("per_page", [25])[0]),
+                )
+                self._reply(200, result)
+            except (TypeError, ValueError) as exc:
+                self._reply(400, {"ok": False, "error": str(exc)})
             return
 
         elif path == "/admin/api/storefront-proof":
@@ -1194,6 +1211,20 @@ class handler(BaseHTTPRequestHandler):
                         if approved
                         else "Paiement refusé."
                     ),
+                })
+                return
+
+            elif action == "update_storefront_customer":
+                result = storefront_service.update_admin_customer(
+                    form.get("phone", ""),
+                    status=form.get("status", "active"),
+                    notes=form.get("notes", ""),
+                    admin_id=ADMIN_ID,
+                )
+                self._reply(200, {
+                    "ok": True,
+                    **result,
+                    "message": "Fiche client mise à jour.",
                 })
                 return
 

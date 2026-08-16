@@ -43,6 +43,7 @@ const BOT_NAV_ITEMS = [
 const SITE_NAV_ITEMS = [
   { id: "site-overview", label: "Vue d’ensemble", icon: LayoutDashboard },
   { id: "tn-storefront", label: "Commandes", icon: ClipboardList },
+  { id: "site-customers", label: "Clients du site", icon: Users },
   { id: "catalog", label: "Produits du site", icon: ShoppingBag },
   { id: "inventory", label: "Stock partagé", icon: Boxes },
 ];

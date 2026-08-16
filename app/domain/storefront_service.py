@@ -247,6 +247,11 @@ def create_order(payload: dict[str, Any]) -> dict[str, Any]:
     if len(name) < 2:
         raise StorefrontError("Le nom du client est obligatoire.")
     phone = _normalize_tunisian_phone(payload.get("phone"))
+    existing_customer = db.get_conn().storefront_customers.find_one({"phone": phone})
+    if existing_customer and existing_customer.get("status") == "blocked":
+        raise StorefrontError(
+            "Ce compte ne peut pas passer de commande. Contactez le support WhatsApp."
+        )
     email = str(payload.get("email") or "").strip().lower()[:200]
     if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         raise StorefrontError("Adresse e-mail invalide.")
@@ -305,6 +310,24 @@ def create_order(payload: dict[str, Any]) -> dict[str, Any]:
         "updated_at": now,
     }
     conn.site_orders.insert_one(order)
+    conn.storefront_customers.update_one(
+        {"phone": phone},
+        {
+            "$set": {
+                "name": name,
+                "email": email,
+                "last_order_at": now,
+                "updated_at": now,
+            },
+            "$setOnInsert": {
+                "created_at": now,
+                "status": "active",
+                "notes": "",
+            },
+            "$inc": {"order_count": 1},
+        },
+        upsert=True,
+    )
     conn.storefront_payment_proofs.insert_one({
         "order_id": order_id,
         "encrypted_payload": db._fernet().encrypt(raw_proof).decode(),
@@ -379,6 +402,139 @@ def list_admin_orders(status: str = "manual_review") -> list[dict[str, Any]]:
         )
         result.append(item)
     return result
+
+
+def list_admin_customers(
+    *,
+    search: str = "",
+    status: str = "all",
+    page: int = 1,
+    per_page: int = 25,
+) -> dict[str, Any]:
+    """Build the site CRM from customer profiles and historical site orders."""
+    conn = db.get_conn()
+    customers: dict[str, dict[str, Any]] = {}
+    paid_statuses = {"payment_confirmed", "paid", "delivered", "stock_issue"}
+
+    for profile in conn.storefront_customers.find({}):
+        phone = str(profile.get("phone") or "")
+        if not phone:
+            continue
+        customers[phone] = {
+            "phone": phone,
+            "name": profile.get("name", ""),
+            "email": profile.get("email", ""),
+            "status": profile.get("status", "active"),
+            "notes": profile.get("notes", ""),
+            "created_at": profile.get("created_at"),
+            "updated_at": profile.get("updated_at"),
+            "last_order_at": profile.get("last_order_at"),
+            "order_count": 0,
+            "approved_order_count": 0,
+            "total_spent": 0.0,
+            "recent_orders": [],
+        }
+
+    for order in conn.site_orders.find({}).sort("created_at", -1).limit(5000):
+        phone = str(order.get("phone") or "")
+        if not phone:
+            continue
+        customer = customers.setdefault(phone, {
+            "phone": phone,
+            "name": order.get("customer_name", ""),
+            "email": order.get("email", ""),
+            "status": "active",
+            "notes": "",
+            "created_at": order.get("created_at"),
+            "updated_at": order.get("updated_at"),
+            "last_order_at": order.get("created_at"),
+            "order_count": 0,
+            "approved_order_count": 0,
+            "total_spent": 0.0,
+            "recent_orders": [],
+        })
+        if not customer.get("name"):
+            customer["name"] = order.get("customer_name", "")
+        if not customer.get("email"):
+            customer["email"] = order.get("email", "")
+        customer["order_count"] += 1
+        created_at = int(order.get("created_at") or 0)
+        customer["last_order_at"] = max(int(customer.get("last_order_at") or 0), created_at)
+        if order.get("status") in paid_statuses:
+            customer["approved_order_count"] += 1
+            customer["total_spent"] += int(order.get("total_millimes") or 0) / 1000
+        if len(customer["recent_orders"]) < 10:
+            customer["recent_orders"].append({
+                "id": order.get("id"),
+                "offer_name": order.get("offer_name", ""),
+                "total": int(order.get("total_millimes") or 0) / 1000,
+                "status": order.get("status", "manual_review"),
+                "created_at": order.get("created_at"),
+            })
+
+    search_value = str(search or "").strip().casefold()
+    status_value = status if status in {"all", "active", "blocked"} else "all"
+    items = [
+        customer for customer in customers.values()
+        if (status_value == "all" or customer["status"] == status_value)
+        and (
+            not search_value
+            or search_value in customer["phone"].casefold()
+            or search_value in str(customer.get("name") or "").casefold()
+            or search_value in str(customer.get("email") or "").casefold()
+        )
+    ]
+    items.sort(key=lambda item: int(item.get("last_order_at") or 0), reverse=True)
+    total = len(items)
+    per_page = max(1, min(int(per_page or 25), 100))
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(int(page or 1), pages))
+    start = (page - 1) * per_page
+    return {
+        "ok": True,
+        "items": items[start:start + per_page],
+        "total": total,
+        "page": page,
+        "pages": pages,
+    }
+
+
+def update_admin_customer(
+    phone: str,
+    *,
+    status: str,
+    notes: str = "",
+    admin_id: int,
+) -> dict[str, Any]:
+    """Update internal site-customer controls used by checkout and the CRM."""
+    normalized_phone = _normalize_tunisian_phone(phone)
+    if status not in {"active", "blocked"}:
+        raise StorefrontError("Statut client invalide.")
+    now = int(time.time())
+    db.get_conn().storefront_customers.update_one(
+        {"phone": normalized_phone},
+        {
+            "$set": {
+                "status": status,
+                "notes": str(notes or "").strip()[:2000],
+                "updated_at": now,
+                "updated_by": int(admin_id),
+            },
+            "$setOnInsert": {
+                "created_at": now,
+                "name": "",
+                "email": "",
+                "order_count": 0,
+            },
+        },
+        upsert=True,
+    )
+    db.audit_event(
+        "storefront.customer_updated",
+        actor_id=admin_id,
+        details={"phone": normalized_phone, "status": status},
+    )
+    return {"phone": normalized_phone, "status": status}
 
 
 def payment_proof(order_id: int) -> tuple[bytes, str, str]:

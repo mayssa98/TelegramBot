@@ -15,7 +15,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
 
@@ -170,6 +170,8 @@ def init_db():
     db.site_orders.create_index(
         [("payment_method", ASCENDING), ("transaction_reference", ASCENDING)]
     )
+    db.storefront_customers.create_index("phone", unique=True)
+    db.storefront_customers.create_index([("status", ASCENDING), ("updated_at", DESCENDING)])
     db.storefront_payment_proofs.create_index("order_id", unique=True)
     db.buyer_api_purchases.create_index(
         [("buyer_key_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True,

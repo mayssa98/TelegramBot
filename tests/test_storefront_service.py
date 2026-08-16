@@ -159,3 +159,46 @@ def test_admin_can_reject_manual_payment(mock_mongodb):
         created["order_id"], created["tracking_token"],
     )["order"]
     assert tracked["rejection_reason"] == "Référence introuvable"
+
+
+def test_site_customer_crm_aggregates_orders_and_revenue(mock_mongodb):
+    offer_id = _product()
+    inventory_service.add_items(offer_id, ["first@example.com\nSecret-123"])
+    first = storefront_service.create_order(_payload(offer_id))
+    second_payload = _payload(offer_id)
+    second_payload["transaction_reference"] = "D17-REF-456"
+    storefront_service.create_order(second_payload)
+    storefront_service.review_order(first["order_id"], approved=True, admin_id=999)
+
+    result = storefront_service.list_admin_customers(search="client@", status="active")
+
+    assert result["total"] == 1
+    customer = result["items"][0]
+    assert customer["phone"] == "+21626183573"
+    assert customer["order_count"] == 2
+    assert customer["approved_order_count"] == 1
+    assert customer["total_spent"] == 32
+    assert len(customer["recent_orders"]) == 2
+
+
+def test_blocked_site_customer_cannot_place_new_order(mock_mongodb):
+    offer_id = _product()
+    storefront_service.create_order(_payload(offer_id))
+    storefront_service.update_admin_customer(
+        "+216 26 183 573",
+        status="blocked",
+        notes="Paiements suspects",
+        admin_id=999,
+    )
+    blocked = storefront_service.list_admin_customers(status="blocked")["items"][0]
+    assert blocked["notes"] == "Paiements suspects"
+
+    new_order = _payload(offer_id)
+    new_order["transaction_reference"] = "D17-REF-BLOCKED"
+    with pytest.raises(storefront_service.StorefrontError, match="ne peut pas passer"):
+        storefront_service.create_order(new_order)
+
+    storefront_service.update_admin_customer(
+        "+21626183573", status="active", notes="", admin_id=999,
+    )
+    assert storefront_service.create_order(new_order)["status"] == "manual_review"
