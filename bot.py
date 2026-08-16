@@ -2206,7 +2206,8 @@ async def handle_pending_input(update, context, lang):
         "adm_svcname", "adm_svcemoji", "adm_offname", "adm_offemoji", "adm_offnote",
         "adm_offdesc", "adm_offdelay",
     }:
-        if kind not in {"adm_offnote", "adm_offdesc"} and not text:
+        custom_emoji_id = custom_emoji_from_message(update.message)
+        if kind not in {"adm_offnote", "adm_offdesc", "adm_svcemoji", "adm_offemoji"} and not text and not custom_emoji_id:
             await update.message.reply_text("⚠️ La valeur ne peut pas être vide.")
             return
         if kind == "adm_svcname":
@@ -2215,25 +2216,55 @@ async def handle_pending_input(update, context, lang):
             db.update_service(
                 ref,
                 name=(clean_name[:80] or service["name"]),
-                custom_emoji_id=custom_emoji_from_message(update.message),
-            )
-        elif kind == "adm_svcemoji":
-            custom_emoji_id = custom_emoji_from_message(update.message)
-            db.update_service(
-                ref,
-                emoji="" if custom_emoji_id else text[:12],
                 custom_emoji_id=custom_emoji_id,
             )
+            PENDING.pop(uid, None)
+            await update.message.reply_text(
+                f"✅ Nom du service mis à jour : {clean_name}",
+                reply_markup=admin.service_admin_keyboard(ref),
+            )
+            return
+        elif kind == "adm_svcemoji":
+            raw_emoji = text.strip() if text else ""
+            db.update_service(
+                ref,
+                emoji=raw_emoji[:12],
+                custom_emoji_id=custom_emoji_id,
+            )
+            PENDING.pop(uid, None)
+            display_emoji = raw_emoji or "✅"
+            await update.message.reply_text(
+                f"✅ Emoji du service mis à jour : {display_emoji}",
+                reply_markup=admin.service_admin_keyboard(ref),
+            )
+            return
         elif kind == "adm_offname":
             offer = db.get_offer(ref)
             clean_name = kb.clean_button_name(text)
             db.update_offer(
                 ref,
                 name=(clean_name[:120] or offer["name"]),
-                custom_emoji_id=custom_emoji_from_message(update.message),
+                custom_emoji_id=custom_emoji_id,
             )
+            PENDING.pop(uid, None)
+            await update.message.reply_text(
+                f"✅ Nom de l'offre mis à jour : {clean_name}",
+                reply_markup=admin.offer_admin_keyboard(ref),
+            )
+            return
         elif kind == "adm_offemoji":
-            db.update_offer(ref, custom_emoji_id=custom_emoji_from_message(update.message))
+            raw_emoji = text.strip() if text else ""
+            db.update_offer(
+                ref,
+                emoji=raw_emoji[:12],
+                custom_emoji_id=custom_emoji_id,
+            )
+            PENDING.pop(uid, None)
+            await update.message.reply_text(
+                "✅ Emoji de l'offre mis à jour.",
+                reply_markup=admin.offer_admin_keyboard(ref),
+            )
+            return
         elif kind == "adm_offnote":
             db.update_offer(ref, note=text[:250])
         elif kind == "adm_offdesc":
