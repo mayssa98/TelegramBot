@@ -1601,6 +1601,13 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
   const set = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
 
+  const wholesalePrice = Number(product.wholesale_price || 0);
+  const retailPrice = Number(form.retail_price || 0);
+  const margin = wholesalePrice > 0 && retailPrice > 0
+    ? (((retailPrice - wholesalePrice) / wholesalePrice) * 100).toFixed(1)
+    : null;
+  const marginColor = margin === null ? "var(--muted)" : Number(margin) >= 30 ? "#34d399" : Number(margin) >= 10 ? "#f59e0b" : "#fb7185";
+
   const handlePublish = async () => {
     let serviceId = form.service_id;
     if (isNewService) {
@@ -1636,6 +1643,24 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
 
   return (
     <Modal title={product.name} onClose={onClose} wide>
+      <div className="detail-grid" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))" }}>
+        <div>
+          <span>Prix d'achat (fournisseur)</span>
+          <strong>{money(wholesalePrice, product.currency)}</strong>
+        </div>
+        <div>
+          <span>Prix de vente</span>
+          <strong style={{ color: retailPrice > 0 ? "#22d3ee" : "var(--muted)" }}>
+            {retailPrice > 0 ? money(retailPrice, product.currency) : "Non défini"}
+          </strong>
+        </div>
+        <div>
+          <span>Marge bénéficiaire</span>
+          <strong style={{ color: marginColor }}>
+            {margin !== null ? `${margin}%` : "—"}
+          </strong>
+        </div>
+      </div>
       <div className="form-grid">
         <Field label="Nom public">
           <input
@@ -1649,6 +1674,7 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
             step="0.01"
             value={form.retail_price}
             onChange={(event) => set("retail_price", event.target.value)}
+            placeholder={wholesalePrice > 0 ? `Min. ${wholesalePrice}` : ""}
           />
         </Field>
         <Field label="Service">
