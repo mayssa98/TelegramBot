@@ -568,12 +568,22 @@ def update_service(service_id, name=None, emoji=None, active=None, custom_emoji_
 
 def archive_service(service_id):
     db = get_conn()
-    db.services.update_one({"id": service_id}, {"$set": {"active": 0}})
-    db.offers.update_many({"service_id": service_id}, {"$set": {"active": 0}})
+    archived_at = int(time.time())
+    db.services.update_one(
+        {"id": service_id},
+        {"$set": {"active": 0, "archived": 1, "archived_at": archived_at}},
+    )
+    db.offers.update_many(
+        {"service_id": service_id},
+        {"$set": {"active": 0, "archived": 1, "archived_at": archived_at}},
+    )
 
 
 def archive_offer(offer_id):
-    return update_offer(offer_id, active=0)
+    return bool(get_conn().offers.update_one(
+        {"id": offer_id},
+        {"$set": {"active": 0, "archived": 1, "archived_at": int(time.time())}},
+    ).matched_count)
 
 
 def add_offer(
@@ -1411,9 +1421,9 @@ def dashboard_data():
 
     # --- Services enrichis ---
     services_enriched = []
-    for svc in db.services.find({}).sort([("sort_order", ASCENDING), ("id", ASCENDING)]):
+    for svc in db.services.find({"archived": {"$ne": 1}}).sort([("sort_order", ASCENDING), ("id", ASCENDING)]):
         svc_data = _public(svc)
-        offers = list(db.offers.find({"service_id": svc["id"]}))
+        offers = list(db.offers.find({"service_id": svc["id"], "archived": {"$ne": 1}}))
         svc_data["offers"] = [_public(offer) for offer in offers]
         svc_data["offer_count"] = len(offers)
         svc_data["total_stock"] = sum(o.get("stock", 0) for o in offers)

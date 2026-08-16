@@ -818,6 +818,14 @@ class handler(BaseHTTPRequestHandler):
                 db.update_service(sid, active=0 if service["active"] else 1)
                 db.audit_event("service.toggled", details={"service_id": sid, "active": not service["active"]})
 
+            elif action == "archive_service":
+                sid = int(form["service_id"])
+                service = db.get_service(sid)
+                if not service:
+                    raise ValueError("Service introuvable")
+                db.archive_service(sid)
+                db.audit_event("service.archived", details={"service_id": sid, "name": service.get("name", "")})
+
             elif action == "add_offer":
                 service_id_raw = form.get("service_id", "").strip()
                 if service_id_raw:
@@ -877,6 +885,13 @@ class handler(BaseHTTPRequestHandler):
                 offer = db.get_offer(oid)
                 db.update_offer(oid, active=0 if offer["active"] else 1)
                 db.audit_event("offer.toggled", details={"offer_id": oid, "active": not offer["active"]})
+
+            elif action == "archive_offer":
+                oid = int(form["offer_id"])
+                offer = db.get_offer(oid)
+                if not offer or not db.archive_offer(oid):
+                    raise ValueError("Produit introuvable")
+                db.audit_event("offer.archived", details={"offer_id": oid, "name": offer.get("name", "")})
 
             elif action == "duplicate_offer":
                 oid = int(form["offer_id"])

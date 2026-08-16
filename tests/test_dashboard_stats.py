@@ -40,6 +40,20 @@ def test_dashboard_services_include_offers(mock_mongodb):
     assert service["offer_count"] == 1
 
 
+def test_archived_catalog_items_are_hidden_but_preserved(mock_mongodb):
+    service_id = db.add_service("Archive me", "📦")
+    offer_id = db.add_offer(service_id, "Old product", 5.0, 2)
+    db.archive_offer(offer_id)
+
+    service = next(item for item in db.dashboard_data()["services"] if item["id"] == service_id)
+    assert service["offers"] == []
+    assert db.get_offer(offer_id)["archived"] == 1
+
+    db.archive_service(service_id)
+    assert all(item["id"] != service_id for item in db.dashboard_data()["services"])
+    assert db.get_service(service_id)["archived"] == 1
+
+
 def test_offer_metadata_can_be_administered(mock_mongodb):
     service_id = db.add_service("AI", "🤖")
     offer_id = db.add_offer(

@@ -64,6 +64,13 @@ const PROVIDERS = [
   ["canboso", "Canboso"],
 ];
 
+const PROVIDER_LABELS = Object.fromEntries(PROVIDERS);
+const SERVICE_COLORS = ["#a78bfa", "#22d3ee", "#34d399", "#f59e0b", "#fb7185", "#60a5fa"];
+
+function providerLabel(value) {
+  return PROVIDER_LABELS[value] || value || "Stock interne";
+}
+
 function money(value, currency = "USDT") {
   return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(Number(value || 0))} ${currency}`;
 }
@@ -687,6 +694,7 @@ function CatalogPage({ data, onAction }) {
   const [serviceEmoji, setServiceEmoji] = useState("📦");
   const [stockOffer, setStockOffer] = useState(null);
   const [stock, setStock] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const createService = async (event) => {
     event.preventDefault();
     if (
@@ -726,26 +734,36 @@ function CatalogPage({ data, onAction }) {
         }
       />
       <div className="catalog-react-grid">
-        {data.services?.map((service) => (
-          <section className="catalog-service" key={service.id}>
+        {data.services?.map((service, serviceIndex) => {
+          const providers = [...new Set((service.offers || []).map((item) => item.supplier_provider || "").filter(Boolean))];
+          return (
+          <section className="catalog-service" key={service.id} style={{ "--service-accent": SERVICE_COLORS[serviceIndex % SERVICE_COLORS.length] }}>
             <header>
               <div>
-                <span>{service.emoji || "◆"}</span>
+                <span className="catalog-service-icon">{service.emoji || "◆"}</span>
                 <div>
                   <h3>{service.name}</h3>
                   <small>
                     {service.offer_count || 0} produit(s) ·{" "}
                     {service.total_stock || 0} en stock
                   </small>
+                  <div className="service-providers">
+                    {providers.length ? providers.map((provider) => (
+                      <span key={provider}><Cloud size={11} />{providerLabel(provider)}</span>
+                    )) : (
+                      <span className="internal"><Database size={11} />Stock interne</span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={() =>
-                  onAction({ action: "toggle_service", service_id: service.id })
-                }
-              >
-                {service.active === 0 ? <ToggleLeft /> : <ToggleRight />}
-              </button>
+              <div className="catalog-service-actions">
+                <button title="Activer/désactiver" onClick={() => onAction({ action: "toggle_service", service_id: service.id })}>
+                  {service.active === 0 ? <ToggleLeft /> : <ToggleRight />}
+                </button>
+                <button className="danger" title="Supprimer le service" onClick={() => setDeleteTarget({ type: "service", item: service })}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </header>
             <div>
               {service.offers?.map((item, index) => (
@@ -758,6 +776,10 @@ function CatalogPage({ data, onAction }) {
                     <span>
                       {money(item.price, data.currency)} · Stock{" "}
                       {item.stock || 0}
+                    </span>
+                    <span className={`offer-provider ${item.supplier_provider ? "api" : "internal"}`}>
+                      {item.supplier_provider ? <Cloud size={11} /> : <Database size={11} />}
+                      {providerLabel(item.supplier_provider)}
                     </span>
                   </div>
                   <div className="offer-actions">
@@ -799,12 +821,16 @@ function CatalogPage({ data, onAction }) {
                         <ToggleRight size={17} />
                       )}
                     </button>
+                    <button className="danger" title="Supprimer le produit" onClick={() => setDeleteTarget({ type: "offer", item })}>
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                 </article>
               ))}
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
       {!data.services?.length && (
         <Empty
@@ -874,6 +900,39 @@ function CatalogPage({ data, onAction }) {
               }}
             >
               Ajouter
+            </ActionButton>
+          </div>
+        </Modal>
+      )}
+      {deleteTarget && (
+        <Modal
+          title={deleteTarget.type === "service" ? "Supprimer le service" : "Supprimer le produit"}
+          onClose={() => setDeleteTarget(null)}
+        >
+          <div className="delete-confirmation">
+            <span><Trash2 size={22} /></span>
+            <div>
+              <h4>Supprimer « {deleteTarget.item.name} » ?</h4>
+              <p>
+                {deleteTarget.type === "service"
+                  ? `Le service et ses ${deleteTarget.item.offer_count || 0} produit(s) disparaîtront du catalogue. Les commandes historiques seront conservées.`
+                  : "Le produit disparaîtra du catalogue et du bot. Les commandes historiques seront conservées."}
+              </p>
+            </div>
+          </div>
+          <div className="dialog-actions">
+            <ActionButton secondary onClick={() => setDeleteTarget(null)}>Annuler</ActionButton>
+            <ActionButton
+              danger
+              icon={Trash2}
+              onClick={async () => {
+                const payload = deleteTarget.type === "service"
+                  ? { action: "archive_service", service_id: deleteTarget.item.id }
+                  : { action: "archive_offer", offer_id: deleteTarget.item.id };
+                if (await onAction(payload)) setDeleteTarget(null);
+              }}
+            >
+              Supprimer
             </ActionButton>
           </div>
         </Modal>
