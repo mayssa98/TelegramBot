@@ -387,7 +387,7 @@ def catalog_offers_keyboard(lang):
             if is_out:
                 p = offer.get("price")
                 p_text = f"${float(p):.2f}".rstrip("0").rstrip(".") if p is not None else ""
-                short_name = compact_offer_name(safe_offer["name"], 20)
+                short_name = compact_offer_name(safe_offer["name"], 30)
                 left_text = f"{short_name} | {p_text}" if p_text else short_name
                 right_text = f"📦 {t(lang, 'btn_preorder')}"
                 regular_offer_buttons.append([
@@ -463,7 +463,7 @@ def offers_keyboard(lang, service_id):
         if is_out:
             p = off.get("price")
             p_text = f"${float(p):.2f}".rstrip("0").rstrip(".") if p is not None else ""
-            short_name = compact_offer_name(safe_offer["name"], 20)
+            short_name = compact_offer_name(safe_offer["name"], 30)
             left_text = f"{short_name} | {p_text}" if p_text else short_name
             right_text = f"📦 {t(lang, 'btn_preorder')}"
             buttons.append([
