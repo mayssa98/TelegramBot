@@ -98,7 +98,12 @@ def stock_button_style(stock):
 def clean_button_name(value):
     """Remove decorative emoji characters from button text; icons use Telegram's icon field."""
     text = " ".join(str(value or "").split())
-    return re.sub(r"^[^\w\d]+", "", text, flags=re.UNICODE).strip()
+    pattern = re.compile(
+        r"^[\s\W\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b00-\u2bff\u2000-\u206f]+|"
+        r"[\s\W\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b00-\u2bff\u2000-\u206f]+$"
+    )
+    cleaned = pattern.sub("", text).strip()
+    return cleaned if cleaned else text
 
 
 def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
