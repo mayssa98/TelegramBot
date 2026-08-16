@@ -306,16 +306,16 @@ async def post_purchase_to_channel(context, order):
         buy_url = f"https://t.me/{bot_username}?start={start_param}"
 
         message_text = (
-            "🔥 <b>NOUVELLE COMMANDE EFFECTUÉE !</b> 🔥\n\n"
-            f"🛒 <b>Produit :</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
-            f"📦 <b>Quantité :</b> <code>{qty}</code>\n"
-            f"💰 <b>Prix Total :</b> <code>${total_price:.2f} USDT</code>\n"
-            f"⚡ <b>Statut :</b> <code>Payé & Confirmé 🟢</code>\n\n"
-            "✨ <i>Achetez le vôtre directement sur le bot BlackMarket !</i>"
+            "🔥 <b>NEW ORDER COMPLETED!</b> 🔥\n\n"
+            f"🛒 <b>Product:</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
+            f"📦 <b>Quantity:</b> <code>{qty}</code>\n"
+            f"💰 <b>Total Price:</b> <code>${total_price:.2f} USDT</code>\n"
+            f"⚡ <b>Status:</b> <code>Paid & Confirmed 🟢</code>\n\n"
+            "✨ <i>Get yours directly on BlackMarket Bot!</i>"
         )
 
         reply_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🛒 Acheter maintenant", url=buy_url, style="success")
+            InlineKeyboardButton("🛒 Buy Now", url=buy_url, style="success")
         ]])
 
         await bot.send_message(
