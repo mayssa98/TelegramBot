@@ -38,6 +38,7 @@ from app.domain import (
     inventory_service,
     order_service,
     reseller_service,
+    storefront_service,
     support_service,
     wallet_service,
 )
@@ -60,6 +61,7 @@ _runtime_lock = threading.RLock()
 log = logging.getLogger(__name__)
 MAX_WEBHOOK_BODY_BYTES = 1_000_000
 ADMIN_UI_DIST = Path(__file__).resolve().parent.parent / "admin-ui" / "dist"
+STOREFRONT_UI_DIST = Path(__file__).resolve().parent.parent / "storefront-ui" / "dist"
 
 
 def health_payload() -> dict:
@@ -333,6 +335,23 @@ class handler(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         path = url.path.rstrip("/")
 
+        if path == "/api/storefront/catalog":
+            lang = parse_qs(url.query).get("lang", ["fr"])[0]
+            self._reply(200, storefront_service.catalog(lang))
+            return
+
+        if path == "/api/storefront/order":
+            params = parse_qs(url.query)
+            try:
+                payload = storefront_service.order_status(
+                    int(params.get("id", [0])[0]),
+                    params.get("token", [""])[0],
+                )
+                self._reply(200, payload)
+            except (TypeError, ValueError, storefront_service.StorefrontError) as exc:
+                self._reply(404, {"ok": False, "error": str(exc)})
+            return
+
         if path == "/api/openapi.json":
             self._reply(200, openapi_document())
             return
@@ -430,8 +449,14 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(500, {"ok": False, "error": str(exc)})
             return
 
-        if path in ("", "/"):
-            body = public_site_html().encode("utf-8")
+        storefront_route = path in {"", "/", "/fr", "/ar"} or path.startswith(("/fr/", "/ar/"))
+        if storefront_route:
+            index_file = STOREFRONT_UI_DIST / "index.html"
+            body = (
+                index_file.read_bytes()
+                if index_file.is_file()
+                else public_site_html().encode("utf-8")
+            )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store, max-age=0")
@@ -459,7 +484,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
-        admin_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "support", "interactions", "activity", "settings"}
+        admin_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "tn-storefront", "support", "interactions", "activity", "settings"}
         react_admin_route = (
             path in {"/admin", "/admin-v2"}
             or path.startswith("/admin-v2/")
@@ -505,6 +530,26 @@ class handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+
+        if path.startswith("/storefront/"):
+            relative_path = path.removeprefix("/storefront/")
+            requested_file = STOREFRONT_UI_DIST / relative_path
+            try:
+                resolved_file = requested_file.resolve()
+                resolved_file.relative_to(STOREFRONT_UI_DIST.resolve())
+            except (OSError, ValueError):
+                self._reply(404, {"ok": False, "error": "asset_not_found"})
+                return
+            if not resolved_file.is_file():
+                self._reply(404, {"ok": False, "error": "asset_not_found"})
+                return
+            body = resolved_file.read_bytes()
+            content_type = mimetypes.guess_type(resolved_file.name)[0] or "application/octet-stream"
+            if resolved_file.suffix in {".js", ".css"}:
+                content_type += "; charset=utf-8"
+            self._reply_bytes(200, body, content_type)
             return
 
         if path == "/admin-legacy" or path.startswith("/admin-legacy/") and path.removeprefix("/admin-legacy/") in admin_tabs:
@@ -628,6 +673,26 @@ class handler(BaseHTTPRequestHandler):
             self._reply(200, dashboard_api.list_wallet_topups(parse_qs(url.query)))
             return
 
+        elif path == "/admin/api/storefront-orders":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            status = parse_qs(url.query).get("status", ["manual_review"])[0]
+            self._reply(200, {"ok": True, "orders": storefront_service.list_admin_orders(status)})
+            return
+
+        elif path == "/admin/api/storefront-proof":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                order_id = int(parse_qs(url.query).get("order_id", [0])[0])
+                body, content_type, filename = storefront_service.payment_proof(order_id)
+                self._reply_bytes(200, body, content_type, filename)
+            except (TypeError, ValueError, storefront_service.StorefrontError) as exc:
+                self._reply(404, {"ok": False, "error": str(exc)})
+            return
+
         elif path == "/admin/api/ticket-messages":
             if not self._dashboard_authorized():
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
@@ -645,7 +710,13 @@ class handler(BaseHTTPRequestHandler):
             if not self._dashboard_authorized():
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
                 return
-            self._reply(200, dashboard_api.list_orders(parse_qs(url.query)))
+            params = parse_qs(url.query)
+            order_id = params.get("order_id", [""])[0]
+            if order_id.isdigit() and params.get("detail", [""])[0] == "1":
+                order = dashboard_api.order_detail(int(order_id))
+                self._reply(200 if order else 404, order or {"ok": False, "error": "Not found"})
+            else:
+                self._reply(200, dashboard_api.list_orders(params))
             return
 
         elif path == "/admin/api/tickets":
@@ -761,6 +832,19 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path.rstrip("/")
+        if path == "/api/storefront/orders":
+            try:
+                payload = self._read_json_body(max_bytes=5_600_000)
+                self._reply(201, storefront_service.create_order(payload))
+            except storefront_service.StorefrontError as exc:
+                self._reply(400, {"ok": False, "error": str(exc)})
+            except buyer_api_service.BuyerApiError as exc:
+                self._reply(exc.status, {"ok": False, "error": exc.message})
+            except Exception:
+                log.exception("Storefront order creation failed")
+                self._reply(500, {"ok": False, "error": "Commande temporairement indisponible."})
+            return
+
         if path == "/api/v2/telegram-buyer/purchase":
             try:
                 payload = self._read_json_body()
@@ -875,7 +959,14 @@ class handler(BaseHTTPRequestHandler):
             if action == "add_service":
                 name = form["name"].strip()[:80]
                 emoji = form.get("emoji", "📦")[:12]
-                sid = db.add_service(name, emoji)
+                channel = form.get("sales_channel", "both")
+                channels = ["bot", "tn_site"] if channel == "both" else [channel]
+                sid = db.add_service(
+                    name,
+                    emoji,
+                    sales_channels=channels,
+                    name_ar=form.get("name_ar", "").strip(),
+                )
                 db.audit_event("service.created", details={"service_id": sid, "name": name})
 
             elif action == "update_service":
@@ -917,6 +1008,10 @@ class handler(BaseHTTPRequestHandler):
                 auto_delivery = form.get("auto_delivery", "") == "on"
                 low_stock_threshold = max(0, int(form.get("low_stock_threshold", 5)))
                 delivery_delay = form.get("delivery_delay", "").strip()[:120]
+                channel = form.get("sales_channel", "both")
+                channels = ["bot", "tn_site"] if channel == "both" else [channel]
+                tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
+                tn_price_millimes = round(float(tn_price_raw) * 1000) if tn_price_raw else None
                 oid = db.add_offer(
                     sid,
                     name,
@@ -927,6 +1022,10 @@ class handler(BaseHTTPRequestHandler):
                     auto_delivery=auto_delivery,
                     low_stock_threshold=low_stock_threshold,
                     delivery_delay=delivery_delay,
+                    sales_channels=channels,
+                    tn_price_millimes=tn_price_millimes,
+                    name_ar=form.get("name_ar", "").strip(),
+                    description_ar=form.get("description_ar", "").strip(),
                 )
                 initial_inventory_text = form.get("initial_inventory", "").strip()
                 if initial_inventory_text:
@@ -940,6 +1039,9 @@ class handler(BaseHTTPRequestHandler):
                 name = form["name"].strip()[:120]
                 price = None if form.get("price", "") == "" else float(form["price"])
                 note = form.get("note", "")[:250]
+                channel = form.get("sales_channel", "both")
+                channels = ["bot", "tn_site"] if channel == "both" else [channel]
+                tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
                 db.update_offer(
                     oid,
                     price=price,
@@ -950,6 +1052,10 @@ class handler(BaseHTTPRequestHandler):
                     auto_delivery=form.get("auto_delivery", "") == "on",
                     low_stock_threshold=max(0, int(form.get("low_stock_threshold", 5))),
                     delivery_delay=form.get("delivery_delay", "").strip()[:120],
+                    sales_channels=channels,
+                    tn_price_millimes=(round(float(tn_price_raw) * 1000) if tn_price_raw else None),
+                    name_ar=form.get("name_ar", "").strip(),
+                    description_ar=form.get("description_ar", "").strip(),
                 )
                 db.audit_event("offer.updated", details={"offer_id": oid, "name": name})
 
@@ -1055,6 +1161,25 @@ class handler(BaseHTTPRequestHandler):
                     "status": "confirmed" if approved else "rejected",
                     "notification_sent": notification_sent,
                     "message": f"Rechargement {decision}. {suffix}",
+                })
+                return
+
+            elif action == "review_storefront_order":
+                approved = form.get("decision") == "approve"
+                result = storefront_service.review_order(
+                    int(form["order_id"]),
+                    approved=approved,
+                    admin_id=ADMIN_ID,
+                    reason=form.get("reason", ""),
+                )
+                self._reply(200, {
+                    "ok": True,
+                    **result,
+                    "message": (
+                        "Paiement accepté et commande mise à jour."
+                        if approved
+                        else "Paiement refusé."
+                    ),
                 })
                 return
 

@@ -80,6 +80,55 @@ def list_orders(params: dict[str, list[str]]) -> dict[str, Any]:
     }
 
 
+def order_detail(order_id: int) -> dict[str, Any] | None:
+    """Return every admin-facing field for one order, including delivered content."""
+    conn = db.get_conn()
+    order = conn.orders.find_one({"id": order_id})
+    if not order:
+        return None
+
+    result = db._public(order)
+    user = conn.users.find_one(
+        {"telegram_id": order.get("user_id")},
+        {"_id": 0, "telegram_id": 1, "username": 1, "first_name": 1, "full_name": 1},
+    ) or {}
+    result["customer"] = db._public(user)
+    result["delivery_content"] = _order_delivery_content(order)
+    return result
+
+
+def _order_delivery_content(order: dict[str, Any]) -> str:
+    """Resolve manual or encrypted inventory delivery for an authenticated admin."""
+    stored = str(order.get("delivery_text") or "").strip()
+    if stored and stored != "[encrypted automatic delivery]":
+        return stored
+
+    order_id = order.get("id")
+    if order_id is None:
+        return ""
+    rows = list(db.get_conn().inventory.find({
+        "$or": [
+            {"delivered_order_id": order_id},
+            {"order_id": order_id, "status": "sold"},
+        ]
+    }).sort("id", 1))
+    if not rows:
+        return ""
+    cipher = db._fernet()
+    values: list[str] = []
+    for row in rows:
+        payload = row.get("payload")
+        if not payload:
+            continue
+        try:
+            value = cipher.decrypt(str(payload).encode()).decode().strip()
+        except Exception:
+            continue
+        if value:
+            values.append(value)
+    return "\n\n".join(values)
+
+
 def _order_analytics(collection: Any, query: dict[str, Any]) -> dict[str, Any]:
     """Build compact global metrics for the React orders dashboard."""
     now = datetime.now(UTC)
@@ -308,13 +357,13 @@ def list_customers(params: dict[str, list[str]]) -> dict[str, Any]:
 
 
 def customer_detail(user_id: int) -> dict[str, Any] | None:
-    """Return one customer with recent orders, tickets and referral metrics."""
+    """Return one customer with their complete order history and CRM metrics."""
     conn = db.get_conn()
     user = conn.users.find_one({"telegram_id": user_id})
     if not user:
         return None
     result = _customer_summary(user)
-    result["orders"] = [db._public(row) for row in conn.orders.find({"user_id": user_id}).sort("created_at", DESCENDING).limit(50)]
+    result["orders"] = [db._public(row) for row in conn.orders.find({"user_id": user_id}).sort("created_at", DESCENDING)]
     result["tickets"] = [db._public(row) for row in conn.support_tickets.find({"user_id": user_id}).sort("updated_at", DESCENDING).limit(25)]
     result["referrals"] = conn.referrals.count_documents({"referrer_id": user_id})
     return result

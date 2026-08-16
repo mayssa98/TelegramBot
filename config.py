@@ -164,6 +164,14 @@ SUPPORTED_LANGS: list[str] = ["en"]
 CURRENCY: str = "USDT"
 
 # ---------------------------------------------------------------------------
+# Boutique tunisienne
+# ---------------------------------------------------------------------------
+TN_WHATSAPP_NUMBER: str = os.environ.get(
+    "HP_TN_WHATSAPP_NUMBER", "21626183573"
+).strip().lstrip("+")
+TN_TND_PER_USDT: str = os.environ.get("HP_TN_TND_PER_USDT", "3.2").strip()
+
+# ---------------------------------------------------------------------------
 # Affiliation
 # ---------------------------------------------------------------------------
 AFFILIATE_QUALIFY_CENTS: int = int(os.environ.get("HP_AFFILIATE_QUALIFY_CENTS", "1000"))

@@ -32,6 +32,7 @@ const NAV_ITEMS = [
   { id: "api-products", label: "Produits API", icon: Cloud },
   { id: "inventory", label: "Inventaire", icon: Boxes },
   { id: "customers", label: "Clients", icon: Users },
+  { id: "tn-storefront", label: "Site tunisien", icon: ShoppingBag },
   { id: "support", label: "Support", icon: Headphones },
   { id: "interactions", label: "Interactions", icon: MessageSquareText },
   { id: "activity", label: "Activité", icon: Activity },

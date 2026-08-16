@@ -191,6 +191,69 @@ def test_customer_detail_metrics(mock_mongodb):
     assert customer["wallet_balance"] == 12.34
 
 
+def test_customer_detail_returns_complete_order_history(mock_mongodb):
+    mock_mongodb.users.insert_one({"telegram_id": 42, "username": "buyer"})
+    mock_mongodb.orders.insert_many([
+        {"id": index, "user_id": 42, "status": "delivered", "created_at": index}
+        for index in range(1, 56)
+    ])
+
+    customer = dashboard_api.customer_detail(42)
+
+    assert customer is not None
+    assert len(customer["orders"]) == 55
+    assert customer["orders"][0]["id"] == 55
+
+
+def test_order_detail_exposes_manual_delivery_and_customer(mock_mongodb):
+    mock_mongodb.users.insert_one({"telegram_id": 42, "username": "buyer", "first_name": "Sam"})
+    mock_mongodb.orders.insert_one({
+        "id": 7,
+        "user_id": 42,
+        "status": "delivered",
+        "delivery_text": "login@example.com\nsecret-password",
+    })
+
+    order = dashboard_api.order_detail(7)
+
+    assert order is not None
+    assert order["delivery_content"] == "login@example.com\nsecret-password"
+    assert order["customer"]["username"] == "buyer"
+
+
+def test_order_detail_decrypts_automatic_delivery(mock_mongodb):
+    import database as db
+
+    cipher = db._fernet()
+    mock_mongodb.orders.insert_one({
+        "id": 8,
+        "user_id": 99,
+        "status": "delivered",
+        "delivery_text": "[encrypted automatic delivery]",
+    })
+    mock_mongodb.inventory.insert_many([
+        {
+            "id": 1,
+            "delivered_order_id": 8,
+            "status": "delivered",
+            "payload": cipher.encrypt(b"first-login:first-secret").decode(),
+        },
+        {
+            "id": 2,
+            "delivered_order_id": 8,
+            "status": "delivered",
+            "payload": cipher.encrypt(b"second-login:second-secret").decode(),
+        },
+    ])
+
+    order = dashboard_api.order_detail(8)
+
+    assert order is not None
+    assert order["delivery_content"] == (
+        "first-login:first-secret\n\nsecond-login:second-secret"
+    )
+
+
 def test_dashboard_renders_mongodb_dates():
     page = render_dashboard({
         "summary": {},

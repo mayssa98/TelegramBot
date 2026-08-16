@@ -164,6 +164,13 @@ def init_db():
     db.buyer_api_keys.create_index("id", unique=True)
     db.buyer_api_keys.create_index("key_hash", unique=True)
     db.external_api_connectors.create_index("id", unique=True)
+    db.site_orders.create_index("id", unique=True)
+    db.site_orders.create_index("tracking_token_hash", unique=True)
+    db.site_orders.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+    db.site_orders.create_index(
+        [("payment_method", ASCENDING), ("transaction_reference", ASCENDING)]
+    )
+    db.storefront_payment_proofs.create_index("order_id", unique=True)
     db.buyer_api_purchases.create_index(
         [("buyer_key_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True,
     )
@@ -500,6 +507,10 @@ def update_offer(
     manual_stock=None,
     supplier_provider=None,
     supplier_product_id=None,
+    sales_channels=None,
+    tn_price_millimes=None,
+    name_ar=None,
+    description_ar=None,
 ):
     values = {
         key: value
@@ -522,6 +533,10 @@ def update_offer(
             "manual_stock": manual_stock,
             "supplier_provider": supplier_provider,
             "supplier_product_id": supplier_product_id,
+            "sales_channels": sales_channels,
+            "tn_price_millimes": tn_price_millimes,
+            "name_ar": name_ar,
+            "description_ar": description_ar,
         }.items()
         if value is not None
     }
@@ -533,7 +548,7 @@ def update_offer(
         get_conn().offers.update_one({"id": offer_id}, {"$set": values})
 
 
-def add_service(name, emoji="", custom_emoji_id=""):
+def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar=""):
     db = get_conn()
     last = db.services.find_one(sort=[("sort_order", DESCENDING)])
     sid = _next_id("services")
@@ -544,13 +559,18 @@ def add_service(name, emoji="", custom_emoji_id=""):
         "custom_emoji_id": custom_emoji_id,
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
+        "sales_channels": list(sales_channels or ["bot", "tn_site"]),
+        "name_ar": str(name_ar or "")[:120],
     })
     if is_otp_service_name(name):
         _ensure_otp_service_offer(db, sid)
     return sid
 
 
-def update_service(service_id, name=None, emoji=None, active=None, custom_emoji_id=None):
+def update_service(
+    service_id, name=None, emoji=None, active=None, custom_emoji_id=None,
+    sales_channels=None, name_ar=None,
+):
     values = {
         k: v
         for k, v in {
@@ -558,6 +578,8 @@ def update_service(service_id, name=None, emoji=None, active=None, custom_emoji_
             "emoji": emoji,
             "active": active,
             "custom_emoji_id": custom_emoji_id,
+            "sales_channels": sales_channels,
+            "name_ar": name_ar,
         }.items()
         if v is not None
     }
@@ -605,6 +627,10 @@ def add_offer(
     manual_stock=False,
     supplier_provider="",
     supplier_product_id="",
+    sales_channels=None,
+    tn_price_millimes=None,
+    name_ar="",
+    description_ar="",
 ):
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
@@ -631,6 +657,10 @@ def add_offer(
         "supplier_product_id": str(supplier_product_id or ""),
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
+        "sales_channels": list(sales_channels or ["bot", "tn_site"]),
+        "tn_price_millimes": tn_price_millimes,
+        "name_ar": str(name_ar or "")[:200],
+        "description_ar": str(description_ar or "")[:2000],
         **special_values,
     })
     return oid

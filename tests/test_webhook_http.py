@@ -42,7 +42,8 @@ def test_public_homepage_is_site():
 
     assert response.status == 200
     assert "text/html" in response.headers["Content-Type"]
-    assert "https://t.me/blackmarketa_bot" in body
+    assert "Trust Market TN" in body
+    assert "/storefront/assets/" in body
 
 
 def test_admin_requires_authentication(monkeypatch):

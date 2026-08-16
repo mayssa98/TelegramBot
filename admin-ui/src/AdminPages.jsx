@@ -66,6 +66,13 @@ const PROVIDERS = [
 ];
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS);
+const STOREFRONT_PAYMENT_LABELS = {
+  d17: "D17",
+  flouci: "Flouci",
+  isi: "ISI",
+  bank_transfer: "Virement bancaire",
+  postal_transfer: "Virement postal",
+};
 const SERVICE_COLORS = ["#a78bfa", "#22d3ee", "#34d399", "#f59e0b", "#fb7185", "#60a5fa"];
 
 function providerLabel(value) {
@@ -265,7 +272,13 @@ function OrderEditor({ order, onAction, onClose, currency }) {
   const [status, setStatus] = useState(order.status || "pending_payment");
   const [note, setNote] = useState(order.admin_note || "");
   const [message, setMessage] = useState("");
-  const [delivery, setDelivery] = useState("");
+  const [delivery, setDelivery] = useState(
+    order.delivery_content ||
+      (order.delivery_text === "[encrypted automatic delivery]"
+        ? ""
+        : order.delivery_text || ""),
+  );
+  const customer = order.customer || {};
   const submit = async (action, extra = {}) => {
     if (await onAction({ action, order_id: order.id, ...extra })) onClose();
   };
@@ -290,7 +303,53 @@ function OrderEditor({ order, onAction, onClose, currency }) {
           <span>Créée</span>
           <strong>{date(order.created_at)}</strong>
         </div>
+        <div>
+          <span>ID client</span>
+          <strong>{order.user_id || customer.telegram_id || "—"}</strong>
+        </div>
+        <div>
+          <span>Quantité</span>
+          <strong>{order.qty || 1}</strong>
+        </div>
+        <div>
+          <span>Prix unitaire</span>
+          <strong>{money(order.unit_price, currency)}</strong>
+        </div>
+        <div>
+          <span>Statut</span>
+          <strong>{STATUS_LABELS[order.status] || order.status || "—"}</strong>
+        </div>
+        <div>
+          <span>ID offre</span>
+          <strong>{order.offer_id || "—"}</strong>
+        </div>
+        <div>
+          <span>TXID</span>
+          <strong title={order.txid || ""}>{order.txid || "—"}</strong>
+        </div>
+        <div>
+          <span>Vérification</span>
+          <strong>{order.verify_method || "—"}</strong>
+        </div>
+        <div>
+          <span>Livrée</span>
+          <strong>{date(order.delivered_at)}</strong>
+        </div>
       </div>
+      <section className="delivery-detail">
+        <header>
+          <div>
+            <span>Contenu livré au client</span>
+            <small>{delivery ? "Contenu complet de la livraison" : "Aucun contenu livré pour cette commande"}</small>
+          </div>
+          {delivery && (
+            <button type="button" onClick={() => navigator.clipboard?.writeText(delivery)} title="Copier le contenu">
+              <Copy size={15} /> Copier
+            </button>
+          )}
+        </header>
+        <pre>{delivery || "—"}</pre>
+      </section>
       <div className="form-grid">
         <Field label="Statut">
           <select
@@ -453,6 +512,13 @@ function OrdersPage({ data, onAction }) {
     }
     setPage(1);
   };
+  const openOrder = async (order) => {
+    const response = await fetch(`/admin/api/orders?detail=1&order_id=${order.id}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    setSelected(response.ok ? await response.json() : order);
+  };
   return (
     <>
       <PageHeader
@@ -538,7 +604,7 @@ function OrdersPage({ data, onAction }) {
             </thead>
             <tbody>
               {result.items.map((order) => (
-                <tr key={order.id} onClick={() => setSelected(order)}>
+                <tr key={order.id} onClick={() => openOrder(order)}>
                   <td>
                     <strong>#{order.id}</strong>
                   </td>
@@ -587,6 +653,7 @@ function OrdersPage({ data, onAction }) {
 }
 
 function OfferForm({ services, offer, onAction, onClose }) {
+  const currentChannels = offer?.sales_channels || ["bot", "tn_site"];
   const [form, setForm] = useState({
     service_id: offer?.service_id || services[0]?.id || "",
     name: offer?.name || "",
@@ -597,6 +664,10 @@ function OfferForm({ services, offer, onAction, onClose }) {
     low_stock_threshold: offer?.low_stock_threshold ?? 5,
     auto_delivery: offer?.auto_delivery !== false,
     initial_inventory: "",
+    sales_channel: currentChannels.includes("bot") && currentChannels.includes("tn_site") ? "both" : currentChannels[0] || "both",
+    tn_price: offer?.tn_price_millimes != null ? Number(offer.tn_price_millimes) / 1000 : "",
+    name_ar: offer?.name_ar || "",
+    description_ar: offer?.description_ar || "",
   });
   const set = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -640,6 +711,13 @@ function OfferForm({ services, offer, onAction, onClose }) {
               onChange={(event) => set("name", event.target.value)}
             />
           </Field>
+          <Field label="Canal de vente">
+            <select value={form.sales_channel} onChange={(event) => set("sales_channel", event.target.value)}>
+              <option value="both">Bot + Site tunisien</option>
+              <option value="bot">Bot uniquement</option>
+              <option value="tn_site">Site tunisien uniquement</option>
+            </select>
+          </Field>
           <Field label="Prix">
             <input
               required
@@ -649,6 +727,9 @@ function OfferForm({ services, offer, onAction, onClose }) {
               value={form.price}
               onChange={(event) => set("price", event.target.value)}
             />
+          </Field>
+          <Field label="Prix site tunisien (TND)">
+            <input min="0" step="0.001" type="number" value={form.tn_price} onChange={(event) => set("tn_price", event.target.value)} placeholder="Ex. 29.900" />
           </Field>
           <Field label="Seuil de stock">
             <input
@@ -665,6 +746,12 @@ function OfferForm({ services, offer, onAction, onClose }) {
               value={form.description}
               onChange={(event) => set("description", event.target.value)}
             />
+          </Field>
+          <Field label="Nom arabe" wide>
+            <input dir="rtl" value={form.name_ar} onChange={(event) => set("name_ar", event.target.value)} placeholder="اسم المنتج بالعربية" />
+          </Field>
+          <Field label="Description arabe" wide>
+            <textarea dir="rtl" value={form.description_ar} onChange={(event) => set("description_ar", event.target.value)} placeholder="وصف المنتج بالعربية" />
           </Field>
           <Field label="Note / garantie" wide>
             <input
@@ -720,7 +807,9 @@ function CatalogPage({ data, onAction }) {
   const [showOffer, setShowOffer] = useState(false);
   const [showService, setShowService] = useState(false);
   const [serviceName, setServiceName] = useState("");
+  const [serviceNameAr, setServiceNameAr] = useState("");
   const [serviceEmoji, setServiceEmoji] = useState("📦");
+  const [serviceChannel, setServiceChannel] = useState("both");
   const [stockOffer, setStockOffer] = useState(null);
   const [stock, setStock] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -730,7 +819,9 @@ function CatalogPage({ data, onAction }) {
       await onAction({
         action: "add_service",
         name: serviceName,
+        name_ar: serviceNameAr,
         emoji: serviceEmoji,
+        sales_channel: serviceChannel,
       })
     )
       setShowService(false);
@@ -832,6 +923,12 @@ function CatalogPage({ data, onAction }) {
                       {money(item.price, data.currency)} · Stock{" "}
                       {item.stock || 0}
                     </span>
+                    <span className="offer-channel">
+                      {(item.sales_channels || ["bot", "tn_site"]).length > 1
+                        ? "Bot + Site TN"
+                        : item.sales_channels?.[0] === "tn_site" ? "Site TN" : "Bot"}
+                      {item.tn_price_millimes != null ? ` · ${(Number(item.tn_price_millimes) / 1000).toFixed(3)} TND` : ""}
+                    </span>
                     <span className={`offer-provider ${item.supplier_provider ? "api" : "internal"}`}>
                       {item.supplier_provider ? <Cloud size={11} /> : <Database size={11} />}
                       {providerLabel(item.supplier_provider)}
@@ -918,6 +1015,16 @@ function CatalogPage({ data, onAction }) {
                   value={serviceEmoji}
                   onChange={(event) => setServiceEmoji(event.target.value)}
                 />
+              </Field>
+              <Field label="Nom arabe" wide>
+                <input dir="rtl" value={serviceNameAr} onChange={(event) => setServiceNameAr(event.target.value)} />
+              </Field>
+              <Field label="Canal" wide>
+                <select value={serviceChannel} onChange={(event) => setServiceChannel(event.target.value)}>
+                  <option value="both">Bot + Site tunisien</option>
+                  <option value="bot">Bot uniquement</option>
+                  <option value="tn_site">Site tunisien uniquement</option>
+                </select>
               </Field>
             </div>
             <div className="dialog-actions">
@@ -1658,16 +1765,31 @@ function InventoryPage({ data, onAction }) {
 function CustomerDetail({ customer, onAction, onClose, currency }) {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loadingOrder, setLoadingOrder] = useState(null);
+  const openOrder = async (order) => {
+    setLoadingOrder(order.id);
+    try {
+      const response = await fetch(`/admin/api/orders?detail=1&order_id=${order.id}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      setSelectedOrder(response.ok ? await response.json() : order);
+    } finally {
+      setLoadingOrder(null);
+    }
+  };
   return (
-    <Modal
-      title={
-        customer.username
-          ? `@${customer.username}`
-          : `Client ${customer.telegram_id}`
-      }
-      onClose={onClose}
-      wide
-    >
+    <>
+      <Modal
+        title={
+          customer.username
+            ? `@${customer.username}`
+            : `Client ${customer.telegram_id}`
+        }
+        onClose={onClose}
+        wide
+      >
       <div className="detail-grid">
         <div>
           <span>Telegram ID</span>
@@ -1732,7 +1854,49 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
           {customer.banned ? "Débloquer" : "Bloquer"}
         </ActionButton>
       </div>
-    </Modal>
+      <section className="customer-orders">
+        <header>
+          <div>
+            <span className="eyebrow">Historique complet</span>
+            <h4>Commandes de ce client</h4>
+          </div>
+          <strong>{customer.orders?.length || 0}</strong>
+        </header>
+        {customer.orders?.length ? (
+          <div className="responsive-table">
+            <table>
+              <thead>
+                <tr><th>Commande</th><th>Produit</th><th>Montant</th><th>Statut</th><th>Date</th><th>Détails</th></tr>
+              </thead>
+              <tbody>
+                {customer.orders.map((order) => (
+                  <tr key={order.id} onClick={() => openOrder(order)}>
+                    <td><strong>#{order.id}</strong></td>
+                    <td>{order.offer_name || order.service_name || "—"}</td>
+                    <td>{money(order.total_price, currency)}</td>
+                    <td><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></td>
+                    <td>{date(order.created_at)}</td>
+                    <td><button className="row-action" type="button" aria-label={`Voir la commande ${order.id}`}><Eye size={15} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty icon={ShoppingBag} title="Aucune commande" text="Ce client n’a encore passé aucune commande." />
+        )}
+        {loadingOrder && <div className="table-loading">Chargement de la commande #{loadingOrder}…</div>}
+      </section>
+      </Modal>
+      {selectedOrder && (
+        <OrderEditor
+          order={selectedOrder}
+          currency={currency}
+          onAction={onAction}
+          onClose={() => setSelectedOrder(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -1990,6 +2154,106 @@ function CustomersPage({ data, onAction }) {
               Créditer tous
             </ActionButton>
           </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function TunisiaStorefrontPage({ onAction }) {
+  const [status, setStatus] = useState("manual_review");
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [reason, setReason] = useState("");
+  const load = () => {
+    setLoading(true);
+    fetch(`/admin/api/storefront-orders?status=${status}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    })
+      .then((response) => response.json())
+      .then((payload) => setOrders(payload.orders || []))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, [status]);
+  const decide = async (decision) => {
+    if (await onAction({
+      action: "review_storefront_order",
+      order_id: selected.id,
+      decision,
+      reason,
+    })) {
+      setSelected(null);
+      setReason("");
+      load();
+    }
+  };
+  return (
+    <>
+      <PageHeader
+        eyebrow="Canal de vente · Tunisie"
+        title="Commandes du site tunisien"
+        description="Vérifiez les paiements manuels D17, Flouci, ISI et virements avant livraison."
+        actions={<ActionButton secondary icon={RefreshCw} onClick={load}>Actualiser</ActionButton>}
+      />
+      <div className="storefront-channel-switch">
+        <a href="/admin/orders">Bot Telegram</a>
+        <button className="active">Site tunisien</button>
+        <a href="/fr" target="_blank" rel="noreferrer">Voir la boutique ↗</a>
+      </div>
+      <FilterBar search="" setSearch={() => {}}>
+        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="manual_review">À vérifier</option>
+          <option value="delivered">Livrées</option>
+          <option value="paid">Payées / livraison manuelle</option>
+          <option value="stock_issue">Problème de stock</option>
+          <option value="rejected">Refusées</option>
+          <option value="all">Toutes</option>
+        </select>
+      </FilterBar>
+      <section className="data-panel">
+        <div className="responsive-table">
+          <table>
+            <thead><tr><th>Commande</th><th>Client</th><th>Produit</th><th>Montant</th><th>Paiement</th><th>Référence</th><th>Statut</th><th>Date</th><th /></tr></thead>
+            <tbody>{orders.map((order) => (
+              <tr key={order.id} onClick={() => { setSelected(order); setReason(""); }}>
+                <td><strong>TN-{order.id}</strong></td>
+                <td><strong>{order.customer_name}</strong><small>{order.phone}</small></td>
+                <td>{order.offer_name}<small>{order.quantity || 1} × produit</small></td>
+                <td><strong>{money(order.total, "TND")}</strong></td>
+                <td>{STOREFRONT_PAYMENT_LABELS[order.payment_method] || order.payment_method}</td>
+                <td><code>{order.transaction_reference}</code></td>
+                <td><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></td>
+                <td>{date(order.created_at)}</td>
+                <td><button className="row-action"><Eye size={15} /></button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        {loading ? <div className="table-loading">Chargement…</div> : !orders.length && <Empty icon={ShoppingBag} title="Aucune commande dans ce statut" />}
+      </section>
+      {selected && (
+        <Modal title={`Commande tunisienne TN-${selected.id}`} onClose={() => setSelected(null)} wide>
+          <div className="detail-grid">
+            <div><span>Client</span><strong>{selected.customer_name}</strong></div>
+            <div><span>Téléphone</span><strong>{selected.phone}</strong></div>
+            <div><span>Montant attendu</span><strong>{money(selected.total, "TND")}</strong></div>
+            <div><span>Méthode</span><strong>{STOREFRONT_PAYMENT_LABELS[selected.payment_method]}</strong></div>
+          </div>
+          <div className="storefront-review-card">
+            <div><span>Produit</span><strong>{selected.offer_name}</strong></div>
+            <div><span>Référence déclarée</span><code>{selected.transaction_reference}</code></div>
+            <div className="review-links">
+              <a href={`/admin/api/storefront-proof?order_id=${selected.id}`} target="_blank" rel="noreferrer"><Eye size={16} />Ouvrir le reçu</a>
+              <a href={`https://wa.me/${selected.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Bonjour, concernant votre commande TN-${selected.id}…`)}`} target="_blank" rel="noreferrer"><Send size={16} />Contacter sur WhatsApp</a>
+            </div>
+          </div>
+          {selected.status === "manual_review" && <>
+            <Field label="Motif en cas de refus" wide><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ex. montant ou référence introuvable" /></Field>
+            <div className="warning-box">Vérifiez le montant et la référence sur votre compte avant d’accepter. L’acceptation peut déclencher la livraison automatique.</div>
+            <div className="dialog-actions"><ActionButton secondary onClick={() => setSelected(null)}>Annuler</ActionButton><ActionButton danger icon={X} onClick={() => decide("reject")}>Refuser</ActionButton><ActionButton icon={Check} onClick={() => decide("approve")}>Accepter le paiement</ActionButton></div>
+          </>}
         </Modal>
       )}
     </>
@@ -2594,6 +2858,7 @@ export default function AdminPage({
   if (page === "api-products") return <ApiProductsPage {...props} />;
   if (page === "inventory") return <InventoryPage {...props} />;
   if (page === "customers") return <CustomersPage {...props} />;
+  if (page === "tn-storefront") return <TunisiaStorefrontPage {...props} />;
   if (page === "support") return <SupportPage {...props} />;
   if (page === "interactions") return <InteractionsPage {...props} />;
   if (page === "activity") return <ActivityPage {...props} />;
