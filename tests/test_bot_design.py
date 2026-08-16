@@ -29,6 +29,7 @@ from bot import (
     custom_emojis_from_message,
     deliver_order,
     handle_buy_confirmed,
+    handle_pending_attachment,
     handle_pending_input,
     handle_ticket_attachment,
     notify_admin_interaction,
@@ -573,6 +574,41 @@ def test_admin_custom_emoji_is_extracted_from_telegram_entity():
     )])
 
     assert custom_emoji_from_message(message) == "animated-emoji-123"
+
+
+def test_admin_custom_emoji_is_extracted_from_custom_emoji_sticker():
+    message = SimpleNamespace(
+        entities=[],
+        caption_entities=[],
+        sticker=SimpleNamespace(custom_emoji_id="5413879192267805083"),
+    )
+
+    assert custom_emoji_from_message(message) == "5413879192267805083"
+
+
+def test_admin_offer_accepts_custom_emoji_sticker(monkeypatch, mock_mongodb):
+    monkeypatch.setattr("bot.ADMIN_ID", 42)
+    service_id = db.add_service("Cursor", "📦")
+    offer_id = db.add_offer(service_id, "Cursor Pro 12m", 60, 14)
+    PENDING[42] = ("adm_offemoji", offer_id)
+    message = SimpleNamespace(
+        entities=[],
+        caption_entities=[],
+        sticker=SimpleNamespace(custom_emoji_id="5413879192267805083"),
+        reply_text=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        effective_message=message,
+    )
+
+    asyncio.run(handle_pending_attachment(update, SimpleNamespace()))
+
+    offer = db.get_offer(offer_id)
+    assert offer["emoji"] == ""
+    assert offer["custom_emoji_id"] == "5413879192267805083"
+    assert PENDING.get(42) is None
+    message.reply_text.assert_awaited_once()
 
 
 def test_admin_text_category_button_opens_category(monkeypatch):

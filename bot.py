@@ -438,7 +438,7 @@ def admin_text_preview(key: str) -> str:
 
 
 def custom_emojis_from_message(message):
-    """Extract every unique Premium custom emoji from text or caption entities."""
+    """Extract every unique Premium custom emoji from entities or a sticker."""
     found = []
     entities = list(getattr(message, "entities", None) or [])
     entities.extend(getattr(message, "caption_entities", None) or [])
@@ -447,6 +447,10 @@ def custom_emojis_from_message(message):
         emoji_id = getattr(entity, "custom_emoji_id", None)
         if str(entity_type) == "custom_emoji" and emoji_id and emoji_id not in found:
             found.append(emoji_id)
+    sticker = getattr(message, "sticker", None)
+    sticker_emoji_id = getattr(sticker, "custom_emoji_id", None)
+    if sticker_emoji_id and sticker_emoji_id not in found:
+        found.append(sticker_emoji_id)
     return found
 
 
@@ -2814,7 +2818,31 @@ async def handle_ticket_attachment(update, context):
 
 
 async def handle_pending_attachment(update, context):
-    await handle_ticket_attachment(update, context)
+    if await handle_ticket_attachment(update, context):
+        return
+    uid = update.effective_user.id
+    pending = PENDING.get(uid)
+    if uid != ADMIN_ID or not pending or pending[0] not in {
+        "adm_svcemoji", "adm_offemoji",
+    }:
+        return
+    custom_emoji_id = custom_emoji_from_message(update.effective_message)
+    if not custom_emoji_id:
+        await update.effective_message.reply_text(
+            "⚠️ Envoyez un emoji Telegram Premium, pas un sticker ordinaire."
+        )
+        return
+    kind, object_id = pending
+    if kind == "adm_svcemoji":
+        db.update_service(int(object_id), emoji="", custom_emoji_id=custom_emoji_id)
+        markup = admin.service_admin_keyboard(int(object_id))
+        confirmation = "✅ Emoji du service mis à jour."
+    else:
+        db.update_offer(int(object_id), emoji="", custom_emoji_id=custom_emoji_id)
+        markup = admin.offer_admin_keyboard(int(object_id))
+        confirmation = "✅ Emoji de l'offre mis à jour."
+    PENDING.pop(uid, None)
+    await update.effective_message.reply_text(confirmation, reply_markup=markup)
 
 
 async def handle_pending_photo(update, context):
