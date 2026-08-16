@@ -79,24 +79,17 @@ KNOWN_SERVICE_EMOJIS = {
 
 def get_service_emoji(name, current_emoji=""):
     emoji = str(current_emoji or "").strip()
-    if emoji and emoji != "📦":
+    if emoji and emoji not in {"🟢", "🔴", "🔵"}:
         return emoji
     name_lower = str(name or "").lower()
     for key, val in KNOWN_SERVICE_EMOJIS.items():
         if key in name_lower:
             return val
-    return "🟢"
+    return "📦"
 
 
 def stock_badge(stock, unlimited=False):
-    if unlimited:
-        return "🟢"
-    stock = int(stock or 0)
-    if stock > 3:
-        return "🟢"
-    if stock > 0:
-        return "🔵"
-    return "🔴"
+    return ""
 
 
 def stock_button_style(stock):
@@ -124,9 +117,11 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
         currency = str(offer.get("currency") or "USDT").upper()
         price_text = f"${amount}" if currency in {"USD", "USDT"} else f"{amount} {currency}"
 
+    label = stock_label if stock_label is not None else t(lang, "stock_label")
+    lbl = str(label or "Stock").title()
+
     if offer.get("unlimited_stock"):
-        badge = "🟢"
-        suffix = f"{price_text} | {badge}: ∞"
+        suffix = f"{price_text} | {lbl}: ∞"
         max_name_length = max(8, 64 - len(suffix) - 3)
         name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
         return f"{name} | {suffix}"
@@ -134,14 +129,12 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
     stock = int(offer.get("stock") or 0)
     if stock <= 0:
         preorder_text = t(lang, "btn_preorder")
-        badge = "🔴"
-        suffix = f"{price_text} | {badge} {preorder_text}"
+        suffix = f"{price_text} | {preorder_text}"
         max_name_length = max(8, 64 - len(suffix) - 3)
         name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
         return f"{name} | {suffix}"
 
-    badge = stock_badge(stock)
-    suffix = f"{price_text} | {badge}: {stock}"
+    suffix = f"{price_text} | {lbl}: {stock}"
     max_name_length = max(8, 64 - len(suffix) - 3)
     name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
     return f"{name} | {suffix}"
