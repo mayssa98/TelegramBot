@@ -1406,8 +1406,8 @@ function ApiProductsPage({ data, onAction, setToast }) {
           />
         )}
       </section>
-      <BuyerKeys setToast={setToast} />
-      <CustomExternalApis setToast={setToast} />
+      <BuyerKeys setToast={setToast} writeToken={data.dashboard_write_token} />
+      <CustomExternalApis setToast={setToast} writeToken={data.dashboard_write_token} />
       {editing && (
         <ApiProductEditor
           product={editing}
@@ -1421,7 +1421,7 @@ function ApiProductsPage({ data, onAction, setToast }) {
   );
 }
 
-function BuyerKeys({ setToast }) {
+function BuyerKeys({ setToast, writeToken }) {
   const [keys, setKeys] = useState([]);
   const [show, setShow] = useState(false);
   const [userId, setUserId] = useState("");
@@ -1441,7 +1441,10 @@ function BuyerKeys({ setToast }) {
     const response = await fetch("/admin/api/buyer-keys", {
       method: "POST",
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Dashboard-Write-Token": writeToken || "",
+      },
       body: JSON.stringify(body),
     });
     const payload = await response.json();
@@ -1547,7 +1550,7 @@ function BuyerKeys({ setToast }) {
   );
 }
 
-function CustomExternalApis({ setToast }) {
+function CustomExternalApis({ setToast, writeToken }) {
   const emptyForm = {
     name: "",
     endpoint: "https://",
@@ -1577,7 +1580,10 @@ function CustomExternalApis({ setToast }) {
       const response = await fetch("/admin", {
         method: "POST",
         credentials: "same-origin",
-        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          "X-Dashboard-Write-Token": writeToken || "",
+        },
         body: new URLSearchParams(Object.entries(payload).map(([key, value]) => [key, value == null ? "" : String(value)])),
       });
       const result = await response.json();
@@ -1869,6 +1875,7 @@ function InventoryPage({ data, onAction }) {
       credentials: "same-origin",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "X-Dashboard-Write-Token": data.dashboard_write_token || "",
       },
       body: new URLSearchParams({
         action: "reveal_inventory",

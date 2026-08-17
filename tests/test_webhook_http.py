@@ -10,6 +10,7 @@ from http.server import HTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import api.webhook as webhook_module
 from api.webhook import handler
 
 
@@ -118,6 +119,23 @@ def test_react_admin_section_route_serves_spa(monkeypatch):
 
     assert response.status == 200
     assert '<div id="root"></div>' in body
+
+
+def test_react_admin_data_includes_scoped_write_token(monkeypatch, mock_mongodb):
+    monkeypatch.setattr(webhook_module, "DASHBOARD_PASSWORD", "secret")
+    encoded = base64.b64encode(b"admin:secret").decode()
+    request = Request(
+        "http://placeholder/admin/api/data",
+        headers={"Authorization": f"Basic {encoded}"},
+    )
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/admin/api/data"
+        with urlopen(request, timeout=5) as response:
+            payload = json.load(response)
+
+    assert response.status == 200
+    assert payload["dashboard_write_token"] == webhook_module.dashboard_write_token()
+    assert payload["dashboard_write_token"] != "secret"
 
 
 def test_webhook_rejects_missing_secret(monkeypatch):

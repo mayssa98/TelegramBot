@@ -462,7 +462,10 @@ export default function App() {
       const response = await fetch("/admin", {
         method: "POST",
         credentials: "same-origin",
-        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          "X-Dashboard-Write-Token": data?.dashboard_write_token || "",
+        },
         body: new URLSearchParams(Object.entries(params).map(([key, value]) => [key, value == null ? "" : String(value)])),
       });
       const payload = await response.json();
@@ -484,7 +487,10 @@ export default function App() {
         const response = await fetch("/admin", {
           method: "POST",
           credentials: "same-origin",
-          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "X-Dashboard-Write-Token": data?.dashboard_write_token || "",
+          },
           body: new URLSearchParams({ action: "repair_telegram_webhook" }),
         });
         const payload = await response.json();

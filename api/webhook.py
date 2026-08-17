@@ -610,6 +610,7 @@ class handler(BaseHTTPRequestHandler):
                 data["bot_username"] = os.environ.get(
                     "HP_BOT_USERNAME", "blackmarketa_bot"
                 ).strip().lstrip("@")
+                data["dashboard_write_token"] = dashboard_write_token()
                 data["reseller"] = {
                     "configured": bool(reseller_service.MAILREADER_API_KEY),
                     "selected_count": db.get_conn().reseller_products.count_documents(
