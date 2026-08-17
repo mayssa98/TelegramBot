@@ -913,6 +913,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
   const [editServiceNameAr, setEditServiceNameAr] = useState("");
   const [editServiceEmoji, setEditServiceEmoji] = useState("📦");
   const [editServiceChannel, setEditServiceChannel] = useState("both");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const startEditService = (service) => {
     setEditService(service);

@@ -17,3 +17,11 @@ def test_railway_runs_single_webhook_replica_in_europe():
     assert deploy["multiRegionConfig"] == {
         "europe-west4-drams3a": {"numReplicas": 1}
     }
+
+
+def test_admin_catalog_declares_delete_confirmation_state():
+    source = (PROJECT_ROOT / "admin-ui" / "src" / "AdminPages.jsx").read_text(
+        encoding="utf-8"
+    )
+
+    assert "const [deleteTarget, setDeleteTarget] = useState(null);" in source
