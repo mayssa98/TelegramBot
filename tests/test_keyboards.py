@@ -195,6 +195,26 @@ def test_catalog_has_a_dedicated_preorder_button(monkeypatch):
     assert preorder.style == "danger"
 
 
+def test_normal_catalog_does_not_launch_legacy_direct_preorder(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [{
+        "id": 11, "service_id": 1, "service_name": "ChatGPT",
+        "name": "Plus", "price": 10.0, "currency": "USDT",
+        "stock": 0, "unlimited_stock": False,
+    }])
+
+    keyboard = kb.catalog_offers_keyboard("en")
+    callbacks = [
+        button.callback_data
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data
+    ]
+
+    assert "svc:1" in callbacks
+    assert "preorder_start:11" not in callbacks
+    assert callbacks.count("preorder_catalog") == 1
+
+
 def test_preorder_catalog_lists_only_empty_services_and_adjusted_offers(monkeypatch):
     offers = [
         {
@@ -532,7 +552,7 @@ def test_offers_keyboard_matches_reference_flow(monkeypatch):
     callbacks = [row[0].callback_data for row in keyboard.inline_keyboard]
     assert "off:1" in callbacks
     assert "off:2" in callbacks
-    assert any(c in callbacks for c in ("off:3", "preorder_start:3"))
+    assert "off:3" in callbacks
     assert "catalog" in [row[0].callback_data for row in keyboard.inline_keyboard if len(row) > 0]
 
 

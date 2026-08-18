@@ -402,7 +402,7 @@ def catalog_offers_keyboard(lang):
             safe_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
             stock = int(offer.get("stock") or 0)
             is_out = not offer.get("unlimited_stock") and stock <= 0
-            cb_data = f"preorder_start:{offer['id']}" if is_out else f"off:{offer['id']}"
+            cb_data = f"off:{offer['id']}"
             btn_style = "danger" if is_out else ("success" if offer.get("unlimited_stock") else stock_button_style(stock))
             regular_offer_buttons.append([InlineKeyboardButton(
                 offer_button_label(
@@ -572,12 +572,11 @@ def preorder_offers_keyboard(lang, service_id):
     return InlineKeyboardMarkup(rows)
 
 
-def preorder_offer_keyboard(lang, offer_id):
-    """Offer pre-order instead of a dead end when physical stock is empty."""
-    return InlineKeyboardMarkup([
-        [translated_button(lang, "btn_preorder", callback_data=f"preorder:{int(offer_id)}", style="primary")],
-        [translated_button(lang, "btn_back", callback_data="catalog")],
-    ])
+def out_of_stock_keyboard(lang):
+    """Return to the catalog without exposing the retired direct pre-order action."""
+    return InlineKeyboardMarkup([[
+        translated_button(lang, "btn_back", callback_data="catalog"),
+    ]])
 
 
 def quantity_keyboard(lang, offer, page=0, page_size=20):

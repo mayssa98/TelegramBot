@@ -910,13 +910,9 @@ async def show_deep_link_offer(update, lang, offer_id):
     offer = db.get_offer(int(offer_id))
     if not offer or not db.offer_has_stock(offer):
         await update.message.reply_text(
-            t(lang, "preorder_available") if offer and offer.get("price") is not None
-            else premium_customer_text(lang, "out_of_stock"),
+            premium_customer_text(lang, "out_of_stock"),
             parse_mode=ParseMode.HTML,
-            reply_markup=(
-                kb.preorder_offer_keyboard(lang, offer["id"])
-                if offer and offer.get("price") is not None else None
-            ),
+            reply_markup=kb.out_of_stock_keyboard(lang),
         )
         return
     detail_text = compact_offer_text(offer, lang)
@@ -1526,13 +1522,9 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         off = db.get_offer(oid)
         if not off or not db.offer_has_stock(off):
             await q.message.reply_text(
-                t(lang, "preorder_available") if off and off.get("price") is not None
-                else premium_customer_text(lang, "out_of_stock"),
+                premium_customer_text(lang, "out_of_stock"),
                 parse_mode=ParseMode.HTML,
-                reply_markup=(
-                    kb.preorder_offer_keyboard(lang, off["id"])
-                    if off and off.get("price") is not None else None
-                ),
+                reply_markup=kb.out_of_stock_keyboard(lang),
             )
             return
         detail_text = compact_offer_text(off, lang)
@@ -1583,7 +1575,14 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("buy:"):
         await handle_quantity_selection(update, context, lang)
         return
-    if data.startswith(("preorder:", "preorder_start:", "preorder_page:")):
+    if data.startswith("preorder:"):
+        await show_callback_screen(
+            q,
+            t(lang, "preorder_catalog_title"),
+            reply_markup=kb.preorder_services_keyboard(lang),
+        )
+        return
+    if data.startswith(("preorder_start:", "preorder_page:")):
         await handle_preorder_quantity_selection(update, context, lang)
         return
     if data.startswith("qty_page:"):

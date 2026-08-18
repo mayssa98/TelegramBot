@@ -1011,7 +1011,7 @@ def test_catalog_from_photo_caption_sends_a_new_text_screen(monkeypatch):
     query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
 
 
-def test_out_of_stock_offer_click_sends_customer_message(monkeypatch):
+def test_out_of_stock_offer_click_has_no_legacy_preorder_button(monkeypatch):
     message = SimpleNamespace(reply_text=AsyncMock())
     query = SimpleNamespace(
         data="off:9",
@@ -1035,7 +1035,8 @@ def test_out_of_stock_offer_click_sends_customer_message(monkeypatch):
         for row in message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
         for button in row
     ]
-    assert "preorder:9" in callbacks
+    assert callbacks == ["catalog"]
+    assert not any(callback.startswith("preorder:") for callback in callbacks)
 
 def test_offer_back_button_from_photo_opens_service_without_editing_photo(monkeypatch):
     message = SimpleNamespace(text=None, reply_text=AsyncMock())
