@@ -32,7 +32,7 @@ from i18n import t
 BUTTON_TEXT_KEYS = {
     "menu_catalog", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
     "menu_support", "menu_lang", "menu_admin", "btn_main_menu", "support_no_order",
-    "catalog_request_button",
+    "catalog_request_button", "catalog_preorder_button",
     "topup_verify_txid", "topup_verify_bybit", "topup_bsc", "topup_polygon",
     "topup_home_button",
     "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
@@ -40,6 +40,7 @@ BUTTON_TEXT_KEYS = {
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_pay_bybit", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
     "btn_cancel", "btn_continue_payment", "btn_new_order", "btn_reply_manual_order",
+    "btn_codex_number_agree",
     "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_join_group",
     "btn_verify_join", "btn_channel_buy_now",
 }
@@ -337,7 +338,7 @@ def catalog_offers_keyboard(lang):
     db.preload_text_overrides(
         (
             "stock_label", "price_tbd", "catalog_request_button",
-            "btn_refresh_short", "btn_main_menu_short",
+            "catalog_preorder_button", "btn_refresh_short", "btn_main_menu_short",
         ),
         lang,
     )
@@ -433,6 +434,14 @@ def catalog_offers_keyboard(lang):
     buttons.extend(regular_offer_buttons)
 
     buttons.append([
+        translated_button(
+            lang,
+            "catalog_preorder_button",
+            callback_data="preorder_catalog",
+            style="danger",
+        ),
+    ])
+    buttons.append([
         translated_button(lang, "catalog_request_button", callback_data="catalog_request"),
     ])
     buttons.append([
@@ -493,6 +502,74 @@ def offer_detail_keyboard(lang, offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
     buttons.append([translated_button(lang, "btn_back", callback_data="catalog")])
     return InlineKeyboardMarkup(buttons)
+
+
+def _preorder_catalog_offers(service_id=None):
+    """Return active, priced physical offers that currently have no stock."""
+    return [
+        offer
+        for offer in db.list_catalog_offers()
+        if (
+            (service_id is None or int(offer.get("service_id") or 0) == int(service_id))
+            and offer.get("price") is not None
+            and not offer.get("unlimited_stock")
+            and int(offer.get("stock") or 0) <= 0
+        )
+    ]
+
+
+def preorder_services_keyboard(lang):
+    """List services containing pre-orderable offers as red Telegram buttons."""
+    services = {}
+    for offer in _preorder_catalog_offers():
+        service_id = int(offer["service_id"])
+        services.setdefault(service_id, offer)
+
+    rows, row = [], []
+    for service_id, offer in services.items():
+        service_name = str(offer.get("service_name") or f"Service #{service_id}").strip()
+        service_icon = offer.get("service_custom_emoji_id") or None
+        service_emoji = get_service_emoji(service_name, offer.get("service_emoji"))
+        label = clean_button_name(service_name) or service_name
+        if service_emoji and not service_icon:
+            label = f"{service_emoji} {label}".strip()
+        row.append(InlineKeyboardButton(
+            compact_offer_name(label, 28),
+            callback_data=f"preorder_svc:{service_id}",
+            style="danger",
+            icon_custom_emoji_id=service_icon,
+        ))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([translated_button(lang, "btn_back", callback_data="catalog")])
+    return InlineKeyboardMarkup(rows)
+
+
+def preorder_offers_keyboard(lang, service_id):
+    """List only empty offers for one service, displaying the 10%-adjusted price."""
+    from app.domain.order_service import preorder_unit_price
+
+    rows = []
+    for offer in _preorder_catalog_offers(service_id):
+        adjusted_offer = dict(offer)
+        adjusted_offer["name"] = clean_button_name(offer.get("name")) or f"Offer #{offer['id']}"
+        adjusted_offer["price"] = preorder_unit_price(offer["price"])
+        rows.append([InlineKeyboardButton(
+            offer_button_label(lang, adjusted_offer),
+            callback_data=f"preorder_start:{offer['id']}",
+            style="danger",
+            icon_custom_emoji_id=(
+                db.get_text_override_icon("stock_label", lang)
+                or offer.get("custom_emoji_id")
+                or offer.get("service_custom_emoji_id")
+                or None
+            ),
+        )])
+    rows.append([translated_button(lang, "btn_back", callback_data="preorder_catalog")])
+    return InlineKeyboardMarkup(rows)
 
 
 def preorder_offer_keyboard(lang, offer_id):
@@ -635,6 +712,18 @@ def manual_order_reply_keyboard(lang, order_id):
             "btn_reply_manual_order",
             callback_data=f"manual_reply:{int(order_id)}",
             style="primary",
+        ),
+    ]])
+
+
+def codex_number_agree_keyboard(lang, order_id):
+    """Require explicit customer acceptance before the OTP can be sent."""
+    return InlineKeyboardMarkup([[
+        translated_button(
+            lang,
+            "btn_codex_number_agree",
+            callback_data=f"codex_number_agree:{int(order_id)}",
+            style="success",
         ),
     ]])
 

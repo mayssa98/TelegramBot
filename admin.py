@@ -198,7 +198,14 @@ def order_detail_text(o):
 def order_detail_keyboard(o):
     rows = []
     if o and o["status"] in {"paid", "payment_confirmed"}:
-        rows.extend(manual_delivery_request_keyboard(o["id"]).inline_keyboard)
+        if db.is_otp_service_name(o.get("service_name")):
+            workflow = str(o.get("otp_workflow_status") or "")
+            if workflow == "customer_agreed":
+                rows.extend(codex_otp_request_keyboard(o["id"]).inline_keyboard)
+            elif workflow != "number_sent":
+                rows.extend(codex_number_request_keyboard(o["id"]).inline_keyboard)
+        else:
+            rows.extend(manual_delivery_request_keyboard(o["id"]).inline_keyboard)
     rows.append([InlineKeyboardButton("⬅️ Retour", callback_data="adm_panel")])
     return InlineKeyboardMarkup(rows)
 
@@ -214,6 +221,28 @@ def manual_delivery_request_keyboard(order_id):
         InlineKeyboardButton(
             "🎁 Envoyer la commande",
             callback_data=f"adm_deliver:{order_id}",
+            style="success",
+        ),
+    ]])
+
+
+def codex_number_request_keyboard(order_id):
+    """Start the first stage of a paid Codex-number order."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "📱 Send number",
+            callback_data=f"adm_codex_number:{int(order_id)}",
+            style="success",
+        ),
+    ]])
+
+
+def codex_otp_request_keyboard(order_id):
+    """Allow OTP entry only after the customer accepted the number."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "🔐 Send OTP code",
+            callback_data=f"adm_codex_otp:{int(order_id)}",
             style="success",
         ),
     ]])
@@ -335,7 +364,7 @@ def _purchase_product_total(order, offer=None):
 
 
 async def post_purchase_to_channel(context, order):
-    """Post an anonymized purchase notification to @blackmarketBotChannel with a 'Buy Now' button."""
+    """Post the correct paid purchase or pre-order announcement to the channel."""
     try:
         channel_id = os.environ.get("HP_REQUIRED_CHANNEL", "@blackmarketBotChannel").strip()
         if not channel_id:
@@ -360,6 +389,7 @@ async def post_purchase_to_channel(context, order):
                 rem_stock_text = f"{rem_stock} left" if rem_stock > 0 else "0 (Pre-order available)"
 
         product_total = _purchase_product_total(order, offer)
+        is_preorder = bool(order.get("is_preorder"))
 
         if offer_id:
             start_param = f"off_{offer_id}"
@@ -370,18 +400,30 @@ async def post_purchase_to_channel(context, order):
 
         buy_url = f"https://t.me/{bot_username}?start={start_param}"
 
-        message_text = (
-            "🔥 <b>NEW ORDER COMPLETED!</b> 🔥\n\n"
-            f"🛒 <b>Product:</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
-            f"📦 <b>Quantity Ordered:</b> <code>{qty}</code>\n"
-            f"📊 <b>Remaining Stock:</b> <code>{rem_stock_text}</code>\n"
-            f"💰 <b>Total Price:</b> <code>${product_total:.2f} USDT</code>\n"
-            f"⚡ <b>Status:</b> <code>Paid & Confirmed 🟢</code>\n\n"
-            "✨ <i>Get yours directly on BlackMarket Bot!</i>"
-        )
+        if is_preorder:
+            message_text = (
+                "⏳ <b>NEW PRE-ORDER CONFIRMED!</b> ⏳\n\n"
+                f"📋 <b>Product:</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
+                f"📦 <b>Quantity Pre-ordered:</b> <code>{qty}</code>\n"
+                f"💰 <b>Pre-order Total:</b> <code>${product_total:.2f} USDT</code>\n"
+                "✅ <b>Status:</b> <code>Paid — Awaiting Restock</code>\n\n"
+                "✨ <i>Reserve yours now on BlackMarket Bot!</i>"
+            )
+            action_label = "⏳ Pre-order Now"
+        else:
+            message_text = (
+                "🔥 <b>NEW ORDER COMPLETED!</b> 🔥\n\n"
+                f"🛒 <b>Product:</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
+                f"📦 <b>Quantity Ordered:</b> <code>{qty}</code>\n"
+                f"📊 <b>Remaining Stock:</b> <code>{rem_stock_text}</code>\n"
+                f"💰 <b>Total Price:</b> <code>${product_total:.2f} USDT</code>\n"
+                f"⚡ <b>Status:</b> <code>Paid & Confirmed 🟢</code>\n\n"
+                "✨ <i>Get yours directly on BlackMarket Bot!</i>"
+            )
+            action_label = "🛒 Buy Now"
 
         reply_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🛒 Buy Now", url=buy_url, style="success")
+            InlineKeyboardButton(action_label, url=buy_url, style="success")
         ]])
 
         await bot.send_message(
@@ -391,7 +433,7 @@ async def post_purchase_to_channel(context, order):
             reply_markup=reply_markup,
         )
     except Exception as exc:
-        log.warning("Channel purchase broadcast failed: %s", exc)
+        log.warning("Channel order broadcast failed: %s", exc)
 
 
 async def notify_new_order(context, order):

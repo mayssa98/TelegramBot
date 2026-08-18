@@ -514,8 +514,12 @@ def rich_text_from_message(message):
 def render_stored_rich_text(value, *, parse_legacy_markdown=True):
     """Render trusted admin HTML or legacy Markdown/token text as Telegram HTML."""
     raw_value = str(value or "")
-    if raw_value.startswith("[[HTML]]"):
-        rendered = raw_value.removeprefix("[[HTML]]")
+    html_prefix = next(
+        (prefix for prefix in ("[[HTML]]", "[HTML]") if raw_value.startswith(prefix)),
+        None,
+    )
+    if html_prefix:
+        rendered = raw_value.removeprefix(html_prefix)
         if parse_legacy_markdown:
             rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
             rendered = re.sub(r"\*([^*]+)\*", r"<b>\1</b>", rendered)
@@ -1180,8 +1184,6 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_topup_txid",
         "await_onchain_topup_amount",
         "await_onchain_topup_txid",
-        "otp_service",
-        "otp_country",
         "manual_order_reply",
         "await_quantity",
         "await_preorder_quantity",
@@ -1210,6 +1212,8 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "adm_broadcast_message",
         "adm_client_message",
         "adm_deliver",
+        "adm_codex_number",
+        "adm_codex_otp",
     }
 
     if pending and pending[0] in blocking_states:
@@ -1270,6 +1274,59 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
     await q.answer()
 
+    if data.startswith("codex_number_agree:"):
+        order_id = int(data.split(":", 1)[1])
+        order = db.get_order(order_id)
+        if (
+            not is_otp_order(order)
+            or int(order.get("user_id") or 0) != uid
+            or order.get("status") not in {"paid", "payment_confirmed"}
+        ):
+            await q.message.reply_text(t(lang, "otp_order_unavailable"))
+            return
+        workflow = str(order.get("otp_workflow_status") or "")
+        if workflow == "number_sent":
+            now = int(time.time())
+            changed = db.get_conn().orders.update_one(
+                {
+                    "id": order_id,
+                    "user_id": uid,
+                    "status": {"$in": ["paid", "payment_confirmed"]},
+                    "otp_workflow_status": "number_sent",
+                },
+                {"$set": {
+                    "otp_workflow_status": "customer_agreed",
+                    "codex_agreed_at": now,
+                    "updated_at": now,
+                }},
+            )
+            if not changed.modified_count:
+                await q.message.reply_text(t(lang, "otp_order_unavailable"))
+                return
+            order = db.get_order(order_id)
+            try:
+                await context.bot.send_message(
+                    ADMIN_ID,
+                    "<b>Customer accepted the Codex number</b>\n\n"
+                    f"Order: <b>#{order_id}</b>\n"
+                    f"Client ID: <code>{uid}</code>\n"
+                    f"Number: <code>{html.escape(str(order.get('codex_number') or '—'))}</code>\n\n"
+                    "Send the OTP code to complete the order.",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=admin.codex_otp_request_keyboard(order_id),
+                )
+            except Exception as exc:
+                log.warning("Codex order #%s agreement notification failed: %s", order_id, exc)
+        elif workflow != "customer_agreed":
+            await q.message.reply_text(t(lang, "otp_order_unavailable"))
+            return
+        await q.edit_message_text(
+            t(lang, "codex_number_agreed"),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.home_keyboard(lang, uid),
+        )
+        return
+
     if data == "verify_channel_join":
         allowed, details = await required_membership_status(context.bot, uid)
         if not allowed:
@@ -1303,6 +1360,34 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             q,
             t(lang, "catalog_flat_title", shop=SHOP_NAME),
             reply_markup=kb.catalog_offers_keyboard(lang),
+        )
+        return
+    if data == "preorder_catalog":
+        await show_callback_screen(
+            q,
+            t(lang, "preorder_catalog_title"),
+            reply_markup=kb.preorder_services_keyboard(lang),
+        )
+        return
+    if data.startswith("preorder_svc:"):
+        sid = int(data.split(":", 1)[1])
+        service = db.get_service(sid)
+        if not service:
+            await show_callback_screen(
+                q,
+                t(lang, "preorder_catalog_title"),
+                reply_markup=kb.preorder_services_keyboard(lang),
+            )
+            return
+        await show_callback_screen(
+            q,
+            t(
+                lang,
+                "preorder_service_title",
+                emoji=service.get("emoji") or "📦",
+                name=service.get("name") or f"Service #{sid}",
+            ),
+            reply_markup=kb.preorder_offers_keyboard(lang, sid),
         )
         return
     if data == "catalog_request":
@@ -1902,111 +1987,6 @@ async def handle_pending_input(update, context, lang):
         )
         return
 
-    if kind == "otp_service":
-        order_id = int(ref["order_id"] if isinstance(ref, dict) else ref)
-        order = db.get_order(order_id)
-        if not order or order.get("user_id") != uid or order.get("status") not in {
-            "paid", "payment_confirmed", "delivered",
-        }:
-            PENDING.pop(uid, None)
-            await update.message.reply_text(t(lang, "otp_order_unavailable"))
-            return
-        service_name = " ".join(text.split())[:120]
-        if not service_name:
-            await update.message.reply_text(t(lang, "otp_ask_service"))
-            return
-        db.get_conn().orders.update_one(
-            {"id": order_id},
-            {"$set": {
-                "otp_service": service_name,
-                "otp_workflow_status": "awaiting_country",
-                "updated_at": int(time.time()),
-            }},
-        )
-        PENDING[uid] = (
-            "otp_country",
-            {"order_id": order_id, "service": service_name},
-        )
-        await update.message.reply_text(
-            t(lang, "otp_ask_country", service=escape_markdown(service_name)),
-            parse_mode=ParseMode.MARKDOWN,
-        )
-        return
-
-    if kind == "otp_country":
-        order_id = int(ref["order_id"])
-        service_name = str(ref["service"])
-        order = db.get_order(order_id)
-        if not order or order.get("user_id") != uid or order.get("status") not in {
-            "paid", "payment_confirmed", "delivered",
-        }:
-            PENDING.pop(uid, None)
-            await update.message.reply_text(t(lang, "otp_order_unavailable"))
-            return
-        country = " ".join(text.split())[:80]
-        if not country:
-            await update.message.reply_text(
-                t(lang, "otp_ask_country", service=escape_markdown(service_name)),
-                parse_mode=ParseMode.MARKDOWN,
-            )
-            return
-        now = int(time.time())
-        db.get_conn().orders.update_one(
-            {"id": order_id},
-            {"$set": {
-                "otp_service": service_name,
-                "otp_country": country,
-                "otp_workflow_status": "sent_to_admin",
-                "otp_requested_at": now,
-                "updated_at": now,
-            }},
-        )
-        PENDING.pop(uid, None)
-        user = update.effective_user
-        username = f"@{user.username}" if getattr(user, "username", None) else "?"
-        display_name = getattr(user, "full_name", None) or username or str(uid)
-        request_details = f"Service: {service_name}\nCountry: {country}"
-        ticket = support_service.create_ticket(
-            uid,
-            request_details,
-            category="otp_order",
-            order_id=order_id,
-        )
-        admin_text = (
-            "<b>New paid OTP request</b>\n\n"
-            f"Order: <b>#{order_id}</b>\n"
-            f"Client: <b>{html.escape(str(display_name))}</b>\n"
-            f"Username: <b>{html.escape(username)}</b>\n"
-            f"Telegram ID: <code>{uid}</code>\n"
-            f"Quantity: <b>{int(order.get('qty') or 1)} OTP code(s)</b>\n"
-            f"Total paid: <b>{float(order.get('wallet_amount') or order.get('total_price') or 0):.2f} {CURRENCY}</b>\n"
-            f"Payment: <b>{html.escape(str(order.get('verify_method') or order.get('payment_method') or 'confirmed'))}</b>\n"
-            f"TXID: <code>{html.escape(str(order.get('txid') or 'wallet payment'))}</code>\n"
-            f"Requested service: <b>{html.escape(service_name)}</b>\n"
-            f"Country: <b>{html.escape(country)}</b>\n"
-            f"Support ticket: <b>#{ticket['id']}</b>"
-        )
-        try:
-            await context.bot.send_message(
-                ADMIN_ID,
-                admin_text,
-                parse_mode=ParseMode.HTML,
-                reply_markup=admin.manual_delivery_request_keyboard(order_id),
-            )
-        except Exception as exc:
-            log.warning("OTP order #%s admin notification failed: %s", order_id, exc)
-        await update.message.reply_text(
-            t(
-                lang,
-                "otp_redirect_admin",
-                oid=order_id,
-                service=escape_markdown(service_name),
-                country=escape_markdown(country),
-            ),
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.home_keyboard(lang, uid),
-        )
-        return
     if kind == "catalog_request":
         request_text = rich_text_from_message(update.message).strip()
         if not request_text:
@@ -2619,48 +2599,164 @@ async def handle_pending_input(update, context, lang):
         PENDING.pop(uid, None)
         return
 
+    if kind == "adm_codex_number" and uid == ADMIN_ID:
+        order_id = int(ref)
+        order = db.get_order(order_id)
+        number = " ".join(text.split())[:240]
+        if (
+            not is_otp_order(order)
+            or order.get("status") not in {"paid", "payment_confirmed"}
+            or str(order.get("otp_workflow_status") or "") != "awaiting_admin_number"
+        ):
+            PENDING.pop(uid, None)
+            await update.message.reply_text("⚠️ This Codex number order is no longer awaiting a number.")
+            return
+        if not number:
+            await update.message.reply_text("📱 Send the Codex number as text.")
+            return
+        customer_id = int(order["user_id"])
+        customer_lang = lang_of(customer_id)
+        try:
+            await context.bot.send_message(
+                customer_id,
+                t(
+                    customer_lang,
+                    "codex_number_received",
+                    oid=order_id,
+                    number=escape_markdown(number),
+                ),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=kb.codex_number_agree_keyboard(customer_lang, order_id),
+            )
+        except Exception as exc:
+            await update.message.reply_text(f"⚠️ Could not send the number to the customer: {exc}")
+            return
+        now = int(time.time())
+        changed = db.get_conn().orders.update_one(
+            {
+                "id": order_id,
+                "status": {"$in": ["paid", "payment_confirmed"]},
+                "otp_workflow_status": "awaiting_admin_number",
+            },
+            {"$set": {
+                "codex_number": number,
+                "otp_workflow_status": "number_sent",
+                "codex_number_sent_at": now,
+                "updated_at": now,
+            }},
+        )
+        PENDING.pop(uid, None)
+        if changed.modified_count:
+            await update.message.reply_text(
+                f"✅ Number sent for order #{order_id}. Waiting for the customer to tap I agree."
+            )
+        else:
+            await update.message.reply_text(
+                f"⚠️ The number was sent, but order #{order_id} changed before it could be saved."
+            )
+        return
+
+    if kind == "adm_codex_otp" and uid == ADMIN_ID:
+        order_id = int(ref)
+        order = db.get_order(order_id)
+        code = " ".join(text.split())[:240]
+        if (
+            not is_otp_order(order)
+            or order.get("status") not in {"paid", "payment_confirmed"}
+            or str(order.get("otp_workflow_status") or "") != "customer_agreed"
+        ):
+            PENDING.pop(uid, None)
+            await update.message.reply_text("⚠️ This order is not ready for its OTP code.")
+            return
+        if not code:
+            await update.message.reply_text("🔐 Send the OTP code as text.")
+            return
+        customer_id = int(order["user_id"])
+        customer_lang = lang_of(customer_id)
+        try:
+            await context.bot.send_message(
+                customer_id,
+                t(
+                    customer_lang,
+                    "codex_otp_received",
+                    oid=order_id,
+                    code=escape_markdown(code),
+                ),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=kb.post_delivery_keyboard(customer_lang, order_id),
+            )
+            delivered = order_service.manual_deliver_order(
+                order_id,
+                f"Codex number: {order.get('codex_number') or ''}\nOTP: {code}",
+            )
+        except Exception as exc:
+            await update.message.reply_text(f"⚠️ Could not send the OTP code: {exc}")
+            return
+        PENDING.pop(uid, None)
+        if not delivered:
+            await update.message.reply_text(
+                f"⚠️ The OTP was sent, but order #{order_id} was no longer awaiting delivery."
+            )
+            return
+        now = int(time.time())
+        db.get_conn().orders.update_one(
+            {"id": order_id, "status": "delivered"},
+            {"$set": {
+                "otp_workflow_status": "completed",
+                "codex_otp_sent_at": now,
+                "updated_at": now,
+            }},
+        )
+        await update.message.reply_text(f"✅ OTP sent. Order #{order_id} is complete.")
+        return
+
 
 def is_otp_order(order):
     return bool(order and db.is_otp_service_name(order.get("service_name")))
 
 
-async def begin_otp_order_questions(message, lang, order_id, uid):
-    """Start or recover the paid OTP service/country questionnaire."""
+async def begin_otp_order_questions(message, context, lang, order_id, uid):
+    """Start or recover the staged Codex number delivery workflow."""
     order = db.get_order(order_id)
     if not is_otp_order(order):
         return False
     workflow = str(order.get("otp_workflow_status") or "")
-    if workflow == "sent_to_admin":
+    if workflow in {"number_sent", "customer_agreed", "completed"}:
         return True
-    pending = PENDING.get(uid)
-    if workflow == "awaiting_country" and order.get("otp_service"):
-        PENDING[uid] = (
-            "otp_country",
-            {"order_id": order_id, "service": order["otp_service"]},
-        )
-        if not pending or pending[0] != "otp_country":
-            await message.reply_text(
-                t(
-                    lang,
-                    "otp_ask_country",
-                    service=escape_markdown(str(order["otp_service"])),
-                ),
-                parse_mode=ParseMode.MARKDOWN,
-            )
-        return True
-    PENDING[uid] = ("otp_service", {"order_id": order_id})
+    PENDING.pop(uid, None)
+    now = int(time.time())
     db.get_conn().orders.update_one(
         {"id": order_id},
         {"$set": {
-            "otp_workflow_status": "awaiting_service",
-            "updated_at": int(time.time()),
+            "otp_workflow_status": "awaiting_admin_number",
+            "updated_at": now,
         }},
     )
-    if not pending or pending[0] != "otp_service":
-        await message.reply_text(
-            t(lang, "otp_payment_confirmed_ask_service", oid=order_id),
-            parse_mode=ParseMode.MARKDOWN,
-        )
+    if not order.get("codex_admin_notified_at"):
+        try:
+            await context.bot.send_message(
+                ADMIN_ID,
+                "<b>New paid Codex number order</b>\n\n"
+                f"Order: <b>#{order_id}</b>\n"
+                f"Client ID: <code>{uid}</code>\n"
+                f"Quantity: <b>{int(order.get('qty') or 1)}</b>\n"
+                f"Total paid: <b>{float(order.get('wallet_amount') or order.get('total_price') or 0):.2f} {CURRENCY}</b>\n"
+                f"Payment: <b>{html.escape(str(order.get('verify_method') or order.get('payment_method') or 'confirmed'))}</b>\n\n"
+                "Send the number to the customer.",
+                parse_mode=ParseMode.HTML,
+                reply_markup=admin.codex_number_request_keyboard(order_id),
+            )
+            db.get_conn().orders.update_one(
+                {"id": order_id},
+                {"$set": {"codex_admin_notified_at": now}},
+            )
+        except Exception as exc:
+            log.warning("Codex order #%s admin notification failed: %s", order_id, exc)
+    await message.reply_text(
+        t(lang, "codex_payment_confirmed_waiting_number", oid=order_id),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.home_keyboard(lang, uid),
+    )
     return True
 
 # ---------------- Traitement de paiement ----------------
@@ -2715,7 +2811,9 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                 parse_mode=ParseMode.HTML,
             )
         paid_order = db.get_order(order_id)
-        if is_otp_order(paid_order) and await begin_otp_order_questions(message, lang, order_id, uid):
+        if is_otp_order(paid_order) and await begin_otp_order_questions(
+            message, context, lang, order_id, uid,
+        ):
             return
         if result["delivered_content"]:
             content = numbered_delivery_content(result["delivered_content"])
@@ -2766,7 +2864,8 @@ def premium_customer_text(lang: str, key: str, **kwargs) -> str:
         raw_value = str(raw_override)
         if kwargs:
             format_kwargs = kwargs
-            if raw_value.startswith("[[HTML]]"):
+            is_stored_html = raw_value.startswith(("[[HTML]]", "[HTML]"))
+            if is_stored_html:
                 format_kwargs = {name: html.escape(str(value)) for name, value in kwargs.items()}
                 if key == "order_created":
                     for name in ("total", "binance_id"):
@@ -2776,7 +2875,7 @@ def premium_customer_text(lang: str, key: str, **kwargs) -> str:
                 raw_value = raw_value.format(**format_kwargs)
     else:
         raw_value = t(lang, key, **kwargs)
-    if key == "order_created" and not raw_value.startswith("[[HTML]]"):
+    if key == "order_created" and not raw_value.startswith(("[[HTML]]", "[HTML]")):
         # Keep the payment values individually copyable in Telegram,
         # even when the admin's customized template uses plain placeholders.
         copyable_values = {
@@ -3352,6 +3451,51 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"(compte / code / instructions). Il sera transmis au client.")
         return
 
+    if data.startswith("adm_codex_number:"):
+        oid = int(data.split(":", 1)[1])
+        order = db.get_order(oid)
+        if (
+            not is_otp_order(order)
+            or order.get("status") not in {"paid", "payment_confirmed"}
+            or str(order.get("otp_workflow_status") or "") not in {
+                "", "awaiting_service", "awaiting_country", "sent_to_admin",
+                "awaiting_admin_number",
+            }
+        ):
+            await q.message.reply_text("⚠️ This order is not awaiting a Codex number.")
+            return
+        if str(order.get("otp_workflow_status") or "") != "awaiting_admin_number":
+            db.get_conn().orders.update_one(
+                {"id": oid},
+                {"$set": {
+                    "otp_workflow_status": "awaiting_admin_number",
+                    "updated_at": int(time.time()),
+                }},
+            )
+        PENDING[uid] = ("adm_codex_number", oid)
+        await q.message.reply_text(
+            f"📱 Send the Codex number for order #{oid}.\n\n"
+            "The customer will receive an I agree button."
+        )
+        return
+
+    if data.startswith("adm_codex_otp:"):
+        oid = int(data.split(":", 1)[1])
+        order = db.get_order(oid)
+        if (
+            not is_otp_order(order)
+            or order.get("status") not in {"paid", "payment_confirmed"}
+            or str(order.get("otp_workflow_status") or "") != "customer_agreed"
+        ):
+            await q.message.reply_text("⚠️ The customer has not accepted this number yet.")
+            return
+        PENDING[uid] = ("adm_codex_otp", oid)
+        await q.message.reply_text(
+            f"🔐 Send the OTP code for order #{oid}.\n\n"
+            "Sending it will complete the order."
+        )
+        return
+
     if data.startswith("adm_client_message:"):
         oid = int(data.split(":", 1)[1])
         order = db.get_order(oid)
@@ -3554,6 +3698,12 @@ async def deliver_order(update, context, order_id, content):
     o = db.get_order(order_id)
     if not o:
         await update.message.reply_text("Commande introuvable.")
+        return
+    if is_otp_order(o):
+        await update.message.reply_text(
+            "⚠️ Codex number orders must use Send number, customer I agree, "
+            "then Send OTP code. Generic delivery is disabled for this service."
+        )
         return
     cl = lang_of(o["user_id"])
     try:

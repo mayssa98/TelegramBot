@@ -688,6 +688,31 @@ def test_channel_message_accepts_exact_premium_emojis_and_rich_text(mock_mongodb
     assert '<tg-emoji emoji-id="premium-sale">🎉</tg-emoji>' in rendered
     assert "<b>New sale</b>" in rendered
 
+
+def test_delivery_template_accepts_legacy_single_html_marker(mock_mongodb):
+    db.set_text_override(
+        "delivery_received",
+        "en",
+        '[HTML]<tg-emoji emoji-id="premium-gift">🎁</tg-emoji> '
+        '<b>Your order #{oid} has been delivered!</b>\n\n'
+        'Service: <b>{service}</b> — {offer}\n\n<pre>{content}</pre>',
+    )
+
+    rendered = premium_customer_text(
+        "en",
+        "delivery_received",
+        oid=180,
+        service="Chat GPT",
+        offer="Chat GPT Plus",
+        content="55",
+    )
+
+    assert "[HTML]" not in rendered
+    assert '<tg-emoji emoji-id="premium-gift">🎁</tg-emoji>' in rendered
+    assert "<b>Your order #180 has been delivered!</b>" in rendered
+    assert "Service: <b>Chat GPT</b> — Chat GPT Plus" in rendered
+    assert "<pre>55</pre>" in rendered
+
 def test_premium_channel_html_also_renders_admin_markdown_markers(mock_mongodb):
     db.set_text_override(
         "channel_stock_announcement",
@@ -916,6 +941,54 @@ def test_catalog_button_opens_the_services_catalog(monkeypatch):
         for button in row
     }
     assert {"catalog", "home"} <= callbacks
+
+
+def test_preorder_catalog_opens_red_out_of_stock_services(monkeypatch):
+    message = SimpleNamespace(text="Catalog")
+    query = SimpleNamespace(
+        data="preorder_catalog",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+    )
+    keyboard = Mock()
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+    monkeypatch.setattr("bot.kb.preorder_services_keyboard", lambda _lang: keyboard)
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace()))
+
+    query.edit_message_text.assert_awaited_once()
+    call = query.edit_message_text.await_args
+    assert "PRE-ORDER" in call.args[0]
+    assert "2 hours maximum" in call.args[0]
+    assert call.kwargs["reply_markup"] is keyboard
+
+
+def test_preorder_service_opens_only_its_empty_offers(monkeypatch):
+    message = SimpleNamespace(text="Pre-order")
+    query = SimpleNamespace(
+        data="preorder_svc:7",
+        from_user=SimpleNamespace(id=42),
+        message=message,
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+    )
+    keyboard = Mock()
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+    monkeypatch.setattr(
+        "bot.db.get_service",
+        lambda _sid: {"id": 7, "name": "ChatGPT", "emoji": "🤖"},
+    )
+    monkeypatch.setattr("bot.kb.preorder_offers_keyboard", lambda _lang, _sid: keyboard)
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace()))
+
+    query.edit_message_text.assert_awaited_once()
+    call = query.edit_message_text.await_args
+    assert "Pre-order ChatGPT" in call.args[0]
+    assert "2 hours maximum" in call.args[0]
+    assert call.kwargs["reply_markup"] is keyboard
 
 
 def test_catalog_from_photo_caption_sends_a_new_text_screen(monkeypatch):
@@ -1257,7 +1330,7 @@ def test_empty_wallet_click_always_returns_a_visible_message(monkeypatch):
     )
 
 
-def test_otp_numbers_catalog_is_always_one_dollar_and_manual(mock_mongodb):
+def test_codex_number_catalog_is_always_half_a_dollar_and_manual(mock_mongodb):
     service_id = db.add_service("OTP numbers", "OTP")
     offers = db.list_offers(service_id)
     assert len(offers) == 1
@@ -1266,21 +1339,22 @@ def test_otp_numbers_catalog_is_always_one_dollar_and_manual(mock_mongodb):
     raw = mock_mongodb.offers.find_one({"id": offer_id})
     offer = db.get_offer(offer_id)
 
-    assert raw["price"] == 1.0
+    assert db.get_service(service_id)["name"] == "Codex number"
+    assert raw["price"] == 0.5
     assert raw["unlimited_stock"] is True
     assert raw["manual_stock"] is True
     assert raw["auto_delivery"] is False
-    assert offer["price"] == 1.0
+    assert offer["price"] == 0.5
     assert db.offer_has_stock(offer, 50) is True
 
     db.update_offer(offer_id, price=25.0, auto_delivery=True, unlimited_stock=False)
     updated = mock_mongodb.offers.find_one({"id": offer_id})
-    assert updated["price"] == 1.0
+    assert updated["price"] == 0.5
     assert updated["auto_delivery"] is False
     assert updated["unlimited_stock"] is True
 
 
-def test_existing_otp_service_without_offers_self_heals(mock_mongodb):
+def test_existing_otp_service_migrates_to_codex_number_and_self_heals(mock_mongodb):
     mock_mongodb.services.insert_one({
         "id": 77,
         "name": "OTP Numbers",
@@ -1294,8 +1368,9 @@ def test_existing_otp_service_without_offers_self_heals(mock_mongodb):
 
     assert len(first) == 1
     assert len(second) == 1
-    assert first[0]["name"] == "OTP code"
-    assert first[0]["price"] == 1.0
+    assert db.get_service(77)["name"] == "Codex number"
+    assert first[0]["name"] == "Codex number"
+    assert first[0]["price"] == 0.5
     assert first[0]["unlimited_stock"] is True
     assert first[0]["manual_stock"] is True
     assert mock_mongodb.offers.count_documents({"service_id": 77}) == 1
@@ -1371,7 +1446,7 @@ def test_manual_delivery_sends_admin_an_in_bot_reply_request(
     assert customer_keyboard.inline_keyboard[0][0].callback_data == "catalog"
 
 
-def test_paid_otp_order_asks_for_service_before_admin_handoff(mock_mongodb):
+def test_paid_codex_order_is_sent_to_admin_for_number(mock_mongodb):
     mock_mongodb.orders.insert_one({
         "id": 501,
         "user_id": 42,
@@ -1382,9 +1457,10 @@ def test_paid_otp_order_asks_for_service_before_admin_handoff(mock_mongodb):
     })
     message = SimpleNamespace(reply_text=AsyncMock())
 
+    bot_client = SimpleNamespace(send_message=AsyncMock())
     asyncio.run(send_payment_result(
         message,
-        SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock())),
+        SimpleNamespace(bot=bot_client),
         "en",
         501,
         {
@@ -1396,71 +1472,111 @@ def test_paid_otp_order_asks_for_service_before_admin_handoff(mock_mongodb):
         42,
     ))
 
-    assert PENDING.get(42) == ("otp_service", {"order_id": 501})
-    assert "What's the service?" in message.reply_text.await_args.args[0]
-    assert mock_mongodb.orders.find_one({"id": 501})["otp_workflow_status"] == "awaiting_service"
+    assert PENDING.get(42) is None
+    assert "preparing your Codex number" in message.reply_text.await_args.args[0]
+    assert mock_mongodb.orders.find_one({"id": 501})["otp_workflow_status"] == "awaiting_admin_number"
+    admin_call = bot_client.send_message.await_args
+    assert "New paid Codex number order" in admin_call.args[1]
+    assert admin_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "adm_codex_number:501"
 
 
-def test_otp_answers_notify_admin_and_redirect_customer(monkeypatch, mock_mongodb):
+def test_codex_number_agreement_then_otp_completes_order(monkeypatch, mock_mongodb):
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     mock_mongodb.orders.insert_one({
         "id": 502,
         "user_id": 42,
-        "service_name": "OTP numbers",
-        "offer_name": "OTP code",
-        "qty": 3,
-        "wallet_amount": 3.0,
+        "service_name": "Codex number",
+        "offer_name": "Codex number",
+        "qty": 1,
+        "wallet_amount": 0.5,
         "total_price": 0.0,
         "payment_method": "wallet",
         "verify_method": "wallet",
         "txid": "",
         "status": "payment_confirmed",
+        "otp_workflow_status": "awaiting_admin_number",
     })
-    PENDING[42] = ("otp_service", {"order_id": 502})
     bot_client = SimpleNamespace(send_message=AsyncMock())
     context = SimpleNamespace(bot=bot_client)
-    user = SimpleNamespace(id=42, username="otpbuyer", full_name="OTP Buyer")
 
-    service_message = SimpleNamespace(text="WhatsApp", reply_text=AsyncMock())
-    asyncio.run(handle_pending_input(
-        SimpleNamespace(effective_user=user, message=service_message),
-        context,
-        "en",
-    ))
-
-    assert PENDING.get(42) == (
-        "otp_country", {"order_id": 502, "service": "WhatsApp"},
+    admin_query = SimpleNamespace(
+        from_user=SimpleNamespace(id=999),
+        data="adm_codex_number:502",
+        answer=AsyncMock(),
+        message=SimpleNamespace(reply_text=AsyncMock()),
     )
-    assert "What's the country?" in service_message.reply_text.await_args.args[0]
+    asyncio.run(cb_admin(SimpleNamespace(callback_query=admin_query), context))
+    assert PENDING.get(999) == ("adm_codex_number", 502)
 
-    country_message = SimpleNamespace(text="Nigeria", reply_text=AsyncMock())
+    number_message = SimpleNamespace(text="+234 555 0100", reply_text=AsyncMock())
     asyncio.run(handle_pending_input(
-        SimpleNamespace(effective_user=user, message=country_message),
+        SimpleNamespace(effective_user=SimpleNamespace(id=999), message=number_message),
         context,
         "en",
     ))
-
-    assert PENDING.get(42) is None
     order = mock_mongodb.orders.find_one({"id": 502})
-    assert order["otp_service"] == "WhatsApp"
-    assert order["otp_country"] == "Nigeria"
-    assert order["otp_workflow_status"] == "sent_to_admin"
+    assert order["otp_workflow_status"] == "number_sent"
+    assert order["codex_number"] == "+234 555 0100"
+    customer_call = bot_client.send_message.await_args
+    assert customer_call.args[0] == 42
+    assert customer_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "codex_number_agree:502"
+
+    agree_query = SimpleNamespace(
+        from_user=SimpleNamespace(id=42),
+        data="codex_number_agree:502",
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+        message=SimpleNamespace(reply_text=AsyncMock()),
+    )
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=agree_query), context))
+    order = mock_mongodb.orders.find_one({"id": 502})
+    assert order["otp_workflow_status"] == "customer_agreed"
     admin_call = bot_client.send_message.await_args
     assert admin_call.args[0] == 999
-    assert "New paid OTP request" in admin_call.args[1]
-    assert "WhatsApp" in admin_call.args[1]
-    assert "Nigeria" in admin_call.args[1]
-    assert "3 OTP code(s)" in admin_call.args[1]
-    assert "3.00 USDT" in admin_call.args[1]
-    assert mock_mongodb.support_tickets.find_one({
-        "user_id": 42, "order_id": 502, "category": "otp_order",
+    assert "Customer accepted" in admin_call.args[1]
+    assert admin_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "adm_codex_otp:502"
+
+    otp_query = SimpleNamespace(
+        from_user=SimpleNamespace(id=999),
+        data="adm_codex_otp:502",
+        answer=AsyncMock(),
+        message=SimpleNamespace(reply_text=AsyncMock()),
+    )
+    asyncio.run(cb_admin(SimpleNamespace(callback_query=otp_query), context))
+    assert PENDING.get(999) == ("adm_codex_otp", 502)
+
+    otp_message = SimpleNamespace(text="847201", reply_text=AsyncMock())
+    asyncio.run(handle_pending_input(
+        SimpleNamespace(effective_user=SimpleNamespace(id=999), message=otp_message),
+        context,
+        "en",
+    ))
+    order = mock_mongodb.orders.find_one({"id": 502})
+    assert order["status"] == "delivered"
+    assert order["otp_workflow_status"] == "completed"
+    assert "OTP: 847201" in order["delivery_text"]
+
+
+def test_codex_order_cannot_use_generic_admin_delivery(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 504,
+        "user_id": 42,
+        "service_name": "Codex number",
+        "offer_name": "Codex number",
+        "status": "payment_confirmed",
+        "otp_workflow_status": "awaiting_admin_number",
     })
-    customer_call = country_message.reply_text.await_args
-    assert "directly in this bot" in customer_call.args[0]
-    assert customer_call.kwargs["reply_markup"].inline_keyboard[0][0].url is None
-    review_buttons = admin_call.kwargs["reply_markup"].inline_keyboard[0]
-    assert review_buttons[0].callback_data == "adm_client_message:502"
-    assert review_buttons[1].callback_data == "adm_deliver:502"
+    message = SimpleNamespace(reply_text=AsyncMock())
+    context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+
+    asyncio.run(deliver_order(
+        SimpleNamespace(message=message), context, 504, "bypass content",
+    ))
+
+    order = mock_mongodb.orders.find_one({"id": 504})
+    assert order["status"] == "payment_confirmed"
+    context.bot.send_message.assert_not_awaited()
+    assert "Generic delivery is disabled" in message.reply_text.await_args.args[0]
 
 
 def test_admin_message_does_not_complete_manual_order(mock_mongodb):

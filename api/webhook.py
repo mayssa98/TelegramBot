@@ -349,6 +349,15 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(404, {"ok": False, "error": str(exc)})
             return
 
+        if path == "/api/storefront/product-portrait":
+            try:
+                offer_id = int(parse_qs(url.query).get("offer_id", [0])[0])
+                body, content_type = storefront_service.product_portrait(offer_id)
+                self._reply_bytes(200, body, content_type)
+            except (TypeError, ValueError, storefront_service.StorefrontError) as exc:
+                self._reply(404, {"ok": False, "error": str(exc)})
+            return
+
         if path == "/api/storefront/order":
             params = parse_qs(url.query)
             try:
@@ -1039,6 +1048,10 @@ class handler(BaseHTTPRequestHandler):
                     storefront_service.validate_product_image(
                         form["site_image_data"], form.get("site_image_type", ""),
                     )
+                if form.get("site_portrait_data"):
+                    storefront_service.validate_product_image(
+                        form["site_portrait_data"], form.get("site_portrait_type", ""),
+                    )
                 service_id_raw = form.get("service_id", "").strip()
                 if service_id_raw:
                     sid = int(service_id_raw)
@@ -1093,6 +1106,7 @@ class handler(BaseHTTPRequestHandler):
                     site_description_fr=form.get("site_description_fr", "").strip(),
                     site_description_ar=form.get("site_description_ar", "").strip(),
                     site_image_url=form.get("site_image_url", "").strip(),
+                    site_portrait_url=form.get("site_portrait_url", "").strip(),
                     site_category=form.get("site_category", "").strip(),
                     site_badge=form.get("site_badge", "").strip(),
                     site_badge_ar=form.get("site_badge_ar", "").strip(),
@@ -1113,11 +1127,22 @@ class handler(BaseHTTPRequestHandler):
                         form.get("site_image_type", ""),
                         admin_id=ADMIN_ID,
                     )
+                if form.get("site_portrait_data"):
+                    storefront_service.save_product_portrait(
+                        oid,
+                        form["site_portrait_data"],
+                        form.get("site_portrait_type", ""),
+                        admin_id=ADMIN_ID,
+                    )
 
             elif action == "update_offer":
                 if form.get("site_image_data"):
                     storefront_service.validate_product_image(
                         form["site_image_data"], form.get("site_image_type", ""),
+                    )
+                if form.get("site_portrait_data"):
+                    storefront_service.validate_product_image(
+                        form["site_portrait_data"], form.get("site_portrait_type", ""),
                     )
                 oid = int(form["offer_id"])
                 name = form["name"].strip()[:120]
@@ -1145,6 +1170,7 @@ class handler(BaseHTTPRequestHandler):
                     site_description_fr=form.get("site_description_fr", "").strip(),
                     site_description_ar=form.get("site_description_ar", "").strip(),
                     site_image_url=form.get("site_image_url", "").strip(),
+                    site_portrait_url=form.get("site_portrait_url", "").strip(),
                     site_category=form.get("site_category", "").strip(),
                     site_badge=form.get("site_badge", "").strip(),
                     site_badge_ar=form.get("site_badge_ar", "").strip(),
@@ -1159,6 +1185,13 @@ class handler(BaseHTTPRequestHandler):
                         oid,
                         form["site_image_data"],
                         form.get("site_image_type", ""),
+                        admin_id=ADMIN_ID,
+                    )
+                if form.get("site_portrait_data"):
+                    storefront_service.save_product_portrait(
+                        oid,
+                        form["site_portrait_data"],
+                        form.get("site_portrait_type", ""),
                         admin_id=ADMIN_ID,
                     )
 

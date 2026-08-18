@@ -125,7 +125,11 @@ def _safe_image_url(value: Any) -> str:
     parsed = urlsplit(url)
     if parsed.scheme == "https" and parsed.netloc:
         return url
-    if url.startswith("/storefront/") or url.startswith("/api/storefront/product-image"):
+    if (
+        url.startswith("/storefront/")
+        or url.startswith("/api/storefront/product-image")
+        or url.startswith("/api/storefront/product-portrait")
+    ):
         return url
     return ""
 
@@ -188,6 +192,42 @@ def product_image(offer_id: int) -> tuple[bytes, str]:
     return bytes(row.get("payload") or b""), str(row.get("mime_type") or "image/jpeg")
 
 
+def save_product_portrait(offer_id: int, encoded: str, mime_type: str, *, admin_id: int) -> str:
+    """Validate and persist the portrait used only by the product-detail modal."""
+    offer_id = int(offer_id)
+    if not db.get_offer(offer_id):
+        raise StorefrontError("Produit introuvable.")
+    raw, mime_type = validate_product_image(encoded, mime_type)
+    now = int(time.time())
+    db.get_conn().storefront_product_portraits.update_one(
+        {"offer_id": offer_id},
+        {"$set": {
+            "payload": raw,
+            "mime_type": mime_type,
+            "size": len(raw),
+            "updated_at": now,
+            "updated_by": int(admin_id),
+        }},
+        upsert=True,
+    )
+    url = f"/api/storefront/product-portrait?offer_id={offer_id}&v={now}"
+    db.update_offer(offer_id, site_portrait_url=url)
+    db.audit_event(
+        "storefront.product_portrait_updated",
+        actor_id=admin_id,
+        details={"offer_id": offer_id, "mime_type": mime_type, "size": len(raw)},
+    )
+    return url
+
+
+def product_portrait(offer_id: int) -> tuple[bytes, str]:
+    """Return one admin-uploaded portrait for the public product-detail modal."""
+    row = db.get_conn().storefront_product_portraits.find_one({"offer_id": int(offer_id)})
+    if not row:
+        raise StorefrontError("Portrait introuvable.")
+    return bytes(row.get("payload") or b""), str(row.get("mime_type") or "image/jpeg")
+
+
 def _site_category(service: dict[str, Any], offer: dict[str, Any]) -> str:
     configured = str(offer.get("site_category") or "").strip().lower()
     if configured in CATEGORY_LABELS:
@@ -240,6 +280,7 @@ def catalog(lang: str = "fr") -> dict[str, Any]:
                 "stock": -1 if offer.get("unlimited_stock") else max(0, int(offer.get("stock") or 0)),
                 "featured": bool(offer.get("site_featured")),
                 "image_url": _safe_image_url(offer.get("site_image_url")),
+                "portrait_url": _safe_image_url(offer.get("site_portrait_url")),
                 "logo_url": _service_logo(service),
                 "category": category,
                 "category_label": CATEGORY_LABELS[category][lang],

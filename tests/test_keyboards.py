@@ -49,6 +49,7 @@ def test_catalog_reuses_shared_translation_and_icon_lookups(monkeypatch):
             "stock_label": "Stock",
             "price_tbd": "Price TBD",
             "catalog_request_button": "Request",
+            "catalog_preorder_button": "Pre-order",
             "btn_refresh_short": "Refresh",
             "btn_main_menu_short": "Home",
         }[key]
@@ -177,6 +178,59 @@ def test_preorder_checkout_keeps_flag_in_every_payment_callback():
     payment_callbacks = [value for value in callbacks if value.startswith("pay_")]
     assert payment_callbacks
     assert all(value.endswith(":9:3:preorder") for value in payment_callbacks)
+
+
+def test_catalog_has_a_dedicated_preorder_button(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [])
+
+    keyboard = kb.catalog_offers_keyboard("en")
+    preorder = next(
+        button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data == "preorder_catalog"
+    )
+
+    assert preorder.text == "⏳ Pre-order"
+    assert preorder.style == "danger"
+
+
+def test_preorder_catalog_lists_only_empty_services_and_adjusted_offers(monkeypatch):
+    offers = [
+        {
+            "id": 11, "service_id": 1, "service_name": "ChatGPT",
+            "service_emoji": "🤖", "name": "Plus", "price": 10.0,
+            "currency": "USDT", "stock": 0,
+        },
+        {
+            "id": 12, "service_id": 1, "service_name": "ChatGPT",
+            "service_emoji": "🤖", "name": "Team", "price": 20.0,
+            "currency": "USDT", "stock": 3,
+        },
+        {
+            "id": 13, "service_id": 2, "service_name": "Unlimited",
+            "service_emoji": "♾️", "name": "Managed", "price": 5.0,
+            "currency": "USDT", "stock": 0, "unlimited_stock": True,
+        },
+    ]
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: offers)
+
+    services = kb.preorder_services_keyboard("en")
+    service_buttons = [
+        button for row in services.inline_keyboard for button in row
+        if button.callback_data and button.callback_data.startswith("preorder_svc:")
+    ]
+    assert [button.callback_data for button in service_buttons] == ["preorder_svc:1"]
+    assert service_buttons[0].style == "danger"
+
+    products = kb.preorder_offers_keyboard("en", 1)
+    product_buttons = [
+        button for row in products.inline_keyboard for button in row
+        if button.callback_data and button.callback_data.startswith("preorder_start:")
+    ]
+    assert [button.callback_data for button in product_buttons] == ["preorder_start:11"]
+    assert "$11" in product_buttons[0].text
+    assert product_buttons[0].style == "danger"
 
 
 def test_stock_label_is_listed_in_catalog_admin_category():

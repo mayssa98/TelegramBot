@@ -708,6 +708,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
     site_description_fr: offer?.site_description_fr || "",
     site_description_ar: offer?.site_description_ar || "",
     site_image_url: offer?.site_image_url || "",
+    site_portrait_url: offer?.site_portrait_url || "",
     site_category: offer?.site_category || "",
     site_badge: offer?.site_badge || "",
     site_badge_ar: offer?.site_badge_ar || "",
@@ -716,6 +717,9 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
   const [imageUpload, setImageUpload] = useState(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState("");
+  const [portraitUpload, setPortraitUpload] = useState(null);
+  const [portraitBusy, setPortraitBusy] = useState(false);
+  const [portraitError, setPortraitError] = useState("");
   const set = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
   const submit = async (event) => {
@@ -732,6 +736,8 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
       site_featured: form.site_featured ? "on" : "",
       site_image_data: imageUpload?.data || "",
       site_image_type: imageUpload?.type || "",
+      site_portrait_data: portraitUpload?.data || "",
+      site_portrait_type: portraitUpload?.type || "",
     };
     if (await onAction(payload)) onClose();
   };
@@ -803,7 +809,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
               <option value="other">Autres services</option>
             </select>
           </Field>
-          <Field label="Image du produit (URL HTTPS)" wide>
+          <Field label="Image de la carte catalogue (URL HTTPS)" wide>
             <input type="url" value={form.site_image_url} onChange={(event) => { set("site_image_url", event.target.value); setImageUpload(null); setImageError(""); }} placeholder="https://…/produit.webp" />
           </Field>
           <div className="product-image-upload">
@@ -811,7 +817,16 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
             <span>ou utilisez une URL HTTPS dans le champ ci-dessus.</span>
           </div>
           {imageError && <div className="form-error wide">{imageError}</div>}
-          {(imageUpload?.data || form.site_image_url) && <div className="product-image-preview"><img src={imageUpload?.data || form.site_image_url} alt="Aperçu du produit" onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Aperçu de l’image</strong><span>{imageUpload ? `${Math.round(imageUpload.size / 1024)} Ko · prête à être enregistrée` : "Cette image sera utilisée sur Trust Market TN."}</span></div></div>}
+          {(imageUpload?.data || form.site_image_url) && <div className="product-image-preview"><img src={imageUpload?.data || form.site_image_url} alt="Aperçu de la carte catalogue" onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Aperçu de la carte catalogue</strong><span>{imageUpload ? `${Math.round(imageUpload.size / 1024)} Ko · prête à être enregistrée` : "Cette image sera utilisée sur les cartes du catalogue."}</span></div></div>}
+          <Field label="Portrait de la fiche produit (URL HTTPS)" wide>
+            <input type="url" value={form.site_portrait_url} onChange={(event) => { set("site_portrait_url", event.target.value); setPortraitUpload(null); setPortraitError(""); }} placeholder="https://…/portrait-produit.webp" />
+          </Field>
+          <div className="product-image-upload portrait-upload">
+            <label className={portraitBusy ? "busy" : ""}><Upload size={19} /><strong>{portraitBusy ? "Optimisation…" : "Importer le portrait"}</strong><span>Format vertical conseillé · JPG, PNG ou WebP · 8 Mo maximum</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={portraitBusy} onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setPortraitBusy(true); setPortraitError(""); try { const optimized = await optimizeProductImage(file); setPortraitUpload(optimized); set("site_portrait_url", ""); } catch (error) { setPortraitError(error.message); } finally { setPortraitBusy(false); event.target.value = ""; } }} /></label>
+            <span>Affiché uniquement dans le grand panneau de détails.</span>
+          </div>
+          {portraitError && <div className="form-error wide">{portraitError}</div>}
+          {(portraitUpload?.data || form.site_portrait_url) && <div className="product-image-preview portrait-preview"><img src={portraitUpload?.data || form.site_portrait_url} alt="Aperçu du portrait" onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Aperçu du portrait</strong><span>{portraitUpload ? `${Math.round(portraitUpload.size / 1024)} Ko · prêt à être enregistré` : "Ce portrait remplira le panneau gauche de la fiche produit."}</span></div></div>}
           <Field label="Badge français">
             <input value={form.site_badge} onChange={(event) => set("site_badge", event.target.value)} placeholder="Populaire, Nouveau…" />
           </Field>
@@ -887,7 +902,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
           <ActionButton secondary onClick={onClose} type="button">
             Annuler
           </ActionButton>
-          <ActionButton icon={Check} type="submit" disabled={imageBusy}>
+          <ActionButton icon={Check} type="submit" disabled={imageBusy || portraitBusy}>
             Enregistrer
           </ActionButton>
         </div>

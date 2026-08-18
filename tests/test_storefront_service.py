@@ -71,6 +71,7 @@ def test_catalog_uses_site_visual_content_and_cleans_telegram_markup(mock_mongod
         site_description_fr="Une description claire pour le site.",
         site_description_ar="وصف واضح للموقع",
         site_image_url="https://cdn.example.com/chatgpt.webp",
+        site_portrait_url="https://cdn.example.com/chatgpt-portrait.webp",
         site_category="ai",
         site_badge="Populaire",
         site_badge_ar="الأكثر طلباً",
@@ -82,6 +83,7 @@ def test_catalog_uses_site_visual_content_and_cleans_telegram_markup(mock_mongod
 
     assert french["description"] == "Une description claire pour le site."
     assert french["image_url"] == "https://cdn.example.com/chatgpt.webp"
+    assert french["portrait_url"] == "https://cdn.example.com/chatgpt-portrait.webp"
     assert french["badge"] == "Populaire"
     assert french["featured"] is True
     assert arabic["description"] == "وصف واضح للموقع"
@@ -103,6 +105,28 @@ def test_admin_can_upload_a_storefront_product_image(mock_mongodb):
     product = storefront_service.catalog("fr")["services"][0]["products"][0]
     assert product["image_url"] == image_url
     stored, mime_type = storefront_service.product_image(offer_id)
+    assert stored == raw
+    assert mime_type == "image/webp"
+
+
+def test_admin_can_upload_a_separate_product_detail_portrait(mock_mongodb):
+    offer_id = _product()
+    raw = b"RIFF" + (20).to_bytes(4, "little") + b"WEBP" + b"VP8 " + b"portrait-data"
+
+    portrait_url = storefront_service.save_product_portrait(
+        offer_id,
+        base64.b64encode(raw).decode(),
+        "image/webp",
+        admin_id=999,
+    )
+
+    assert portrait_url.startswith(
+        f"/api/storefront/product-portrait?offer_id={offer_id}&v="
+    )
+    product = storefront_service.catalog("fr")["services"][0]["products"][0]
+    assert product["portrait_url"] == portrait_url
+    assert product["image_url"] == ""
+    stored, mime_type = storefront_service.product_portrait(offer_id)
     assert stored == raw
     assert mime_type == "image/webp"
 

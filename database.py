@@ -15,22 +15,23 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
 
 
 def is_otp_service_name(value):
-    """Return whether a catalogue service is the special OTP-numbers flow."""
+    """Return whether a service uses the legacy OTP / Codex-number flow."""
     normalized = " ".join(re.sub(r"[^a-z0-9]+", " ", str(value or "").casefold()).split())
-    return "otp" in normalized.split() and any(
-        token in {"number", "numbers"} for token in normalized.split()
-    )
+    tokens = set(normalized.split())
+    return (
+        "number" in tokens or "numbers" in tokens
+    ) and ("otp" in tokens or "codex" in tokens)
 
 
 def _otp_offer_values():
     return {
-        "price": 1.0,
+        "price": 0.5,
         "currency": "USDT",
         "unlimited_stock": True,
         "manual_stock": True,
@@ -57,10 +58,10 @@ def _ensure_otp_service_offer(conn, service_id):
     insert_values = {
         "id": _next_id("offers"),
         "service_id": service_id,
-        "name": "OTP code",
-        "description": "One OTP code for your selected service and country.",
+        "name": "Codex number",
+        "description": "A Codex number delivered by the administrator after payment.",
         "stock": 0,
-        "note": "Contact the administrator after payment.",
+        "note": "After receiving the number, tap I agree to request the OTP code.",
         "low_stock_threshold": 0,
         "custom_emoji_id": "",
         "photo_file_id": "",
@@ -88,6 +89,10 @@ def _ensure_otp_service_offer(conn, service_id):
 def _enforce_otp_catalog_rules(conn):
     for row in conn.services.find({}, {"id": 1, "name": 1}):
         if is_otp_service_name(row.get("name")):
+            conn.services.update_one(
+                {"id": row["id"]},
+                {"$set": {"name": "Codex number"}},
+            )
             _ensure_otp_service_offer(conn, row["id"])
 
 
@@ -173,6 +178,7 @@ def init_db():
     db.storefront_customers.create_index("phone", unique=True)
     db.storefront_customers.create_index([("status", ASCENDING), ("updated_at", DESCENDING)])
     db.storefront_product_images.create_index("offer_id", unique=True)
+    db.storefront_product_portraits.create_index("offer_id", unique=True)
     db.storefront_payment_proofs.create_index("order_id", unique=True)
     db.buyer_api_purchases.create_index(
         [("buyer_key_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True,
@@ -345,6 +351,11 @@ def get_service(service_id):
 def list_offers(service_id, active_only=True):
     service = get_service(service_id)
     if service and is_otp_service_name(service.get("name")):
+        if service.get("name") != "Codex number":
+            get_conn().services.update_one(
+                {"id": service_id}, {"$set": {"name": "Codex number"}},
+            )
+            service["name"] = "Codex number"
         _ensure_otp_service_offer(get_conn(), service_id)
     query = {"service_id": service_id}
     if active_only:
@@ -505,6 +516,7 @@ def update_offer(
     site_description_fr=None,
     site_description_ar=None,
     site_image_url=None,
+    site_portrait_url=None,
     site_category=None,
     site_badge=None,
     site_badge_ar=None,
@@ -539,6 +551,7 @@ def update_offer(
             "site_description_fr": site_description_fr,
             "site_description_ar": site_description_ar,
             "site_image_url": site_image_url,
+            "site_portrait_url": site_portrait_url,
             "site_category": site_category,
             "site_badge": site_badge,
             "site_badge_ar": site_badge_ar,
@@ -558,9 +571,10 @@ def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar
     db = get_conn()
     last = db.services.find_one(sort=[("sort_order", DESCENDING)])
     sid = _next_id("services")
+    special_service = is_otp_service_name(name)
     db.services.insert_one({
         "id": sid,
-        "name": name,
+        "name": "Codex number" if special_service else name,
         "emoji": emoji,
         "custom_emoji_id": custom_emoji_id,
         "sort_order": (last or {}).get("sort_order", 0) + 1,
@@ -568,7 +582,7 @@ def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar
         "sales_channels": list(sales_channels or ["bot", "tn_site"]),
         "name_ar": str(name_ar or "")[:120],
     })
-    if is_otp_service_name(name):
+    if special_service:
         _ensure_otp_service_offer(db, sid)
     return sid
 
@@ -577,6 +591,7 @@ def update_service(
     service_id, name=None, emoji=None, active=None, custom_emoji_id=None,
     sales_channels=None, name_ar=None,
 ):
+    special_service = is_otp_service_name(name)
     values = {
         k: v
         for k, v in {
@@ -589,8 +604,10 @@ def update_service(
         }.items()
         if v is not None
     }
+    if special_service:
+        values["name"] = "Codex number"
     updated = bool(values and get_conn().services.update_one({"id": service_id}, {"$set": values}).matched_count)
-    if updated and is_otp_service_name(name):
+    if updated and special_service:
         _ensure_otp_service_offer(get_conn(), service_id)
     return updated
 
@@ -640,6 +657,7 @@ def add_offer(
     site_description_fr="",
     site_description_ar="",
     site_image_url="",
+    site_portrait_url="",
     site_category="",
     site_badge="",
     site_badge_ar="",
@@ -677,6 +695,7 @@ def add_offer(
         "site_description_fr": str(site_description_fr or "")[:2000],
         "site_description_ar": str(site_description_ar or "")[:2000],
         "site_image_url": str(site_image_url or "")[:1000],
+        "site_portrait_url": str(site_portrait_url or "")[:1000],
         "site_category": str(site_category or "")[:60],
         "site_badge": str(site_badge or "")[:60],
         "site_badge_ar": str(site_badge_ar or "")[:60],
@@ -719,6 +738,7 @@ def duplicate_offer(offer_id):
         site_description_fr=source.get("site_description_fr", ""),
         site_description_ar=source.get("site_description_ar", ""),
         site_image_url=source.get("site_image_url", ""),
+        site_portrait_url=source.get("site_portrait_url", ""),
         site_category=source.get("site_category", ""),
         site_badge=source.get("site_badge", ""),
         site_badge_ar=source.get("site_badge_ar", ""),

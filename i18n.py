@@ -308,7 +308,24 @@ TRANSLATIONS = {
         "ar": "❌ نفذ المخزون",
     },
     "preorder_available": {
-        "en": "❌ <b>Out of stock</b>\n\nYou can pre-order this offer with a <b>10% surcharge</b>. It will be delivered as soon as the product is available again.",
+        "fr": "❌ <b>Rupture de stock</b>\n\nVous pouvez précommander cette offre avec un <b>supplément de 10 %</b>. Livraison sous <b>2 heures maximum</b>.",
+        "en": "❌ <b>Out of stock</b>\n\nYou can pre-order this offer with a <b>10% surcharge</b>. Delivery is within <b>2 hours maximum</b>.",
+        "ar": "❌ <b>نفد المخزون</b>\n\nيمكنك طلب هذا العرض مسبقاً مع <b>زيادة 10%</b>. التسليم خلال <b>ساعتين كحد أقصى</b>.",
+    },
+    "catalog_preorder_button": {
+        "fr": "⏳ Précommande",
+        "en": "⏳ Pre-order",
+        "ar": "⏳ طلب مسبق",
+    },
+    "preorder_catalog_title": {
+        "fr": "⏳ *PRÉCOMMANDE*\n\nChoisissez un service en rupture de stock. Les offres sont affichées avec le supplément de *10 %* inclus.\n\n🚚 *Livraison sous 2 heures maximum.*",
+        "en": "⏳ *PRE-ORDER*\n\nChoose an out-of-stock service. Offer prices include the *10% surcharge*.\n\n🚚 *Delivery within 2 hours maximum.*",
+        "ar": "⏳ *الطلب المسبق*\n\nاختر خدمة نفد مخزونها. تشمل الأسعار المعروضة زيادة *10%*.\n\n🚚 *التسليم خلال ساعتين كحد أقصى.*",
+    },
+    "preorder_service_title": {
+        "fr": "{emoji} *Précommander {name}*\n\nChoisissez une offre en rupture de stock. Le prix affiché inclut déjà le supplément de *10 %*.\n\n🚚 *Livraison sous 2 heures maximum.*",
+        "en": "{emoji} *Pre-order {name}*\n\nChoose an out-of-stock offer. The displayed price already includes the *10% surcharge*.\n\n🚚 *Delivery within 2 hours maximum.*",
+        "ar": "{emoji} *طلب {name} مسبقاً*\n\nاختر عرضاً نفد مخزونه. السعر المعروض يشمل زيادة *10%*.\n\n🚚 *التسليم خلال ساعتين كحد أقصى.*",
     },
     # ---------------- Détail offre ----------------
     "offer_detail": {
@@ -348,7 +365,9 @@ TRANSLATIONS = {
         "ar": "✏️ *أدخل الكمية المطلوبة (1-{stock}):*\n\nالمنتج: *{offer}*\nالمخزون المتاح: *{stock}*\nسعر الوحدة: *{price} {cur}*",
     },
     "choose_preorder_quantity": {
-        "en": "⏳ *Pre-order (+10%)*\n\nProduct: *{offer}*\nUnit price including surcharge: *{price} {cur}*\n\nChoose a quantity (1-{max_qty}):",
+        "fr": "⏳ *Précommande (+10 %)*\n\nProduit : *{offer}*\nPrix unitaire avec supplément : *{price} {cur}*\n🚚 Livraison sous *2 heures maximum*.\n\nChoisissez une quantité (1-{max_qty}) :",
+        "en": "⏳ *Pre-order (+10%)*\n\nProduct: *{offer}*\nUnit price including surcharge: *{price} {cur}*\n🚚 Delivery within *2 hours maximum*.\n\nChoose a quantity (1-{max_qty}):",
+        "ar": "⏳ *طلب مسبق (+10%)*\n\nالمنتج: *{offer}*\nسعر الوحدة بعد الزيادة: *{price} {cur}*\n🚚 التسليم خلال *ساعتين كحد أقصى*.\n\nاختر الكمية (1-{max_qty}):",
     },
     "preorder_quantity_invalid": {
         "en": "⚠️ Invalid quantity. Send a whole number between *1* and *{max_qty}*.",
@@ -374,7 +393,9 @@ TRANSLATIONS = {
         "ar": "🧾 *ملخص الطلب*\n\n{emoji} الخدمة: *{service}*\n📋 العرض: *{offer}*\n💵 السعر: *{price} {cur}*\n📦 الكمية: *{qty}*\n{discount_line}\n💰 الإجمالي: *{total} {cur}*\n\nهل تؤكد هذا الشراء؟",
     },
     "preorder_line": {
-        "en": "⏳ Pre-order: *10% surcharge included*\n",
+        "fr": "⏳ Précommande : *supplément de 10 % inclus*\n🚚 Livraison : *2 heures maximum*\n",
+        "en": "⏳ Pre-order: *10% surcharge included*\n🚚 Delivery: *2 hours maximum*\n",
+        "ar": "⏳ طلب مسبق: *زيادة 10% مشمولة*\n🚚 التسليم: *خلال ساعتين كحد أقصى*\n",
     },
     "loyalty_discount_line": {
         "fr": "🏆 Niveau {level} : *-{percent}%* (-{amount} {cur})",
@@ -544,10 +565,30 @@ TRANSLATIONS = {
         "en": "🔎 Verifying your Binance TXID... Please wait.",
         "ar": "🔎 جارٍ التحقق من TXID على Binance... الرجاء الانتظار.",
     },
-    "otp_payment_confirmed_ask_service": {
-        "fr": "*Paiement confirme - commande #{oid}*\n\nQuel est le service pour lequel vous avez besoin du code OTP ?",
-        "en": "*Payment confirmed - order #{oid}*\n\nWhat's the service?",
-        "ar": "*Payment confirmed - order #{oid}*\n\nWhat's the service?",
+    "codex_payment_confirmed_waiting_number": {
+        "fr": "✅ *Paiement confirmé — commande #{oid}*\n\nL'administrateur prépare votre numéro Codex. Vous le recevrez ici.",
+        "en": "✅ *Payment confirmed — order #{oid}*\n\nThe administrator is preparing your Codex number. You will receive it here.",
+        "ar": "✅ *تم تأكيد الدفع — الطلب #{oid}*\n\nيقوم المسؤول بإعداد رقم Codex الخاص بك. ستستلمه هنا.",
+    },
+    "codex_number_received": {
+        "fr": "📱 *Votre numéro Codex*\n\nCommande : *#{oid}*\nNuméro : `{number}`\n\nAprès avoir vérifié le numéro, appuyez sur *J'accepte* pour demander le code OTP.",
+        "en": "📱 *Your Codex number*\n\nOrder: *#{oid}*\nNumber: `{number}`\n\nAfter checking the number, tap *I agree* to request the OTP code.",
+        "ar": "📱 *رقم Codex الخاص بك*\n\nالطلب: *#{oid}*\nالرقم: `{number}`\n\nبعد التحقق من الرقم، اضغط *أوافق* لطلب رمز OTP.",
+    },
+    "btn_codex_number_agree": {
+        "fr": "J'accepte",
+        "en": "I agree",
+        "ar": "أوافق",
+    },
+    "codex_number_agreed": {
+        "fr": "✅ *Numéro accepté*\n\nL'administrateur a été averti. Votre code OTP sera envoyé ici.",
+        "en": "✅ *Number accepted*\n\nThe administrator has been notified. Your OTP code will be sent here.",
+        "ar": "✅ *تم قبول الرقم*\n\nتم إشعار المسؤول. سيتم إرسال رمز OTP هنا.",
+    },
+    "codex_otp_received": {
+        "fr": "🔐 *Code OTP reçu — commande #{oid}*\n\nCode : `{code}`\n\n✅ Votre commande est maintenant terminée.",
+        "en": "🔐 *OTP code received — order #{oid}*\n\nCode: `{code}`\n\n✅ Your order is now complete.",
+        "ar": "🔐 *تم استلام رمز OTP — الطلب #{oid}*\n\nالرمز: `{code}`\n\n✅ اكتمل طلبك الآن.",
     },
     "otp_ask_service": {
         "fr": "Quel est le service ?",
@@ -565,9 +606,9 @@ TRANSLATIONS = {
         "ar": "*تم إرسال طلب OTP*\n\nالطلب: *#{oid}*\nالخدمة: *{service}*\nالبلد: *{country}*\n\nتم إرسال طلبك. ستتلقى الرمز أو الرد مباشرة في هذا البوت.",
     },
     "otp_order_unavailable": {
-        "fr": "Cette commande OTP n'est plus disponible. Utilisez le menu Support si vous avez besoin d'aide.",
-        "en": "This OTP order is no longer available. Use the Support menu if you need help.",
-        "ar": "طلب OTP هذا لم يعد متاحاً. استخدم قائمة الدعم إذا كنت بحاجة إلى المساعدة.",
+        "fr": "Cette commande de numéro Codex n'est plus disponible. Utilisez le menu Support si vous avez besoin d'aide.",
+        "en": "This Codex number order is no longer available. Use the Support menu if you need help.",
+        "ar": "طلب رقم Codex هذا لم يعد متاحاً. استخدم قائمة الدعم إذا كنت بحاجة إلى المساعدة.",
     },
     "verify_ok": {
         "fr": "✅ *Paiement confirmé !* Commande #{oid}\n\nVotre commande est en cours de préparation. Vous recevrez votre produit ici très bientôt. Merci pour votre achat ! 🎉",
