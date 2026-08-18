@@ -43,7 +43,12 @@ from app.domain import (
     wallet_service,
 )
 from app.web import dashboard_api
-from bot import announce_api_flash_sale, announce_channel_restock, build_app
+from bot import (
+    announce_api_flash_sale,
+    announce_channel_restock,
+    build_app,
+    monitor_codex_number_deadlines,
+)
 from config import (
     ADMIN_ID,
     BOT_TOKEN,
@@ -548,6 +553,26 @@ class handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path == "/api/cron/codex-deadlines":
+            expected = env_value("CRON_SECRET")
+            supplied = self.headers.get("Authorization", "")
+            if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                expired = _run_async(
+                    monitor_codex_number_deadlines(_application().bot)
+                )
+                self._reply(200, {
+                    "ok": True,
+                    "expired": len(expired),
+                    "order_ids": [int(order["id"]) for order in expired],
+                })
+            except Exception as exc:
+                log.exception("Codex acceptance deadline monitor failed")
+                self._reply(500, {"ok": False, "error": str(exc)})
             return
 
 

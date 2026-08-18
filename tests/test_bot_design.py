@@ -32,6 +32,7 @@ from bot import (
     handle_pending_attachment,
     handle_pending_input,
     handle_ticket_attachment,
+    monitor_codex_number_deadlines,
     notify_admin_interaction,
     notify_successful_referral,
     numbered_delivery_content,
@@ -1517,8 +1518,10 @@ def test_codex_number_agreement_then_otp_completes_order(monkeypatch, mock_mongo
     order = mock_mongodb.orders.find_one({"id": 502})
     assert order["otp_workflow_status"] == "number_sent"
     assert order["codex_number"] == "+234 555 0100"
+    assert order["codex_agree_deadline"] - order["codex_number_sent_at"] == 300
     customer_call = bot_client.send_message.await_args
     assert customer_call.args[0] == 42
+    assert "within *5 minutes*" in customer_call.args[1]
     assert customer_call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "codex_number_agree:502"
 
     agree_query = SimpleNamespace(
@@ -1577,6 +1580,43 @@ def test_codex_order_cannot_use_generic_admin_delivery(mock_mongodb):
     assert order["status"] == "payment_confirmed"
     context.bot.send_message.assert_not_awaited()
     assert "Generic delivery is disabled" in message.reply_text.await_args.args[0]
+
+
+def test_codex_monitor_expires_unaccepted_number_and_notifies_both_sides(
+    monkeypatch, mock_mongodb,
+):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    mock_mongodb.users.insert_one({"telegram_id": 42, "lang": "en"})
+    mock_mongodb.orders.insert_many([
+        {
+            "id": 505,
+            "user_id": 42,
+            "service_name": "Codex number",
+            "status": "payment_confirmed",
+            "otp_workflow_status": "number_sent",
+            "codex_agree_deadline": 100,
+        },
+        {
+            "id": 506,
+            "user_id": 42,
+            "service_name": "Codex number",
+            "status": "payment_confirmed",
+            "otp_workflow_status": "number_sent",
+            "codex_agree_deadline": 500,
+        },
+    ])
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    expired = asyncio.run(monitor_codex_number_deadlines(bot_client, now=101))
+
+    assert [order["id"] for order in expired] == [505]
+    overdue = mock_mongodb.orders.find_one({"id": 505})
+    future = mock_mongodb.orders.find_one({"id": 506})
+    assert overdue["status"] == "expired"
+    assert overdue["otp_workflow_status"] == "acceptance_expired"
+    assert future["status"] == "payment_confirmed"
+    assert bot_client.send_message.await_count == 2
+    assert {call.args[0] for call in bot_client.send_message.await_args_list} == {42, 999}
 
 
 def test_admin_message_does_not_complete_manual_order(mock_mongodb):

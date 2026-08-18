@@ -16,6 +16,7 @@ _client = None
 _db = None
 _schema_initialized = False
 SCHEMA_VERSION = 12
+CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
 
@@ -27,6 +28,45 @@ def is_otp_service_name(value):
     return (
         "number" in tokens or "numbers" in tokens
     ) and ("otp" in tokens or "codex" in tokens)
+
+
+def expire_codex_number_acceptance(order_id, now=None):
+    """Atomically expire one paid Codex order whose acceptance window elapsed."""
+    now = int(time.time() if now is None else now)
+    row = get_conn().orders.find_one_and_update(
+        {
+            "id": int(order_id),
+            "status": {"$in": ["paid", "payment_confirmed"]},
+            "otp_workflow_status": "number_sent",
+            "codex_agree_deadline": {"$lte": now, "$gt": 0},
+        },
+        {"$set": {
+            "status": "expired",
+            "otp_workflow_status": "acceptance_expired",
+            "codex_expired_at": now,
+            "updated_at": now,
+        }},
+        return_document=ReturnDocument.AFTER,
+    )
+    if row:
+        audit_event("order.codex_acceptance_expired", details={"order_id": int(order_id)})
+    return _public(row)
+
+
+def due_codex_number_acceptances(now=None):
+    """Return IDs that are ready for the five-minute acceptance expiry."""
+    now = int(time.time() if now is None else now)
+    return [
+        int(row["id"])
+        for row in get_conn().orders.find(
+            {
+                "status": {"$in": ["paid", "payment_confirmed"]},
+                "otp_workflow_status": "number_sent",
+                "codex_agree_deadline": {"$lte": now, "$gt": 0},
+            },
+            {"id": 1},
+        )
+    ]
 
 
 def _otp_offer_values():

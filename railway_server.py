@@ -137,6 +137,9 @@ def scheduler_loop(stop_event: threading.Event, port: int) -> None:
         "/api/cron/prices": max(
             60, int(os.environ.get("HP_PRICE_INTERVAL_SECONDS", "600"))
         ),
+        "/api/cron/codex-deadlines": max(
+            10, int(os.environ.get("HP_CODEX_MONITOR_INTERVAL_SECONDS", "15"))
+        ),
     }
     due_at = {path: time.monotonic() + seconds for path, seconds in intervals.items()}
     while not stop_event.is_set():

@@ -571,9 +571,9 @@ TRANSLATIONS = {
         "ar": "✅ *تم تأكيد الدفع — الطلب #{oid}*\n\nيقوم المسؤول بإعداد رقم Codex الخاص بك. ستستلمه هنا.",
     },
     "codex_number_received": {
-        "fr": "📱 *Votre numéro Codex*\n\nCommande : *#{oid}*\nNuméro : `{number}`\n\nAprès avoir vérifié le numéro, appuyez sur *J'accepte* pour demander le code OTP.",
-        "en": "📱 *Your Codex number*\n\nOrder: *#{oid}*\nNumber: `{number}`\n\nAfter checking the number, tap *I agree* to request the OTP code.",
-        "ar": "📱 *رقم Codex الخاص بك*\n\nالطلب: *#{oid}*\nالرقم: `{number}`\n\nبعد التحقق من الرقم، اضغط *أوافق* لطلب رمز OTP.",
+        "fr": "📱 *Votre numéro Codex*\n\nCommande : *#{oid}*\nNuméro : `{number}`\n\nAprès avoir vérifié le numéro, appuyez sur *J'accepte* pour demander le code OTP.\n\n⚠️ Vous perdrez la commande si vous n'acceptez pas le numéro dans les *5 minutes* suivant sa réception.",
+        "en": "📱 *Your Codex number*\n\nOrder: *#{oid}*\nNumber: `{number}`\n\nAfter checking the number, tap *I agree* to request the OTP code.\n\n⚠️ You will lose the order if you do not accept the number within *5 minutes* of receiving it.",
+        "ar": "📱 *رقم Codex الخاص بك*\n\nالطلب: *#{oid}*\nالرقم: `{number}`\n\nبعد التحقق من الرقم، اضغط *أوافق* لطلب رمز OTP.\n\n⚠️ ستفقد الطلب إذا لم تقبل الرقم خلال *5 دقائق* من استلامه.",
     },
     "btn_codex_number_agree": {
         "fr": "J'accepte",
@@ -584,6 +584,11 @@ TRANSLATIONS = {
         "fr": "✅ *Numéro accepté*\n\nL'administrateur a été averti. Votre code OTP sera envoyé ici.",
         "en": "✅ *Number accepted*\n\nThe administrator has been notified. Your OTP code will be sent here.",
         "ar": "✅ *تم قبول الرقم*\n\nتم إشعار المسؤول. سيتم إرسال رمز OTP هنا.",
+    },
+    "codex_acceptance_expired": {
+        "fr": "⌛ *Délai expiré — commande #{oid}*\n\nVous n'avez pas accepté le numéro Codex dans les 5 minutes. Cette commande est maintenant expirée.",
+        "en": "⌛ *Time expired — order #{oid}*\n\nYou did not accept the Codex number within 5 minutes. This order has now expired.",
+        "ar": "⌛ *انتهت المهلة — الطلب #{oid}*\n\nلم تقبل رقم Codex خلال 5 دقائق. انتهت صلاحية هذا الطلب الآن.",
     },
     "codex_otp_received": {
         "fr": "🔐 *Code OTP reçu — commande #{oid}*\n\nCode : `{code}`\n\n✅ Votre commande est maintenant terminée.",

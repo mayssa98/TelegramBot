@@ -1285,8 +1285,19 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_text(t(lang, "otp_order_unavailable"))
             return
         workflow = str(order.get("otp_workflow_status") or "")
+        now = int(time.time())
+        deadline = int(order.get("codex_agree_deadline") or 0)
+        if workflow == "number_sent" and deadline and deadline <= now:
+            expired = db.expire_codex_number_acceptance(order_id, now)
+            if expired:
+                await notify_codex_acceptance_expired(context.bot, expired)
+            await q.edit_message_text(
+                t(lang, "codex_acceptance_expired", oid=order_id),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=kb.home_keyboard(lang, uid),
+            )
+            return
         if workflow == "number_sent":
-            now = int(time.time())
             changed = db.get_conn().orders.update_one(
                 {
                     "id": order_id,
@@ -2642,6 +2653,7 @@ async def handle_pending_input(update, context, lang):
                 "codex_number": number,
                 "otp_workflow_status": "number_sent",
                 "codex_number_sent_at": now,
+                "codex_agree_deadline": now + db.CODEX_ACCEPTANCE_SECONDS,
                 "updated_at": now,
             }},
         )
@@ -2713,6 +2725,41 @@ async def handle_pending_input(update, context, lang):
 
 def is_otp_order(order):
     return bool(order and db.is_otp_service_name(order.get("service_name")))
+
+
+async def notify_codex_acceptance_expired(bot, order):
+    """Notify both parties after the five-minute Codex acceptance window."""
+    order_id = int(order["id"])
+    customer_id = int(order["user_id"])
+    customer_lang = lang_of(customer_id)
+    with contextlib.suppress(Exception):
+        await bot.send_message(
+            customer_id,
+            t(customer_lang, "codex_acceptance_expired", oid=order_id),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=kb.home_keyboard(customer_lang, customer_id),
+        )
+    with contextlib.suppress(Exception):
+        await bot.send_message(
+            ADMIN_ID,
+            "⌛ <b>Codex number order expired</b>\n\n"
+            f"Order: <b>#{order_id}</b>\n"
+            f"Client ID: <code>{customer_id}</code>\n"
+            "Reason: the customer did not tap I agree within 5 minutes.",
+            parse_mode=ParseMode.HTML,
+        )
+
+
+async def monitor_codex_number_deadlines(bot, now=None):
+    """Expire and announce all overdue Codex-number acceptance windows."""
+    expired_orders = []
+    for order_id in db.due_codex_number_acceptances(now):
+        expired = db.expire_codex_number_acceptance(order_id, now)
+        if not expired:
+            continue
+        expired_orders.append(expired)
+        await notify_codex_acceptance_expired(bot, expired)
+    return expired_orders
 
 
 async def begin_otp_order_questions(message, context, lang, order_id, uid):
