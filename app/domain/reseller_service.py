@@ -375,14 +375,19 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         if not isinstance(raw, dict):
             continue
         raw_product_id = (
-            raw.get("_id") if provider == CANBOSO_PROVIDER else raw.get("id")
+            raw.get("_id") or raw.get("productId") or raw.get("id")
+            if provider == CANBOSO_PROVIDER
+            else raw.get("id")
         )
         if not raw_product_id:
             continue
         product_id = str(raw_product_id)
         try:
+            canboso_price = raw.get("price")
+            if isinstance(canboso_price, dict):
+                canboso_price = canboso_price.get("amount", 0)
             wholesale = float(Decimal(str(
-                raw.get("usdPricing", "0")
+                raw.get("usdPricing", canboso_price or 0)
                 if provider == CANBOSO_PROVIDER
                 else (
                     raw.get("price")
@@ -393,8 +398,13 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         except (InvalidOperation, ValueError):
             wholesale = 0.0
         stats = raw.get("stats") if isinstance(raw.get("stats"), dict) else {}
+        availability = (
+            raw.get("availability")
+            if isinstance(raw.get("availability"), dict)
+            else {}
+        )
         stock = max(0, int(
-            (stats.get("available") or 0)
+            (stats.get("available") or availability.get("available") or 0)
             if provider == CANBOSO_PROVIDER
             else (
                 (raw.get("stock_count") or 0)
@@ -433,12 +443,32 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             "delivery_instruction": str(raw.get("delivery_instruction") or "")[:2000],
             "wholesale_price": wholesale,
             "currency": str(
-                "USDT" if provider == CANBOSO_PROVIDER else raw.get("currency") or "USDT"
+                (
+                    "USDT"
+                    if str(
+                        (raw.get("price") or {}).get("currency", "USD")
+                        if isinstance(raw.get("price"), dict)
+                        else "USD"
+                    ).upper() in {"USD", "USDT"}
+                    else (raw.get("price") or {}).get("currency", "USDT")
+                )
+                if provider == CANBOSO_PROVIDER
+                else raw.get("currency") or "USDT"
             )[:12],
             "stock": stock,
             "manual_delivery": bool(
                 raw.get("manual_delivery", False)
-                or (provider == CANBOSO_PROVIDER and raw.get("requiresCustomerEmail"))
+                or (
+                    provider == CANBOSO_PROVIDER
+                    and (
+                        raw.get("requiresCustomerEmail")
+                        or raw.get("productType") == "slot"
+                        or (
+                            isinstance(raw.get("purchaseRequirements"), dict)
+                            and raw["purchaseRequirements"].get("customerEmail")
+                        )
+                    )
+                )
             ),
             "enabled": bool(config.get("enabled", False)),
             "retail_price": float(retail_price) if retail_price is not None else None,

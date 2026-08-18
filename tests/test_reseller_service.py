@@ -501,6 +501,47 @@ def test_canboso_catalog_maps_wallet_products_and_slot_delivery(monkeypatch, moc
     assert result["products"][1]["manual_delivery"] is True
 
 
+def test_canboso_catalog_maps_current_live_product_schema(monkeypatch, mock_mongodb):
+    def fake_request(path, **_kwargs):
+        if path == "/balance":
+            return {
+                "success": True,
+                "walletCurrency": "USD",
+                "balance": 12.5,
+            }
+        return {
+            "success": True,
+            "walletCurrency": "USD",
+            "products": [{
+                "productId": "live-account-1",
+                "name": "Premium account",
+                "description": "Instant account",
+                "productType": "account",
+                "price": {"amount": 0.05, "currency": "USD", "text": "$0.05"},
+                "availability": {"available": 41, "sold": 513},
+            }, {
+                "productId": "live-slot-1",
+                "name": "Business slot",
+                "productType": "slot",
+                "price": {"amount": 3.5, "currency": "USD", "text": "$3.50"},
+                "availability": {"available": 10, "sold": 2},
+                "purchaseRequirements": {"customerEmail": True, "quantityFixed": 1},
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_canboso_request_json", fake_request)
+
+    result = reseller_service.catalog("canboso")
+
+    assert len(result["products"]) == 2
+    assert result["products"][0]["id"] == "live-account-1"
+    assert result["products"][0]["wholesale_price"] == 0.05
+    assert result["products"][0]["currency"] == "USDT"
+    assert result["products"][0]["stock"] == 41
+    assert result["products"][0]["manual_delivery"] is False
+    assert result["products"][1]["manual_delivery"] is True
+
+
 def test_canboso_purchase_uses_stable_idempotency_key(monkeypatch, mock_mongodb):
     calls = []
 
