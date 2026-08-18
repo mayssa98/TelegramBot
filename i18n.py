@@ -307,6 +307,9 @@ TRANSLATIONS = {
         "en": "❌ Out of stock",
         "ar": "❌ نفذ المخزون",
     },
+    "preorder_available": {
+        "en": "❌ <b>Out of stock</b>\n\nYou can pre-order this offer with a <b>10% surcharge</b>. It will be delivered as soon as the product is available again.",
+    },
     # ---------------- Détail offre ----------------
     "offer_detail": {
         "fr": "{emoji} *{offer}*\n\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\n\n\U0001f4ab *DETAILS DE L'OFFRE*\n\n\U0001f6e1 *Warranty*\n{note}\n\n\U000023f3 *Duration*\n{duration}\n\n\U0001f4e7 *Mail*\n{mail}\n\n\U0001f510 *Access*\n{access}\n\n\U0001f69a *Delivery*\n{delivery}\n\n\U0001f48e *Price*\n*{price} {cur}*\n\n\U0001f4e6 *Stock disponible*\n*{stock} compte(s)*\n\n{description}\n\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\n\U0001f680 _Choisissez Acheter maintenant pour selectionner la quantite._",
@@ -314,6 +317,7 @@ TRANSLATIONS = {
         "ar": "{emoji} *{offer}*\n\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\n\n\U0001f4ab *OFFER DETAILS*\n\n\U0001f6e1 *Warranty*\n{note}\n\n\U000023f3 *Duration*\n{duration}\n\n\U0001f4e7 *Mail*\n{mail}\n\n\U0001f510 *Access*\n{access}\n\n\U0001f69a *Delivery*\n{delivery}\n\n\U0001f48e *Price*\n*{price} {cur}*\n\n\U0001f4e6 *Stock*\n*{stock} account(s)*\n\n{description}\n\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\n\U0001f680 _Tap Buy now to select quantity._",
     },
     "btn_buy": {"fr": "🛒 Acheter maintenant", "en": "🛒 Buy now", "ar": "🛒 اشترِ الآن"},
+    "btn_preorder": {"en": "⏳ Pre-order (+10%)"},
     "btn_back": {"fr": "⬅️ Retour", "en": "⬅️ Back", "ar": "⬅️ رجوع"},
     "btn_back_services": {
         "fr": "🔶 Services",
@@ -343,6 +347,12 @@ TRANSLATIONS = {
         "en": "✏️ *Enter quantity to buy (1-{stock}):*\n\nProduct: *{offer}*\nAvailable stock: *{stock}*\nUnit price: *{price} {cur}*",
         "ar": "✏️ *أدخل الكمية المطلوبة (1-{stock}):*\n\nالمنتج: *{offer}*\nالمخزون المتاح: *{stock}*\nسعر الوحدة: *{price} {cur}*",
     },
+    "choose_preorder_quantity": {
+        "en": "⏳ *Pre-order (+10%)*\n\nProduct: *{offer}*\nUnit price including surcharge: *{price} {cur}*\n\nChoose a quantity (1-{max_qty}):",
+    },
+    "preorder_quantity_invalid": {
+        "en": "⚠️ Invalid quantity. Send a whole number between *1* and *{max_qty}*.",
+    },
     "affiliate_referral_success": {
         "fr": "🎉 *Nouveau filleul valide !*\n\nProgression : *{progress}/10*\nEncore *{remaining}* filleul(s) valide(s) pour gagner *2 USDT*.",
         "en": "🎉 *New qualified referral!*\n\nProgress: *{progress}/10*\nOnly *{remaining}* more qualified referral(s) to earn *2 USDT*.",
@@ -362,6 +372,9 @@ TRANSLATIONS = {
         "fr": "🧾 *Résumé de votre commande*\n\n{emoji} Service : *{service}*\n📋 Offre : *{offer}*\n💵 Prix unitaire : *{price} {cur}*\n📦 Quantité : *{qty}*\n{discount_line}\n💰 Total : *{total} {cur}*\n\nConfirmez-vous cet achat ?",
         "en": "🧾 *Order summary*\n\n{emoji} Service: *{service}*\n📋 Offer: *{offer}*\n💵 Unit price: *{price} {cur}*\n📦 Quantity: *{qty}*\n{discount_line}\n💰 Total: *{total} {cur}*\n\nDo you confirm this purchase?",
         "ar": "🧾 *ملخص الطلب*\n\n{emoji} الخدمة: *{service}*\n📋 العرض: *{offer}*\n💵 السعر: *{price} {cur}*\n📦 الكمية: *{qty}*\n{discount_line}\n💰 الإجمالي: *{total} {cur}*\n\nهل تؤكد هذا الشراء؟",
+    },
+    "preorder_line": {
+        "en": "⏳ Pre-order: *10% surcharge included*\n",
     },
     "loyalty_discount_line": {
         "fr": "🏆 Niveau {level} : *-{percent}%* (-{amount} {cur})",

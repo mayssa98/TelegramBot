@@ -167,6 +167,18 @@ def test_unlimited_offer_displays_infinity_and_remains_buyable():
     assert any(c in callbacks for c in ("catalog", "svc:1"))
 
 
+def test_preorder_checkout_keeps_flag_in_every_payment_callback():
+    callbacks = [
+        button.callback_data
+        for row in kb.confirm_buy_keyboard("en", 9, 3, preorder=True).inline_keyboard
+        for button in row
+    ]
+
+    payment_callbacks = [value for value in callbacks if value.startswith("pay_")]
+    assert payment_callbacks
+    assert all(value.endswith(":9:3:preorder") for value in payment_callbacks)
+
+
 def test_stock_label_is_listed_in_catalog_admin_category():
     assert admin.text_category_for_key("stock_label") == "catalog"
 

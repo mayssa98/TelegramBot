@@ -87,7 +87,9 @@ def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: 
         order = db.get_order(order_id) or {}
         offer = db.get_offer(order.get("offer_id")) if order.get("offer_id") else None
         try:
-            if offer and offer.get("supplier_provider"):
+            if order.get("is_preorder"):
+                delivered = None
+            elif offer and offer.get("supplier_provider"):
                 delivered = reseller_service.fulfill_paid_order(order_id)
             else:
                 delivered = inventory_service.deliver_for_order(order_id)

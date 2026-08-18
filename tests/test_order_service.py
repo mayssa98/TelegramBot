@@ -138,6 +138,33 @@ def test_create_order_out_of_stock(mock_mongodb):
         order_service.create_order(user_id=12345, offer=offer, qty=1)
 
 
+def test_create_preorder_adds_ten_percent_without_consuming_stock(mock_mongodb):
+    db.add_service("Discord", "🎮")
+    offer_id = db.add_offer(service_id=1, name="Nitro 1 Year", price=10.0, stock=0)
+
+    order = order_service.create_order(
+        user_id=12345, offer=db.get_offer(offer_id), qty=2, preorder=True,
+    )
+
+    assert order["is_preorder"] is True
+    assert order["preorder_surcharge_percent"] == 10
+    assert order["unit_price"] == 11.0
+    assert order["gross_total"] == 22.0
+    assert order["total_price"] == 22.0
+    assert db.mark_order_paid(order["id"], "test") is True
+    assert db.get_offer(offer_id)["stock"] == 0
+
+
+def test_preorder_is_rejected_after_offer_is_restocked(mock_mongodb):
+    db.add_service("Discord", "🎮")
+    offer_id = db.add_offer(service_id=1, name="Nitro 1 Year", price=10.0, stock=1)
+
+    with pytest.raises(ValueError, match="back in stock"):
+        order_service.create_order(
+            user_id=12345, offer=db.get_offer(offer_id), preorder=True,
+        )
+
+
 def test_create_order_rejects_quantity_above_stock(mock_mongodb):
     db.add_service("Discord", "🎮")
     offer_id = db.add_offer(service_id=1, name="Nitro 1 Year", price=9.99, stock=2)

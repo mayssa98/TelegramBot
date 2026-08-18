@@ -188,7 +188,8 @@ def orders_list_keyboard(status):
 def order_detail_text(o):
     if not o:
         return "Commande introuvable."
-    return (f"🧾 *Commande #{o['id']}*\nUtilisateur: `{o['user_id']}`\n"
+    preorder = "\n⏳ *Pre-order (+10%)*" if o.get("is_preorder") else ""
+    return (f"🧾 *Commande #{o['id']}*{preorder}\nUtilisateur: `{o['user_id']}`\n"
             f"Produit: {o['service_name']} — {o['offer_name']}\n"
             f"Quantité: {o['qty']}\nTotal: *{o['total_price']:.2f} {CURRENCY}*\n"
             f"Statut: `{o['status']}`\nTXID: `{o['txid'] or '—'}`")

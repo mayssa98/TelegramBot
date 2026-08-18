@@ -16,6 +16,12 @@ from app.domain import loyalty_service, wallet_service
 from config import CURRENCY, ORDER_EXPIRY_SECONDS
 
 log = logging.getLogger(__name__)
+PREORDER_SURCHARGE_RATE = 0.10
+
+
+def preorder_unit_price(price: float) -> float:
+    """Return the customer-facing pre-order price including its 10% surcharge."""
+    return round(float(price) * (1 + PREORDER_SURCHARGE_RATE), 2)
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +61,13 @@ def cancel_incomplete_orders(user_id: int, exclude_order_id: int | None = None) 
     return cancelled
 
 
-def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = "binance") -> dict:
+def create_order(
+    user_id: int,
+    offer: dict,
+    qty: int = 1,
+    payment_method: str = "binance",
+    preorder: bool = False,
+) -> dict:
     """Crée une commande avec expiration et renvoie l'objet complet.
 
     Raises:
@@ -63,15 +75,19 @@ def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = 
     """
     if not offer or offer.get("price") is None or not offer.get("active", 1):
         raise ValueError("Cette offre n'est pas disponible à l'achat.")
-    if not db.offer_has_stock(offer):
+    if not preorder and not db.offer_has_stock(offer):
         raise ValueError("Cette offre est en rupture de stock.")
     if qty < 1:
         raise ValueError("La quantité doit être au minimum 1.")
-    if not db.offer_has_stock(offer, qty):
+    if preorder and qty > 100:
+        raise ValueError("The maximum pre-order quantity is 100.")
+    if not preorder and not db.offer_has_stock(offer, qty):
         raise ValueError("La quantité demandée dépasse le stock disponible.")
+    if preorder and db.offer_has_stock(offer):
+        raise ValueError("This offer is back in stock. Buy it at the regular price.")
 
     now = int(time.time())
-    unit_price = offer["price"]
+    unit_price = preorder_unit_price(offer["price"]) if preorder else offer["price"]
     gross_total = round(unit_price * qty, 2)
     discount = loyalty_service.discount_for_order(user_id, gross_total)
     discount_amount = discount["amount"]
@@ -99,6 +115,8 @@ def create_order(user_id: int, offer: dict, qty: int = 1, payment_method: str = 
         "offer_name": offer["name"],
         "warranty": str(offer.get("note") or "").strip(),
         "qty": qty,
+        "is_preorder": bool(preorder),
+        "preorder_surcharge_percent": 10 if preorder else 0,
         "unit_price": unit_price,
         "gross_total": gross_total,
         "loyalty_level": discount["level"],
@@ -264,7 +282,7 @@ def cancel_order(order_id: int, reason: str = "") -> bool:
     # Rétablir le stock si le paiement avait été confirmé
     if order["status"] in PAID_STATUSES and order.get("offer_id"):
         offer = conn.offers.find_one({"id": order["offer_id"]}) or {}
-        if not offer.get("unlimited_stock"):
+        if not offer.get("unlimited_stock") and not order.get("is_preorder"):
             conn.offers.update_one(
                 {"id": order["offer_id"]},
                 {"$inc": {"stock": order.get("qty", 1)}},

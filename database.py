@@ -744,7 +744,7 @@ def mark_order_paid(order_id, verify_method):
         return False
     offer = db.offers.find_one({"id": order.get("offer_id")}) if order.get("offer_id") else None
     stock_decremented = False
-    if offer and not offer.get("unlimited_stock"):
+    if offer and not offer.get("unlimited_stock") and not order.get("is_preorder"):
         stock = db.offers.update_one(
             {"id": order["offer_id"], "stock": {"$gte": order["qty"]}},
             {"$inc": {"stock": -order["qty"]}},

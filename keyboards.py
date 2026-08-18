@@ -495,6 +495,14 @@ def offer_detail_keyboard(lang, offer):
     return InlineKeyboardMarkup(buttons)
 
 
+def preorder_offer_keyboard(lang, offer_id):
+    """Offer pre-order instead of a dead end when physical stock is empty."""
+    return InlineKeyboardMarkup([
+        [translated_button(lang, "btn_preorder", callback_data=f"preorder:{int(offer_id)}", style="primary")],
+        [translated_button(lang, "btn_back", callback_data="catalog")],
+    ])
+
+
 def quantity_keyboard(lang, offer, page=0, page_size=20):
     stock = 100 if offer.get("unlimited_stock") else max(1, int(offer.get("stock", 1)))
     total_pages = max(1, (stock + page_size - 1) // page_size)
@@ -518,6 +526,31 @@ def quantity_keyboard(lang, offer, page=0, page_size=20):
     if nav:
         rows.append(nav)
     rows.append([translated_button(lang, "btn_back", callback_data=f"off:{offer['id']}")])
+    return InlineKeyboardMarkup(rows)
+
+
+def preorder_quantity_keyboard(lang, offer_id, page=0, page_size=20, max_qty=100):
+    """Quantity picker for pre-orders, which are not limited by current stock."""
+    total_pages = max(1, (max_qty + page_size - 1) // page_size)
+    page = max(0, min(int(page), total_pages - 1))
+    start = page * page_size + 1
+    end = min(max_qty, start + page_size - 1)
+    rows, row = [], []
+    for qty in range(start, end + 1):
+        row.append(InlineKeyboardButton(str(qty), callback_data=f"preorderq:{int(offer_id)}:{qty}"))
+        if len(row) == 5:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("◀️", callback_data=f"preorder_page:{int(offer_id)}:{page - 1}"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton("▶️", callback_data=f"preorder_page:{int(offer_id)}:{page + 1}"))
+    if nav:
+        rows.append(nav)
+    rows.append([translated_button(lang, "btn_back", callback_data=f"off:{int(offer_id)}")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -566,14 +599,15 @@ def orders_keyboard(lang, orders=None):
     ]])
 
 
-def confirm_buy_keyboard(lang, offer_id, qty=1):
+def confirm_buy_keyboard(lang, offer_id, qty=1, preorder=False):
     """Clavier de confirmation avant achat."""
+    suffix = ":preorder" if preorder else ""
     return InlineKeyboardMarkup([
-        [translated_button(lang, "btn_pay_wallet", callback_data=f"pay_wallet:{offer_id}:{qty}")],
-        [translated_button(lang, "btn_pay_binance", callback_data=f"pay_binance:{offer_id}:{qty}")],
-        [translated_button(lang, "btn_pay_bybit", callback_data=f"pay_bybit:{offer_id}:{qty}")],
-        [translated_button(lang, "btn_pay_bsc", callback_data=f"pay_bsc:{offer_id}:{qty}")],
-        [translated_button(lang, "btn_pay_polygon", callback_data=f"pay_polygon:{offer_id}:{qty}")],
+        [translated_button(lang, "btn_pay_wallet", callback_data=f"pay_wallet:{offer_id}:{qty}{suffix}")],
+        [translated_button(lang, "btn_pay_binance", callback_data=f"pay_binance:{offer_id}:{qty}{suffix}")],
+        [translated_button(lang, "btn_pay_bybit", callback_data=f"pay_bybit:{offer_id}:{qty}{suffix}")],
+        [translated_button(lang, "btn_pay_bsc", callback_data=f"pay_bsc:{offer_id}:{qty}{suffix}")],
+        [translated_button(lang, "btn_pay_polygon", callback_data=f"pay_polygon:{offer_id}:{qty}{suffix}")],
         [translated_button(lang, "btn_cancel", callback_data=f"cancel_buy:{offer_id}")],
     ])
 

@@ -946,13 +946,22 @@ def test_out_of_stock_offer_click_sends_customer_message(monkeypatch):
         answer=AsyncMock(),
     )
     monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
-    monkeypatch.setattr("bot.db.get_offer", lambda _oid: {"id": 9, "stock": 0})
+    monkeypatch.setattr(
+        "bot.db.get_offer",
+        lambda _oid: {"id": 9, "service_id": 1, "name": "Plan", "price": 10.0, "stock": 0},
+    )
 
     asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace()))
 
     message.reply_text.assert_awaited_once()
     assert "Out of stock" in message.reply_text.await_args.args[0]
     assert message.reply_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
+    callbacks = [
+        button.callback_data
+        for row in message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+        for button in row
+    ]
+    assert "preorder:9" in callbacks
 
 def test_offer_back_button_from_photo_opens_service_without_editing_photo(monkeypatch):
     message = SimpleNamespace(text=None, reply_text=AsyncMock())
