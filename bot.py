@@ -3905,9 +3905,15 @@ async def deliver_order(update, context, order_id, content):
     try:
         await context.bot.send_message(
             o["user_id"],
-            t(cl, "delivery_received", oid=order_id, service=o["service_name"],
-              offer=o["offer_name"], content=content),
-            parse_mode=ParseMode.MARKDOWN,
+            premium_customer_text(
+                cl,
+                "delivery_received",
+                oid=order_id,
+                service=o["service_name"],
+                offer=o["offer_name"],
+                content=content,
+            ),
+            parse_mode=ParseMode.HTML,
             reply_markup=kb.post_delivery_keyboard(cl, order_id),
         )
         delivered = order_service.manual_deliver_order(order_id, content)

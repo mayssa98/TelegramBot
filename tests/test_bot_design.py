@@ -1713,6 +1713,10 @@ def test_manual_order_is_delivered_only_after_content_reaches_customer(mock_mong
     delivered = db.get_order(602)
     assert delivered["status"] == "delivered"
     assert delivered["delivery_text"] == "login:password"
+    sent = bot_client.send_message.await_args
+    assert sent.kwargs["parse_mode"] == ParseMode.HTML
+    assert "[HTML]" not in sent.args[1]
+    assert "<b>Your order #602 has been delivered!</b>" in sent.args[1]
 
 
 def test_failed_manual_send_keeps_order_waiting(mock_mongodb):
