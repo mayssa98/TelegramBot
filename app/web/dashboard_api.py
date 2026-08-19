@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -367,6 +368,126 @@ def customer_detail(user_id: int) -> dict[str, Any] | None:
     result["tickets"] = [db._public(row) for row in conn.support_tickets.find({"user_id": user_id}).sort("updated_at", DESCENDING).limit(25)]
     result["referrals"] = conn.referrals.count_documents({"referrer_id": user_id})
     return result
+
+
+def list_reseller_clients(params: dict[str, list[str]]) -> dict[str, Any]:
+    """Return safe reseller-API client profiles, keys, and purchase metrics."""
+    page = _bounded_int(_first(params, "page"), 1, 1, 100_000)
+    per_page = _bounded_int(_first(params, "per_page"), 25, 1, 100)
+    conn = db.get_conn()
+    keys_by_user: dict[int, list[dict[str, Any]]] = {}
+    for key in conn.buyer_api_keys.find({}).sort("created_at", DESCENDING):
+        user_id = int(key["user_id"])
+        keys_by_user.setdefault(user_id, []).append({
+            "id": int(key["id"]),
+            "prefix": str(key.get("prefix") or ""),
+            "label": str(key.get("label") or "Buyer API"),
+            "active": bool(key.get("active")),
+            "created_at": key.get("created_at"),
+            "last_used_at": key.get("last_used_at"),
+            "revoked_at": key.get("revoked_at"),
+        })
+
+    cutoff = int(time.time()) - (30 * 24 * 60 * 60)
+    summaries: list[dict[str, Any]] = []
+    for user_id, keys in keys_by_user.items():
+        user = conn.users.find_one({"telegram_id": user_id}) or {"telegram_id": user_id}
+        wallet = conn.wallets.find_one({"user_id": user_id}) or {}
+        purchases = list(
+            conn.buyer_api_purchases.find({"user_id": user_id}).sort("created_at", DESCENDING)
+        )
+        successful = [row for row in purchases if (row.get("response") or {}).get("success") is True]
+        failed = [row for row in purchases if (row.get("response") or {}).get("success") is False]
+        pending = [row for row in purchases if not isinstance((row.get("response") or {}).get("success"), bool)]
+        total_spent = sum(float((row.get("response") or {}).get("amount") or 0) for row in successful)
+        spent_30d = sum(
+            float((row.get("response") or {}).get("amount") or 0)
+            for row in successful
+            if int(row.get("created_at") or 0) >= cutoff
+        )
+        last_purchase_at = max((int(row.get("created_at") or 0) for row in purchases), default=0)
+        last_key_use = max((int(key.get("last_used_at") or 0) for key in keys), default=0)
+        recent_purchases = []
+        for purchase in purchases[:10]:
+            response = purchase.get("response") or {}
+            recent_purchases.append({
+                "order_id": purchase.get("order_id"),
+                "idempotency_key": str(purchase.get("idempotency_key") or ""),
+                "status": str(purchase.get("status") or response.get("status") or "unknown"),
+                "success": response.get("success"),
+                "product": str(response.get("productType") or ""),
+                "quantity": int(response.get("quantity") or 0),
+                "amount": round(float(response.get("amount") or 0), 2),
+                "error_code": str(response.get("code") or ""),
+                "created_at": purchase.get("created_at"),
+            })
+        summaries.append({
+            "telegram_id": user_id,
+            "username": str(user.get("username") or ""),
+            "first_name": str(user.get("first_name") or ""),
+            "full_name": str(user.get("full_name") or ""),
+            "language": str(user.get("lang") or user.get("language") or ""),
+            "joined_at": user.get("created_at"),
+            "banned": bool(user.get("banned")),
+            "wallet_balance": round(float(wallet.get("balance_cents") or 0) / 100, 2),
+            "keys": keys,
+            "key_count": len(keys),
+            "active_key_count": sum(1 for key in keys if key["active"]),
+            "api_order_count": len(successful),
+            "failed_order_count": len(failed),
+            "pending_order_count": len(pending),
+            "total_spent": round(total_spent, 2),
+            "spent_30d": round(spent_30d, 2),
+            "last_activity_at": max(last_purchase_at, last_key_use) or None,
+            "recent_purchases": recent_purchases,
+        })
+
+    global_summary = {
+        "clients": len(summaries),
+        "active_clients": sum(1 for item in summaries if item["active_key_count"]),
+        "active_keys": sum(item["active_key_count"] for item in summaries),
+        "api_orders": sum(item["api_order_count"] for item in summaries),
+        "total_spent": round(sum(item["total_spent"] for item in summaries), 2),
+        "spent_30d": round(sum(item["spent_30d"] for item in summaries), 2),
+    }
+
+    status = _first(params, "status") or "all"
+    if status == "active":
+        summaries = [item for item in summaries if item["active_key_count"] > 0]
+    elif status == "revoked":
+        summaries = [item for item in summaries if item["active_key_count"] == 0]
+    search = _first(params, "search").lower()
+    search_field = _first(params, "search_field") or "all"
+    if search:
+        def matches(item: dict[str, Any]) -> bool:
+            values = {
+                "name": f"{item['first_name']} {item['full_name']}",
+                "username": item["username"],
+                "telegram_id": str(item["telegram_id"]),
+                "prefix": " ".join(key["prefix"] for key in item["keys"]),
+            }
+            haystack = " ".join(values.values()) if search_field == "all" else values.get(search_field, "")
+            return search in haystack.lower()
+        summaries = [item for item in summaries if matches(item)]
+
+    sort = _first(params, "sort") or "activity"
+    sort_key = {
+        "spent": lambda item: (item["total_spent"], item["telegram_id"]),
+        "orders": lambda item: (item["api_order_count"], item["telegram_id"]),
+        "balance": lambda item: (item["wallet_balance"], item["telegram_id"]),
+        "created": lambda item: (max((int(key.get("created_at") or 0) for key in item["keys"]), default=0), item["telegram_id"]),
+        "activity": lambda item: (int(item["last_activity_at"] or 0), item["telegram_id"]),
+    }.get(sort, lambda item: (int(item["last_activity_at"] or 0), item["telegram_id"]))
+    summaries.sort(key=sort_key, reverse=True)
+    total = len(summaries)
+    return {
+        "items": summaries[(page - 1) * per_page:page * per_page],
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": max(1, (total + per_page - 1) // per_page),
+        "summary": global_summary,
+    }
 
 
 def list_wallet_topups(params: dict[str, list[str]]) -> dict[str, Any]:

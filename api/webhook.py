@@ -818,6 +818,13 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(200, dashboard_api.list_customers(params))
             return
 
+        elif path == "/admin/api/reseller-clients":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, dashboard_api.list_reseller_clients(parse_qs(url.query)))
+            return
+
         elif path == "/admin/api/inventory-export":
             if not self._dashboard_authorized():
                 self._reply(401, {"ok": False, "error": "Unauthorized"})

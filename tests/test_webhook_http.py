@@ -138,6 +138,29 @@ def test_react_admin_data_includes_scoped_write_token(monkeypatch, mock_mongodb)
     assert payload["dashboard_write_token"] != "secret"
 
 
+def test_admin_reseller_clients_endpoint_returns_safe_profiles(monkeypatch, mock_mongodb):
+    monkeypatch.setattr(webhook_module, "DASHBOARD_PASSWORD", "secret")
+    mock_mongodb.users.insert_one({"telegram_id": 42, "username": "partner"})
+    mock_mongodb.buyer_api_keys.insert_one({
+        "id": 1, "user_id": 42, "prefix": "tgb_12345678",
+        "key_hash": "never-return-this-hash", "active": True, "created_at": 1,
+    })
+    encoded = base64.b64encode(b"admin:secret").decode()
+    request = Request(
+        "http://placeholder/admin/api/reseller-clients",
+        headers={"Authorization": f"Basic {encoded}"},
+    )
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/admin/api/reseller-clients"
+        with urlopen(request, timeout=5) as response:
+            payload = json.load(response)
+
+    assert response.status == 200
+    assert payload["items"][0]["username"] == "partner"
+    assert payload["items"][0]["keys"][0]["prefix"] == "tgb_12345678"
+    assert "never-return-this-hash" not in str(payload)
+
+
 def test_webhook_rejects_missing_secret(monkeypatch):
     monkeypatch.setenv("HP_WEBHOOK_SECRET", "expected-secret")
     request = Request(

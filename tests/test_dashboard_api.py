@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -172,6 +173,78 @@ def test_inventory_never_exposes_encrypted_payload(mock_mongodb):
     assert result["items"][0]["masked_preview"] == "us***@example.com"
     assert "payload" not in result["items"][0]
     assert "fingerprint" not in result["items"][0]
+
+
+def test_reseller_clients_include_safe_keys_wallet_and_api_metrics(mock_mongodb):
+    now = int(time.time())
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 42, "username": "reseller", "first_name": "API Buyer", "lang": "en", "created_at": 10},
+        {"telegram_id": 99, "username": "revoked", "first_name": "Old Buyer", "created_at": 20},
+    ])
+    mock_mongodb.wallets.insert_one({"user_id": 42, "balance_cents": 1250})
+    mock_mongodb.buyer_api_keys.insert_many([
+        {"id": 1, "user_id": 42, "prefix": "tgb_abcd1234", "key_hash": "secret-hash", "label": "Shop API", "active": True, "created_at": now - 100, "last_used_at": now - 10},
+        {"id": 2, "user_id": 99, "prefix": "tgb_deadbeef", "key_hash": "other-secret-hash", "label": "Old API", "active": False, "created_at": now - 200, "revoked_at": now - 50},
+    ])
+    mock_mongodb.buyer_api_purchases.insert_many([
+        {
+            "buyer_key_id": 1, "idempotency_key": "successful-order", "user_id": 42,
+            "order_id": 501, "status": "completed", "created_at": now,
+            "response": {
+                "success": True, "amount": 3.5, "productType": "Premium Account",
+                "quantity": 2, "deliveredAccounts": ["must:not-leak"],
+            },
+        },
+        {
+            "buyer_key_id": 1, "idempotency_key": "failed-order", "user_id": 42,
+            "status": "failed", "created_at": now - 5,
+            "response": {"success": False, "code": "INSUFFICIENT_STOCK"},
+        },
+    ])
+
+    result = dashboard_api.list_reseller_clients({"status": ["active"]})
+
+    assert result["summary"] == {
+        "clients": 2,
+        "active_clients": 1,
+        "active_keys": 1,
+        "api_orders": 1,
+        "total_spent": 3.5,
+        "spent_30d": 3.5,
+    }
+    assert result["total"] == 1
+    client = result["items"][0]
+    assert client["telegram_id"] == 42
+    assert client["wallet_balance"] == 12.5
+    assert client["api_order_count"] == 1
+    assert client["failed_order_count"] == 1
+    assert client["keys"][0]["prefix"] == "tgb_abcd1234"
+    assert "key_hash" not in str(result)
+    assert "must:not-leak" not in str(result)
+
+
+def test_reseller_clients_support_search_sort_and_pagination(mock_mongodb):
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 10, "username": "small"},
+        {"telegram_id": 20, "username": "large"},
+    ])
+    mock_mongodb.buyer_api_keys.insert_many([
+        {"id": 1, "user_id": 10, "prefix": "tgb_small000", "key_hash": "small-hash", "active": True, "created_at": 1},
+        {"id": 2, "user_id": 20, "prefix": "tgb_large000", "key_hash": "large-hash", "active": True, "created_at": 2},
+    ])
+    mock_mongodb.buyer_api_purchases.insert_one({
+        "buyer_key_id": 2, "idempotency_key": "large-order", "user_id": 20,
+        "created_at": int(time.time()), "response": {"success": True, "amount": 20},
+    })
+
+    searched = dashboard_api.list_reseller_clients({
+        "search": ["large"], "search_field": ["username"], "sort": ["spent"],
+        "page": ["1"], "per_page": ["1"],
+    })
+
+    assert searched["total"] == 1
+    assert searched["items"][0]["telegram_id"] == 20
+    assert searched["pages"] == 1
 
 
 def test_customer_detail_metrics(mock_mongodb):
