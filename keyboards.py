@@ -31,7 +31,7 @@ from i18n import t
 
 BUTTON_TEXT_KEYS = {
     "menu_catalog", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
-    "menu_support", "menu_lang", "menu_admin", "btn_main_menu", "support_no_order",
+    "menu_support", "menu_lang", "menu_admin", "menu_reseller_api", "btn_main_menu", "support_no_order",
     "catalog_request_button", "catalog_preorder_button",
     "topup_verify_txid", "topup_verify_bybit", "topup_bsc", "topup_polygon",
     "topup_home_button",
@@ -41,6 +41,8 @@ BUTTON_TEXT_KEYS = {
     "btn_pay_binance", "btn_pay_bybit", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
     "btn_cancel", "btn_continue_payment", "btn_new_order", "btn_reply_manual_order",
     "btn_codex_number_agree",
+    "reseller_api_create", "reseller_api_regenerate", "reseller_api_confirm_regenerate",
+    "reseller_api_docs", "reseller_api_refresh", "reseller_api_cancel",
     "affiliate_copy", "affiliate_share", "orders_all", "btn_join_channel", "btn_join_group",
     "btn_verify_join", "btn_channel_buy_now",
 }
@@ -225,6 +227,7 @@ def home_keyboard(lang, user_id):
     candidate_rows = [
         [translated_button(lang, "menu_catalog", callback_data="catalog")],
         [translated_button(lang, "menu_topup", callback_data="topup", style="success")],
+        [translated_button(lang, "menu_reseller_api", callback_data="reseller_api", style="primary")],
         [
             translated_button(lang, "menu_orders", callback_data="orders"),
             translated_button(lang, "menu_account", callback_data="account"),
@@ -546,6 +549,34 @@ def preorder_services_keyboard(lang):
         rows.append(row)
     rows.append([translated_button(lang, "btn_back", callback_data="catalog")])
     return InlineKeyboardMarkup(rows)
+
+
+def reseller_api_keyboard(lang, *, has_key, docs_url):
+    rows = []
+    if has_key:
+        rows.append([translated_button(
+            lang, "reseller_api_regenerate", callback_data="reseller_api_regen",
+        )])
+    else:
+        rows.append([translated_button(
+            lang, "reseller_api_create", callback_data="reseller_api_create", style="success",
+        )])
+    rows.extend([
+        [translated_button(lang, "reseller_api_docs", url=docs_url)],
+        [translated_button(lang, "reseller_api_refresh", callback_data="reseller_api")],
+        [translated_button(lang, "btn_main_menu", callback_data="home")],
+    ])
+    return InlineKeyboardMarkup(rows)
+
+
+def reseller_api_regenerate_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [translated_button(
+            lang, "reseller_api_confirm_regenerate",
+            callback_data="reseller_api_regen_confirm", style="danger",
+        )],
+        [translated_button(lang, "reseller_api_cancel", callback_data="reseller_api")],
+    ])
 
 
 def preorder_offers_keyboard(lang, service_id):

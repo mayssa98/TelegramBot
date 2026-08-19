@@ -71,6 +71,13 @@ TRANSLATIONS = {
     "menu_affiliate": {"fr": "🎁 Affiliation", "en": "🎁 Affiliate", "ar": "🎁 الإحالة"},
     "menu_account": {"fr": "👤 Mon compte", "en": "👤 My account", "ar": "👤 حسابي"},
     "menu_support": {"fr": "🛎️ Support", "en": "🛎️ Support", "ar": "🛎️ Support"},
+    "menu_reseller_api": {"fr": "🔗 API Revendeur", "en": "🔗 Reseller API", "ar": "🔗 Reseller API"},
+    "reseller_api_create": {"fr": "🔑 Créer ma clé API", "en": "🔑 Create my API key", "ar": "🔑 Create my API key"},
+    "reseller_api_regenerate": {"fr": "🔄 Régénérer la clé", "en": "🔄 Regenerate key", "ar": "🔄 Regenerate key"},
+    "reseller_api_confirm_regenerate": {"fr": "⚠️ Confirmer la régénération", "en": "⚠️ Confirm regeneration", "ar": "⚠️ Confirm regeneration"},
+    "reseller_api_docs": {"fr": "📚 Documentation API", "en": "📚 API documentation", "ar": "📚 API documentation"},
+    "reseller_api_refresh": {"fr": "🔄 Actualiser", "en": "🔄 Refresh", "ar": "🔄 Refresh"},
+    "reseller_api_cancel": {"fr": "Annuler", "en": "Cancel", "ar": "Cancel"},
     "topup_message": {
         "fr": "✍️ *Envoyez le montant souhaité — minimum 1 USDT*\nLe même montant sera ajouté à votre portefeuille.\n\n🟡 *Binance Pay*\nID : `{binance_id}`\n\n🟠 *Bybit Pay*\nUID : `{bybit_uid}`\n\nAprès le transfert, choisissez ci-dessous le fournisseur utilisé et envoyez le TXID affiché sur votre reçu.",
         "en": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay*\nID: `{binance_id}`\n\n🟠 *Bybit Pay*\nUID: `{bybit_uid}`\n\nAfter transferring, choose the provider used below and send the TXID shown on your receipt.",

@@ -25,7 +25,8 @@ def openapi_document() -> dict:
             "title": "BlackMarket Buyer API",
             "version": "1.0.0",
             "description": (
-                "Wallet-funded reseller API. Buyer keys are issued by an administrator. "
+                "Wallet-funded reseller API. Telegram users can create their own key "
+                "from the bot's Reseller API dashboard. "
                 "Purchases require a unique Idempotency-Key and use the wallet attached "
                 "to the key's Telegram user."
             ),

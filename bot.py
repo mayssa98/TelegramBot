@@ -31,6 +31,7 @@ import keyboards as kb
 from app import support_bridge
 from app.domain import (
     affiliate_service,
+    buyer_api_service,
     inventory_service,
     loyalty_service,
     order_service,
@@ -1147,6 +1148,58 @@ async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def reseller_api_dashboard_text(user_id, *, revealed_key=None):
+    summary = buyer_api_service.dashboard(user_id)
+    endpoint = f"{public_base_url_from_environment()}/api/v2/telegram-buyer"
+    key = summary.get("key") or {}
+    if revealed_key:
+        credential = html.escape(revealed_key)
+        key_note = "🔓 <i>Copy this key now. It will never be shown again.</i>"
+    elif key:
+        credential = html.escape(f"{key.get('prefix', '')}{'•' * 20}")
+        key_note = "🔒 <i>The full key was shown once. Regenerate it to get a new one.</i>"
+    else:
+        credential = "Not created yet"
+        key_note = "Create a key to start using the reseller API."
+    status = "🟢 Active" if summary["active"] else "⚪ Inactive"
+    return (
+        "🔗 <b>Reseller API Dashboard</b>\n\n"
+        "<blockquote>"
+        f"Status: <b>{status}</b>\n"
+        f"Balance: <b>{summary['balance']:.2f} {html.escape(summary['currency'])}</b>\n"
+        f"Total API Orders: <b>{summary['total_orders']}</b>\n"
+        f"Spend (30d): <b>{summary['spend_30d']:.2f} {html.escape(summary['currency'])}</b>"
+        "</blockquote>\n\n"
+        f"<b>Endpoint</b>\n<code>{html.escape(endpoint)}</code>\n\n"
+        f"<b>Your API Key</b>\n<code>{credential}</code>\n"
+        f"{key_note}\n\n"
+        "<i>Treat this key like a password. Use the documentation for request examples.</i>"
+    )
+
+
+async def show_reseller_api(update: Update, context: ContextTypes.DEFAULT_TYPE, *, revealed_key=None):
+    uid = update.effective_user.id
+    lang = lang_of(uid)
+    chat = getattr(update, "effective_chat", None)
+    if chat is not None and getattr(chat, "type", "private") != "private":
+        await update.effective_message.reply_text(
+            "🔒 Open a private chat with the bot to manage your Reseller API key."
+        )
+        return
+    summary = buyer_api_service.dashboard(uid)
+    markup = kb.reseller_api_keyboard(
+        lang,
+        has_key=summary["active"],
+        docs_url=f"{public_base_url_from_environment()}/api/swagger",
+    )
+    await update.effective_message.reply_text(
+        reseller_api_dashboard_text(uid, revealed_key=revealed_key),
+        parse_mode=ParseMode.HTML,
+        reply_markup=markup,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+    )
+
+
 # ---------------- Sélection langue ----------------
 async def cb_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -1368,6 +1421,43 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             t(lang, "catalog_flat_title", shop=SHOP_NAME),
             reply_markup=kb.catalog_offers_keyboard(lang),
         )
+        return
+    if data == "reseller_api":
+        await show_reseller_api(update, context)
+        return
+    if data == "reseller_api_create":
+        chat = getattr(update, "effective_chat", None)
+        if chat is not None and getattr(chat, "type", "private") != "private":
+            await q.message.reply_text(
+                "🔒 Open a private chat with the bot to create your API key."
+            )
+            return
+        try:
+            issued = await asyncio.to_thread(buyer_api_service.issue_user_key, uid)
+        except buyer_api_service.BuyerApiError as exc:
+            await q.message.reply_text(html.escape(exc.message), parse_mode=ParseMode.HTML)
+            return
+        await show_reseller_api(update, context, revealed_key=issued["key"])
+        return
+    if data == "reseller_api_regen":
+        await q.message.reply_text(
+            "⚠️ <b>Regenerate your API key?</b>\n\n"
+            "Your current key will stop working immediately. This cannot be undone.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.reseller_api_regenerate_keyboard(lang),
+        )
+        return
+    if data == "reseller_api_regen_confirm":
+        chat = getattr(update, "effective_chat", None)
+        if chat is not None and getattr(chat, "type", "private") != "private":
+            await q.message.reply_text(
+                "🔒 Open a private chat with the bot to regenerate your API key."
+            )
+            return
+        issued = await asyncio.to_thread(
+            buyer_api_service.issue_user_key, uid, regenerate=True,
+        )
+        await show_reseller_api(update, context, revealed_key=issued["key"])
         return
     if data == "preorder_catalog":
         await show_callback_screen(
@@ -3837,6 +3927,8 @@ def build_app():
     app.add_handler(CommandHandler("account", show_account))
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("affiliate", show_affiliate))
+    app.add_handler(CommandHandler("reseller", show_reseller_api))
+    app.add_handler(CommandHandler("resellerapi", show_reseller_api))
     app.add_handler(CommandHandler("terms", cmd_terms))
     app.add_handler(CommandHandler("privacy", cmd_privacy))
     app.add_handler(CallbackQueryHandler(cb_lang, pattern=r"^lang:"))

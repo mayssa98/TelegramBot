@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from contextlib import contextmanager
 from http.server import HTTPServer
 from urllib.error import HTTPError
@@ -53,6 +54,63 @@ def test_key_is_returned_once_but_only_hash_is_stored(mock_mongodb):
     assert "key" not in stored
     assert issued["key"] not in str(stored)
     assert issued["key"] not in str(buyer_api_service.list_keys())
+
+
+def test_user_can_self_issue_and_regenerate_a_single_active_key(mock_mongodb):
+    db.upsert_user(42, "buyer", "Buyer")
+
+    first = buyer_api_service.issue_user_key(42)
+    with pytest.raises(buyer_api_service.BuyerApiError) as error:
+        buyer_api_service.issue_user_key(42)
+    second = buyer_api_service.issue_user_key(42, regenerate=True)
+
+    assert error.value.code == "API_KEY_ALREADY_EXISTS"
+    assert first["key"] != second["key"]
+    assert mock_mongodb.buyer_api_keys.count_documents({
+        "user_id": 42, "active": True,
+    }) == 1
+    with pytest.raises(buyer_api_service.BuyerApiError):
+        buyer_api_service.authenticate(first["key"], "127.0.0.1", "balance")
+    assert buyer_api_service.authenticate(
+        second["key"], "127.0.0.2", "balance"
+    )["user_id"] == 42
+
+
+def test_reseller_dashboard_is_scoped_and_sums_only_recent_successes(mock_mongodb):
+    db.upsert_user(42, "buyer", "Buyer")
+    db.upsert_user(99, "other", "Other")
+    mock_mongodb.wallets.insert_one({"user_id": 42, "balance_cents": 1234})
+    issued = buyer_api_service.issue_user_key(42)
+    now = int(time.time())
+    mock_mongodb.buyer_api_purchases.insert_many([
+        {
+            "buyer_key_id": issued["id"], "idempotency_key": "recent-order",
+            "user_id": 42, "created_at": now, "response": {"success": True, "amount": 2.2},
+        },
+        {
+            "buyer_key_id": issued["id"], "idempotency_key": "old-order",
+            "user_id": 42, "created_at": now - (31 * 86400),
+            "response": {"success": True, "amount": 9.0},
+        },
+        {
+            "buyer_key_id": issued["id"], "idempotency_key": "failed-order",
+            "user_id": 42, "created_at": now, "response": {"success": False, "amount": 7.0},
+        },
+        {
+            "buyer_key_id": 999, "idempotency_key": "other-user",
+            "user_id": 99, "created_at": now, "response": {"success": True, "amount": 50.0},
+        },
+    ])
+
+    result = buyer_api_service.dashboard(42)
+
+    assert result["active"] is True
+    assert result["balance"] == 12.34
+    assert result["total_orders"] == 2
+    assert result["spend_30d"] == 2.2
+    assert result["key"]["prefix"] == issued["prefix"]
+    assert "key_hash" not in result["key"]
+    assert issued["key"] not in str(result)
 
 
 def test_catalog_and_balance_are_scoped_to_key_owner(mock_mongodb):

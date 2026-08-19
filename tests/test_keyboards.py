@@ -493,6 +493,26 @@ def test_home_menu_hides_channel_link_but_keeps_optional_group(mock_mongodb):
     assert required_keyboard.inline_keyboard[0][0].url == "https://t.me/blackmarketBotChannel"
 
 
+def test_home_and_reseller_dashboard_expose_self_service_api(mock_mongodb):
+    home_callbacks = {
+        button.callback_data
+        for row in kb.home_keyboard("en", 42).inline_keyboard
+        for button in row
+        if button.callback_data
+    }
+    create_keyboard = kb.reseller_api_keyboard(
+        "en", has_key=False, docs_url="https://shop.example/api/swagger"
+    )
+    active_keyboard = kb.reseller_api_keyboard(
+        "en", has_key=True, docs_url="https://shop.example/api/swagger"
+    )
+
+    assert "reseller_api" in home_callbacks
+    assert create_keyboard.inline_keyboard[0][0].callback_data == "reseller_api_create"
+    assert create_keyboard.inline_keyboard[1][0].url == "https://shop.example/api/swagger"
+    assert active_keyboard.inline_keyboard[0][0].callback_data == "reseller_api_regen"
+
+
 def test_admin_panel_has_persistent_maintenance_toggle(mock_mongodb):
     keyboard = admin.admin_panel_keyboard()
     button = next(

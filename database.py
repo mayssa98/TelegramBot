@@ -15,7 +15,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
@@ -208,6 +208,9 @@ def init_db():
     db.bulk_wallet_credits.create_index("operation_id", unique=True)
     db.buyer_api_keys.create_index("id", unique=True)
     db.buyer_api_keys.create_index("key_hash", unique=True)
+    db.buyer_api_keys.create_index([
+        ("user_id", ASCENDING), ("active", ASCENDING), ("created_at", DESCENDING),
+    ])
     db.external_api_connectors.create_index("id", unique=True)
     db.site_orders.create_index("id", unique=True)
     db.site_orders.create_index("tracking_token_hash", unique=True)
@@ -223,6 +226,9 @@ def init_db():
     db.buyer_api_purchases.create_index(
         [("buyer_key_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True,
     )
+    db.buyer_api_purchases.create_index([
+        ("user_id", ASCENDING), ("response.success", ASCENDING), ("created_at", DESCENDING),
+    ])
     db.buyer_api_rate_limits.create_index(
         [("bucket", ASCENDING), ("window", ASCENDING)], unique=True,
     )

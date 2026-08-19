@@ -111,6 +111,78 @@ def list_keys() -> list[dict[str, Any]]:
     return rows
 
 
+def active_key_for_user(user_id: int) -> dict[str, Any] | None:
+    """Return safe metadata for a user's current key, never its hash or secret."""
+    item = db.get_conn().buyer_api_keys.find_one(
+        {"user_id": int(user_id), "active": True},
+        sort=[("created_at", -1), ("id", -1)],
+    )
+    if not item:
+        return None
+    return {
+        "id": int(item["id"]),
+        "prefix": str(item.get("prefix") or ""),
+        "user_id": int(item["user_id"]),
+        "label": str(item.get("label") or ""),
+        "active": True,
+        "created_at": item.get("created_at"),
+        "last_used_at": item.get("last_used_at"),
+    }
+
+
+def issue_user_key(user_id: int, *, regenerate: bool = False) -> dict[str, Any]:
+    """Self-service key issue with at most one active credential per Telegram user."""
+    user_id = int(user_id)
+    current = active_key_for_user(user_id)
+    if current and not regenerate:
+        raise BuyerApiError(
+            409,
+            "API_KEY_ALREADY_EXISTS",
+            "An active API key already exists. Regenerate it to receive a new one.",
+        )
+    if current:
+        now = int(time.time())
+        db.get_conn().buyer_api_keys.update_many(
+            {"user_id": user_id, "active": True},
+            {"$set": {"active": False, "revoked_at": now, "updated_at": now}},
+        )
+        db.audit_event(
+            "buyer_api.key_regenerated",
+            actor_id=user_id,
+            details={"previous_key_id": current["id"]},
+        )
+    return create_key(user_id, label="Reseller API")
+
+
+def dashboard(user_id: int) -> dict[str, Any]:
+    """Build the safe user-facing reseller dashboard summary."""
+    user_id = int(user_id)
+    conn = db.get_conn()
+    wallet = conn.wallets.find_one({"user_id": user_id}) or {}
+    cutoff = int(time.time()) - (30 * 24 * 60 * 60)
+    successful = {
+        "user_id": user_id,
+        "response.success": True,
+    }
+    total_orders = conn.buyer_api_purchases.count_documents(successful)
+    spend_30d = 0.0
+    for purchase_row in conn.buyer_api_purchases.find({
+        **successful,
+        "created_at": {"$gte": cutoff},
+    }):
+        response = purchase_row.get("response") or {}
+        spend_30d += float(response.get("amount") or 0)
+    active_key = active_key_for_user(user_id)
+    return {
+        "active": active_key is not None,
+        "balance": max(0, int(wallet.get("balance_cents") or 0)) / 100,
+        "currency": CURRENCY,
+        "total_orders": total_orders,
+        "spend_30d": round(spend_30d, 2),
+        "key": active_key,
+    }
+
+
 def revoke_key(key_id: int) -> bool:
     result = db.get_conn().buyer_api_keys.update_one(
         {"id": int(key_id), "active": True},
