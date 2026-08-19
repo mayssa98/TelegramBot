@@ -1255,6 +1255,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "adm_addoff_price",
         "adm_offimage",
         "adm_text_override",
+        "adm_ticket_style",
         "adm_btn_add",
         "adm_inventory",
         "adm_manual_stock",
@@ -2149,6 +2150,18 @@ async def handle_pending_input(update, context, lang):
         await update.message.reply_text(
             f"✅ Annonce envoyée à {sent} utilisateur(s).",
             reply_markup=admin.admin_panel_keyboard(),
+        )
+        return
+    if kind == "adm_ticket_style" and uid == ADMIN_ID:
+        try:
+            saved = support_bridge.save_ticket_style(str(ref), text)
+        except ValueError as exc:
+            await update.message.reply_text(f"⚠️ {exc}")
+            return
+        PENDING.pop(uid, None)
+        await update.message.reply_text(
+            f"✅ Design enregistré : {saved}",
+            reply_markup=admin.ticket_style_keyboard(),
         )
         return
     if kind == "adm_text_override" and uid == ADMIN_ID:
@@ -3612,6 +3625,53 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(
             f"📱 Send the Codex number for order #{oid}.\n\n"
             "The customer will receive an I agree button."
+        )
+        return
+    if data == "adm_ticket_style":
+        style = support_bridge.ticket_style()
+        await q.edit_message_text(
+            "🎨 <b>DESIGN DES TICKETS</b>\n\n"
+            "Personnalisez les cartes envoyées dans le canal support. "
+            "Les informations sensibles restent protégées.\n\n"
+            f"<b>Titre</b>\n<code>{html.escape(style['title'])}</code>\n\n"
+            f"<b>Instruction de réponse</b>\n<code>{html.escape(style['reply_hint'])}</code>\n\n"
+            f"<b>Signature</b>\n<code>{html.escape(style['footer'])}</code>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.ticket_style_keyboard(),
+        )
+        return
+    if data == "adm_ticket_style_preview":
+        await q.edit_message_text(
+            support_bridge.ticket_card_preview(),
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.ticket_style_keyboard(),
+        )
+        return
+    if data == "adm_ticket_style_reset":
+        support_bridge.reset_ticket_style()
+        await q.edit_message_text(
+            "✅ <b>Design restauré</b>\n\nLes valeurs professionnelles par défaut sont de nouveau actives.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.ticket_style_keyboard(),
+        )
+        return
+    if data.startswith("adm_ticket_style_edit:"):
+        field = data.split(":", 1)[1]
+        labels = {
+            "title": "le nouveau titre",
+            "reply_hint": "la nouvelle instruction de réponse",
+            "footer": "la nouvelle signature",
+        }
+        if field not in labels:
+            return
+        PENDING[uid] = ("adm_ticket_style", field)
+        placeholder_note = (
+            "\n\nVariables disponibles : `{ticket_id}` et `{ticket_ref}`."
+            if field == "reply_hint" else ""
+        )
+        await q.message.reply_text(
+            f"✏️ Envoyez {labels[field]}.{placeholder_note}",
+            parse_mode=ParseMode.MARKDOWN,
         )
         return
 

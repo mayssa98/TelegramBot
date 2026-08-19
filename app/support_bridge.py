@@ -18,6 +18,15 @@ _TICKET_REFERENCE_RE = re.compile(
     re.IGNORECASE,
 )
 
+TICKET_STYLE_DEFAULTS = {
+    "title": "BLACKMARKET SUPPORT CENTER",
+    "reply_hint": "Reply to this post or use /reply {ticket_id} your message.",
+    "footer": "Fast • Secure • Human support",
+}
+TICKET_STYLE_SETTING_KEYS = {
+    field: f"support_ticket_card_{field}" for field in TICKET_STYLE_DEFAULTS
+}
+
 
 def ticket_reference(ticket_id: int) -> str:
     return f"TKT-{int(ticket_id):06d}"
@@ -45,22 +54,98 @@ def _user_values(user: Any, user_id: int) -> tuple[str, str]:
     return str(name), f"@{raw_username}" if raw_username else "Not provided"
 
 
+def ticket_style() -> dict[str, str]:
+    """Return the administrator-editable, plain-text ticket card style."""
+    return {
+        field: str(db.get_setting(TICKET_STYLE_SETTING_KEYS[field], default) or default).strip()
+        or default
+        for field, default in TICKET_STYLE_DEFAULTS.items()
+    }
+
+
+def save_ticket_style(field: str, value: str) -> str:
+    if field not in TICKET_STYLE_DEFAULTS:
+        raise ValueError("Unknown ticket style field.")
+    limits = {"title": 80, "reply_hint": 240, "footer": 120}
+    clean = " ".join(str(value or "").split())[:limits[field]]
+    if not clean:
+        raise ValueError("The value cannot be empty.")
+    db.set_setting(TICKET_STYLE_SETTING_KEYS[field], clean)
+    return clean
+
+
+def reset_ticket_style() -> None:
+    for field, default in TICKET_STYLE_DEFAULTS.items():
+        db.set_setting(TICKET_STYLE_SETTING_KEYS[field], default)
+
+
+def _styled_text(value: str, ticket: dict) -> str:
+    return str(value).replace("{ticket_id}", str(int(ticket["id"]))).replace(
+        "{ticket_ref}", ticket_reference(ticket["id"])
+    )
+
+
+def _event_style(event: str) -> tuple[str, str]:
+    normalized = str(event or "").lower()
+    if "closed" in normalized:
+        return "✅", "CLOSED"
+    if "attachment" in normalized:
+        return "📎", "ATTACHMENT"
+    if "reply" in normalized or "message" in normalized:
+        return "💬", "CUSTOMER REPLY"
+    if "catalog" in normalized:
+        return "🛍️", "New catalog request"
+    return "🆕", "NEW TICKET"
+
+
 def _channel_card(ticket: dict, user: Any, body: str, event: str) -> str:
     user_id = int(ticket["user_id"])
     name, username = _user_values(user, user_id)
     category = str(ticket.get("category") or "other").replace("_", " ").title()
-    order_line = f"\n<b>Order:</b> #{int(ticket['order_id'])}" if ticket.get("order_id") else ""
+    order_line = f"\n• <b>Order:</b> <code>#{int(ticket['order_id'])}</code>" if ticket.get("order_id") else ""
+    priority = str(ticket.get("priority") or "normal").replace("_", " ").title()
+    status = str(ticket.get("status") or "waiting_admin").replace("_", " ").title()
+    style = ticket_style()
+    event_icon, event_label = _event_style(event)
+    reply_hint = _styled_text(style["reply_hint"], ticket)
     return (
-        f"<b>{html.escape(event)} - {ticket_reference(ticket['id'])}</b>\n"
-        f"<b>Category:</b> {html.escape(category)}\n"
-        f'<b>Customer:</b> <a href="tg://user?id={user_id}">'
-        f"{html.escape(name)}</a>\n"
-        f"<b>Username:</b> {html.escape(username)}\n"
-        f"<b>Telegram ID:</b> <code>{user_id}</code>"
+        f"🛎️ <b>{html.escape(style['title'])}</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"<blockquote>{event_icon} <b>{event_label} · {ticket_reference(ticket['id'])}</b>\n"
+        f"🟠 <b>Status:</b> {html.escape(status)}\n"
+        f"🏷️ <b>Category:</b> {html.escape(category)}\n"
+        f"⚡ <b>Priority:</b> {html.escape(priority)}</blockquote>\n\n"
+        "👤 <b>CUSTOMER DETAILS</b>\n"
+        f'• <b>Name:</b> <a href="tg://user?id={user_id}">{html.escape(name)}</a>\n'
+        f"• <b>Username:</b> {html.escape(username)}\n"
+        f"• <b>Telegram ID:</b> <code>{user_id}</code>"
         f"{order_line}\n\n"
-        f"{html.escape(body[:2500])}\n\n"
-        "<i>Reply to this post, or publish "
-        f"<code>/reply {int(ticket['id'])} your message</code>.</i>"
+        "💬 <b>CUSTOMER MESSAGE</b>\n"
+        f"<blockquote>{html.escape(body[:2500])}</blockquote>\n\n"
+        f"↩️ <b>REPLY</b>\n<i>{html.escape(reply_hint)}</i>\n\n"
+        f"<i>— {html.escape(style['footer'])}</i>"
+    )
+
+
+def ticket_card_preview() -> str:
+    """Render a safe example using the currently saved administrator style."""
+    class PreviewUser:
+        full_name = "Example Customer"
+        first_name = "Example"
+        username = "customer"
+
+    return _channel_card(
+        {
+            "id": 62,
+            "user_id": 123456789,
+            "order_id": 412,
+            "category": "delivery",
+            "priority": "high",
+            "status": "waiting_admin",
+        },
+        PreviewUser(),
+        "Hello, I need help with my order.",
+        "New support ticket",
     )
 
 
@@ -171,7 +256,12 @@ async def handle_admin_channel_post(update, context) -> bool:
     body = content or f"[{media_label(message)}]"
     await context.bot.send_message(
         user_id,
-        (f"<b>Support reply - {ticket_reference(ticket_id)}</b>\n\n{html.escape(body[:2500])}"),
+        (
+            f"🛎️ <b>{html.escape(ticket_style()['title'])}</b>\n"
+            f"<blockquote>💬 <b>REPLY · {ticket_reference(ticket_id)}</b></blockquote>\n\n"
+            f"{html.escape(body[:2500])}\n\n"
+            f"<i>— {html.escape(ticket_style()['footer'])}</i>"
+        ),
         parse_mode=ParseMode.HTML,
         reply_markup=kb.ticket_conversation_keyboard(lang, ticket_id),
     )

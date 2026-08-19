@@ -477,6 +477,28 @@ def test_admin_panel_has_custom_announcement_button():
     assert "adm_broadcast_message" in callbacks
 
 
+def test_admin_can_customize_and_preview_ticket_design():
+    customize_callbacks = {
+        button.callback_data
+        for row in admin.customize_keyboard().inline_keyboard
+        for button in row
+    }
+    style_callbacks = {
+        button.callback_data
+        for row in admin.ticket_style_keyboard().inline_keyboard
+        for button in row
+    }
+
+    assert "adm_ticket_style" in customize_callbacks
+    assert {
+        "adm_ticket_style_edit:title",
+        "adm_ticket_style_edit:reply_hint",
+        "adm_ticket_style_edit:footer",
+        "adm_ticket_style_preview",
+        "adm_ticket_style_reset",
+    } <= style_callbacks
+
+
 def test_home_menu_hides_channel_link_but_keeps_optional_group(mock_mongodb):
     keyboard = kb.home_keyboard("en", 42)
     urls = {

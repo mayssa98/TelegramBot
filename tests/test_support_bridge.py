@@ -33,8 +33,37 @@ def test_client_ticket_message_is_posted_and_linked(mock_mongodb):
     assert call.args[0] == -1004326329551
     assert "TKT-000001" in call.args[1]
     assert "Initial issue" in call.args[1]
+    assert "BLACKMARKET SUPPORT CENTER" in call.args[1]
+    assert "NEW TICKET" in call.args[1]
+    assert "CUSTOMER DETAILS" in call.args[1]
+    assert "CUSTOMER MESSAGE" in call.args[1]
+    assert "Priority:" in call.args[1]
     linked = support_service.get_ticket_by_channel_message(701)
     assert linked["id"] == ticket["id"]
+
+
+def test_ticket_card_style_is_editable_and_keeps_html_safe(mock_mongodb):
+    support_bridge.save_ticket_style("title", "VIP <Support>")
+    support_bridge.save_ticket_style(
+        "reply_hint", "Answer ticket {ticket_ref} with /reply {ticket_id}",
+    )
+    support_bridge.save_ticket_style("footer", "Always by your side")
+
+    preview = support_bridge.ticket_card_preview()
+
+    assert "VIP &lt;Support&gt;" in preview
+    assert "Answer ticket TKT-000062 with /reply 62" in preview
+    assert "Always by your side" in preview
+    assert "{ticket_id}" not in preview
+    assert "{ticket_ref}" not in preview
+
+
+def test_ticket_card_style_can_be_restored(mock_mongodb):
+    support_bridge.save_ticket_style("title", "Temporary title")
+
+    support_bridge.reset_ticket_style()
+
+    assert support_bridge.ticket_style() == support_bridge.TICKET_STYLE_DEFAULTS
 
 
 def test_admin_channel_reply_is_delivered_to_linked_customer(mock_mongodb):
