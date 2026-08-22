@@ -962,6 +962,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
   const [serviceName, setServiceName] = useState("");
   const [serviceNameAr, setServiceNameAr] = useState("");
   const [serviceEmoji, setServiceEmoji] = useState("📦");
+  const [serviceSuffixEmoji, setServiceSuffixEmoji] = useState("");
   const [serviceChannel, setServiceChannel] = useState(workspace === "site" ? "tn_site" : "bot");
   const [stockOffer, setStockOffer] = useState(null);
   const [stock, setStock] = useState("");
@@ -969,6 +970,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
   const [editServiceName, setEditServiceName] = useState("");
   const [editServiceNameAr, setEditServiceNameAr] = useState("");
   const [editServiceEmoji, setEditServiceEmoji] = useState("📦");
+  const [editServiceSuffixEmoji, setEditServiceSuffixEmoji] = useState("");
   const [editServiceChannel, setEditServiceChannel] = useState("both");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedOffers, setSelectedOffers] = useState(new Set());
@@ -980,6 +982,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
     setEditServiceName(service.name || "");
     setEditServiceNameAr(service.name_ar || "");
     setEditServiceEmoji(service.emoji || "📦");
+    setEditServiceSuffixEmoji(service.suffix_emoji || "");
     const channels = service.sales_channels || ["bot", "tn_site"];
     setEditServiceChannel(channels.length > 1 ? "both" : (channels[0] || "bot"));
   };
@@ -994,6 +997,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
         name: editServiceName,
         name_ar: editServiceNameAr,
         emoji: editServiceEmoji,
+        suffix_emoji: editServiceSuffixEmoji,
         sales_channel: editServiceChannel,
       })
     )
@@ -1007,6 +1011,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
         name: serviceName,
         name_ar: serviceNameAr,
         emoji: serviceEmoji,
+        suffix_emoji: serviceSuffixEmoji,
         sales_channel: serviceChannel,
       })
     )
@@ -1100,7 +1105,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
               <div>
                 <span className="catalog-service-icon">{service.emoji || "◆"}</span>
                 <div>
-                  <h3>{service.name}</h3>
+                  <h3>{service.name} {service.suffix_emoji || ""}</h3>
                   <small>
                     {service.offers?.length || 0} produit(s) ·{" "}
                     {service.total_stock || 0} en stock
@@ -1236,6 +1241,9 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
                   onChange={(event) => setServiceEmoji(event.target.value)}
                 />
               </Field>
+              <Field label="Emoji droit">
+                <input value={serviceSuffixEmoji} onChange={(event) => setServiceSuffixEmoji(event.target.value)} placeholder="✅" />
+              </Field>
               <Field label="Nom arabe" wide>
                 <input dir="rtl" value={serviceNameAr} onChange={(event) => setServiceNameAr(event.target.value)} />
               </Field>
@@ -1272,6 +1280,9 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
                   onChange={(event) => setEditServiceEmoji(event.target.value)}
                   style={{ maxWidth: 80, textAlign: "center", fontSize: "1.25rem" }}
                 />
+              </Field>
+              <Field label="Emoji droit">
+                <input value={editServiceSuffixEmoji} onChange={(event) => setEditServiceSuffixEmoji(event.target.value)} placeholder="✅" style={{ maxWidth: 80, textAlign: "center", fontSize: "1.25rem" }} />
               </Field>
               <Field label="Nom arabe" wide>
                 <input dir="rtl" value={editServiceNameAr} onChange={(event) => setEditServiceNameAr(event.target.value)} />

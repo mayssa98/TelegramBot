@@ -27,3 +27,16 @@ def test_flat_catalog_returns_offers_from_active_services_only(mock_mongodb):
     assert [offer["id"] for offer in offers] == [visible]
     assert offers[0]["service_name"] == "Active"
     assert hidden not in {offer["id"] for offer in offers}
+
+
+def test_catalog_propagates_service_button_suffix(mock_mongodb):
+    service_id = db.add_service(
+        "officiels subscribes", "⭐", suffix_emoji="✅",
+    )
+    db.add_offer(service_id, "Premium", 5.0, 4)
+
+    service = db.get_service(service_id)
+    offer = db.list_catalog_offers()[0]
+
+    assert service["suffix_emoji"] == "✅"
+    assert offer["service_suffix_emoji"] == "✅"

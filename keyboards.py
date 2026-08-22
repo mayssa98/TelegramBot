@@ -88,6 +88,18 @@ def get_service_emoji(name, current_emoji=""):
     return emoji
 
 
+def service_button_label(service, max_len=40):
+    """Render configurable Unicode emojis around a service name."""
+    service = service or {}
+    icon_id = str(service.get("custom_emoji_id") or "").strip()
+    has_premium_left_icon = bool(icon_id and icon_id.isascii())
+    left = "" if has_premium_left_icon else str(service.get("emoji") or "").strip()
+    right = str(service.get("suffix_emoji") or service.get("service_suffix_emoji") or "").strip()
+    reserved = len(left) + len(right) + int(bool(left)) + int(bool(right))
+    name = compact_offer_name(clean_button_name(service.get("name")) or f"Service #{service.get('id', '')}", max(8, max_len - reserved))
+    return " ".join(part for part in (left, name, right) if part).strip()[:64]
+
+
 def stock_badge(stock, unlimited=False):
     if unlimited:
         return "🟩"
@@ -302,8 +314,7 @@ def services_keyboard(lang):
         row = []
         for _i, svc in enumerate(svcs):
             total = svc.get("total_stock", 0)
-            safe_name = clean_button_name(svc.get("name")) or f"Service #{svc['id']}"
-            label = compact_offer_name(safe_name, 28)
+            label = service_button_label(svc, 34)
             row.append(InlineKeyboardButton(
                 label,
                 callback_data=f"svc:{svc['id']}",
@@ -388,9 +399,13 @@ def catalog_offers_keyboard(lang):
                 )
                 # Telegram renders the custom icon before the text.  Do not also
                 # put the service's Unicode emoji in the label or two icons appear.
-                label = clean_name if service_icon else (
-                    f"{service_emoji} {clean_name}".strip() if service_emoji else clean_name
-                )
+                label = service_button_label({
+                    "id": sid,
+                    "name": clean_name,
+                    "emoji": service_emoji,
+                    "suffix_emoji": offer.get("service_suffix_emoji"),
+                    "custom_emoji_id": service_icon,
+                }, 46)
                 cat_style = "success" if (has_unlimited or total_stock > 3) else ("primary" if total_stock > 0 else "danger")
                 grouped_category_buttons.append(InlineKeyboardButton(
                     label,
@@ -530,12 +545,14 @@ def preorder_services_keyboard(lang):
     for service_id, offer in services.items():
         service_name = str(offer.get("service_name") or f"Service #{service_id}").strip()
         service_icon = offer.get("service_custom_emoji_id") or None
-        service_emoji = get_service_emoji(service_name, offer.get("service_emoji"))
-        label = clean_button_name(service_name) or service_name
-        if service_emoji and not service_icon:
-            label = f"{service_emoji} {label}".strip()
+        label = service_button_label({
+            "name": service_name,
+            "emoji": offer.get("service_emoji"),
+            "custom_emoji_id": service_icon,
+            "suffix_emoji": offer.get("service_suffix_emoji"),
+        }, 28)
         row.append(InlineKeyboardButton(
-            compact_offer_name(label, 28),
+            label,
             callback_data=f"preorder_svc:{service_id}",
             style="danger",
             icon_custom_emoji_id=service_icon,

@@ -1172,6 +1172,7 @@ class handler(BaseHTTPRequestHandler):
                 sid = db.add_service(
                     name,
                     emoji,
+                    suffix_emoji=form.get("suffix_emoji", "").strip()[:12],
                     sales_channels=channels,
                     name_ar=form.get("name_ar", "").strip(),
                 )
@@ -1189,6 +1190,7 @@ class handler(BaseHTTPRequestHandler):
                     sid,
                     name=name,
                     emoji=emoji,
+                    suffix_emoji=form.get("suffix_emoji", "").strip()[:12],
                     sales_channels=channels,
                     name_ar=form.get("name_ar", "").strip(),
                 )

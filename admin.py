@@ -12,6 +12,14 @@ def _safe_custom_emoji_id(value):
     return normalized if normalized and normalized.isascii() else None
 
 
+def _service_button_text(service):
+    icon_id = _safe_custom_emoji_id(service.get("custom_emoji_id"))
+    left = "" if icon_id else str(service.get("emoji") or "").strip()
+    name = service.get("name") or f"Service #{service['id']}"
+    right = str(service.get("suffix_emoji") or "").strip()
+    return " ".join(part for part in (left, name, right) if part)[:64]
+
+
 TEXT_CATEGORIES = [
     ("menus", "🏠 Menus et boutons"),
     ("payments", "💳 Paiements et Binance Pay"),
@@ -280,7 +288,7 @@ def onchain_payment_review_keyboard(order_id):
 
 def catalog_admin_keyboard():
     rows = [[InlineKeyboardButton(
-        s.get("name") or f"Service #{s['id']}",
+        _service_button_text(s),
         callback_data=f"adm_svc:{s['id']}",
         icon_custom_emoji_id=_safe_custom_emoji_id(s.get("custom_emoji_id")),
         style="success" if s["active"] else "danger",
@@ -300,8 +308,9 @@ def service_admin_keyboard(service_id):
     )] for o in db.list_offers(service_id, active_only=False)]
     rows.extend([
         [InlineKeyboardButton("➕ Ajouter une offre", callback_data=f"adm_addoff:{service_id}")],
-        [InlineKeyboardButton("✏️ Nom", callback_data=f"adm_svcname:{service_id}"),
-         InlineKeyboardButton("🎨 Emoji", callback_data=f"adm_svcemoji:{service_id}")],
+        [InlineKeyboardButton("✏️ Nom", callback_data=f"adm_svcname:{service_id}")],
+        [InlineKeyboardButton("⬅️ Emoji gauche", callback_data=f"adm_svcemoji:{service_id}"),
+         InlineKeyboardButton("Emoji droit ➡️", callback_data=f"adm_svcsuffix:{service_id}")],
         [InlineKeyboardButton("⏸ Désactiver" if svc["active"] else "▶️ Activer",
                               callback_data=f"adm_svctoggle:{service_id}"),
          InlineKeyboardButton("🗑 Archiver", callback_data=f"adm_svcdel:{service_id}")],

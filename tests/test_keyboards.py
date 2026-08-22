@@ -304,7 +304,7 @@ def test_services_keyboard_uses_total_stock_color(monkeypatch):
         for button in row
     ]
 
-    assert labels == ["Large", "Low", "Empty"]
+    assert labels == ["📦 Large", "📦 Low", "📦 Empty"]
     assert keyboard.inline_keyboard[0][0].style == "success"
     assert keyboard.inline_keyboard[0][1].style == "primary"
     assert keyboard.inline_keyboard[1][0].style == "danger"
@@ -380,6 +380,37 @@ def test_service_button_uses_admin_selected_animated_emoji(monkeypatch):
     assert button.icon_custom_emoji_id == "premium-service-emoji"
 
 
+def test_official_catalog_button_supports_left_and_right_emojis(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: [{
+        "id": 7,
+        "name": "officiels subscribes",
+        "emoji": "⭐",
+        "suffix_emoji": "✅",
+        "total_stock": 4,
+    }])
+
+    button = kb.services_keyboard("fr").inline_keyboard[0][0]
+
+    assert button.text == "⭐ officiels subscribes ✅"
+    assert button.icon_custom_emoji_id is None
+
+
+def test_premium_left_icon_keeps_unicode_suffix(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: [{
+        "id": 7,
+        "name": "officiels subscribes",
+        "emoji": "⭐",
+        "suffix_emoji": "✅",
+        "custom_emoji_id": "premium-left-icon",
+        "total_stock": 4,
+    }])
+
+    button = kb.services_keyboard("fr").inline_keyboard[0][0]
+
+    assert button.text == "officiels subscribes ✅"
+    assert button.icon_custom_emoji_id == "premium-left-icon"
+
+
 def test_admin_catalog_button_uses_premium_emoji(monkeypatch):
     monkeypatch.setattr(admin.db, "list_services", lambda active_only=False: [{
         "id": 4,
@@ -409,6 +440,22 @@ def test_admin_service_ignores_unicode_stored_as_custom_emoji_id(monkeypatch):
 
     assert button.callback_data == "adm_off:84"
     assert button.icon_custom_emoji_id is None
+
+
+def test_admin_service_can_configure_both_button_emojis(monkeypatch):
+    monkeypatch.setattr(admin.db, "get_service", lambda _service_id: {
+        "id": 52, "name": "officiels subscribes", "active": 1,
+    })
+    monkeypatch.setattr(admin.db, "list_offers", lambda *_args, **_kwargs: [])
+
+    callbacks = [
+        button.callback_data
+        for row in admin.service_admin_keyboard(52).inline_keyboard
+        for button in row
+    ]
+
+    assert "adm_svcemoji:52" in callbacks
+    assert "adm_svcsuffix:52" in callbacks
 
 
 def test_admin_cannot_manually_modify_offer_stock(monkeypatch):

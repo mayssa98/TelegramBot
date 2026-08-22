@@ -633,6 +633,28 @@ def test_admin_custom_emoji_is_extracted_from_custom_emoji_sticker():
     assert custom_emoji_from_message(message) == "5413879192267805083"
 
 
+def test_admin_can_save_service_right_emoji(monkeypatch, mock_mongodb):
+    monkeypatch.setattr("bot.ADMIN_ID", 42)
+    service_id = db.add_service("officiels subscribes", "⭐")
+    PENDING[42] = ("adm_svcsuffix", service_id)
+    message = SimpleNamespace(
+        text="✅",
+        entities=[],
+        caption_entities=[],
+        reply_text=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        message=message,
+    )
+
+    asyncio.run(handle_pending_input(update, SimpleNamespace(), "fr"))
+
+    assert db.get_service(service_id)["suffix_emoji"] == "✅"
+    assert PENDING.get(42) is None
+    message.reply_text.assert_awaited_once()
+
+
 def test_admin_offer_accepts_custom_emoji_sticker(monkeypatch, mock_mongodb):
     monkeypatch.setattr("bot.ADMIN_ID", 42)
     service_id = db.add_service("Cursor", "📦")

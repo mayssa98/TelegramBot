@@ -2594,11 +2594,11 @@ async def handle_pending_input(update, context, lang):
         return
 
     if uid == ADMIN_ID and kind in {
-        "adm_svcname", "adm_svcemoji", "adm_offname", "adm_offemoji", "adm_offnote",
+        "adm_svcname", "adm_svcemoji", "adm_svcsuffix", "adm_offname", "adm_offemoji", "adm_offnote",
         "adm_offdesc", "adm_offdelay",
     }:
         custom_emoji_id = custom_emoji_from_message(update.message)
-        if kind not in {"adm_offnote", "adm_offdesc", "adm_svcemoji", "adm_offemoji"} and not text and not custom_emoji_id:
+        if kind not in {"adm_offnote", "adm_offdesc", "adm_svcemoji", "adm_svcsuffix", "adm_offemoji"} and not text and not custom_emoji_id:
             await update.message.reply_text("⚠️ La valeur ne peut pas être vide.")
             return
         if kind == "adm_svcname":
@@ -2628,6 +2628,21 @@ async def handle_pending_input(update, context, lang):
             display_emoji = raw_emoji or "✅"
             await update.message.reply_text(
                 f"✅ Emoji du service mis à jour : {display_emoji}",
+                reply_markup=admin.service_admin_keyboard(ref),
+            )
+            return
+        elif kind == "adm_svcsuffix":
+            if custom_emoji_id and not text.strip():
+                await update.message.reply_text(
+                    "⚠️ Telegram ne permet pas une icône Premium native à droite. "
+                    "Envoyez un emoji Unicode, par exemple : ✅"
+                )
+                return
+            suffix_emoji = text.strip()[:12]
+            db.update_service(ref, suffix_emoji=suffix_emoji)
+            PENDING.pop(uid, None)
+            await update.message.reply_text(
+                f"✅ Emoji droit mis à jour : {suffix_emoji or 'aucun'}",
                 reply_markup=admin.service_admin_keyboard(ref),
             )
             return
@@ -3981,11 +3996,12 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN,
         )
         return
-    if data.startswith("adm_svcname:") or data.startswith("adm_svcemoji:"):
+    if data.startswith(("adm_svcname:", "adm_svcemoji:", "adm_svcsuffix:")):
         action, sid = data.split(":")
-        kind = "adm_svcname" if action == "adm_svcname" else "adm_svcemoji"
+        kind = action
         PENDING[uid] = (kind, int(sid))
-        await q.message.reply_text("✏️ Envoyez la nouvelle valeur :")
+        prompt = "➡️ Envoyez l’emoji Unicode à afficher à droite du nom :" if kind == "adm_svcsuffix" else "✏️ Envoyez la nouvelle valeur :"
+        await q.message.reply_text(prompt)
         return
     if data.startswith("adm_svctoggle:"):
         sid = int(data.split(":")[1])

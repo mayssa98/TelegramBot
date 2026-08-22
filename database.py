@@ -450,6 +450,7 @@ def list_catalog_offers():
             offer.update(_otp_offer_values())
         offer["service_name"] = service.get("name", "")
         offer["service_emoji"] = service.get("emoji", "")
+        offer["service_suffix_emoji"] = service.get("suffix_emoji", "")
         offer["service_custom_emoji_id"] = service.get("custom_emoji_id", "")
         offers.append(offer)
     offers.sort(key=lambda offer: (
@@ -657,7 +658,7 @@ def move_offer(offer_id, service_id):
     }
 
 
-def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar=""):
+def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar="", suffix_emoji=""):
     db = get_conn()
     last = db.services.find_one(sort=[("sort_order", DESCENDING)])
     sid = _next_id("services")
@@ -666,6 +667,7 @@ def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar
         "id": sid,
         "name": "Codex number" if special_service else name,
         "emoji": emoji,
+        "suffix_emoji": str(suffix_emoji or "")[:12],
         "custom_emoji_id": custom_emoji_id,
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
@@ -679,7 +681,7 @@ def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar
 
 def update_service(
     service_id, name=None, emoji=None, active=None, custom_emoji_id=None,
-    sales_channels=None, name_ar=None,
+    sales_channels=None, name_ar=None, suffix_emoji=None,
 ):
     special_service = is_otp_service_name(name)
     values = {
@@ -687,6 +689,7 @@ def update_service(
         for k, v in {
             "name": name,
             "emoji": emoji,
+            "suffix_emoji": str(suffix_emoji)[:12] if suffix_emoji is not None else None,
             "active": active,
             "custom_emoji_id": custom_emoji_id,
             "sales_channels": sales_channels,
