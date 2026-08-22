@@ -336,13 +336,13 @@ def test_zero_added_inventory_does_not_announce(mock_mongodb):
     assert sent == 0
     bot_client.send_message.assert_not_awaited()
 
-def test_delivery_accounts_use_numeric_labels_without_hash_delimiters():
+def test_delivery_accounts_use_numeric_labels_and_preserve_hash_content():
     assert numbered_delivery_content([
         "first@example.com:pass",
         "#second@example.com:pass",
         "#3\nthird@example.com:pass",
     ]) == (
-        "1.\nfirst@example.com:pass\n\n2.\nsecond@example.com:pass\n\n3.\nthird@example.com:pass"
+        "1.\nfirst@example.com:pass\n\n2.\n#second@example.com:pass\n\n3.\nthird@example.com:pass"
     )
 
 def test_start_requires_official_channel_membership(monkeypatch):
@@ -1038,7 +1038,7 @@ def test_out_of_stock_offer_click_has_no_legacy_preorder_button(monkeypatch):
     assert callbacks == ["catalog"]
     assert not any(callback.startswith("preorder:") for callback in callbacks)
 
-def test_offer_back_button_from_photo_opens_service_without_editing_photo(monkeypatch):
+def test_single_offer_service_from_photo_opens_offer_without_editing_photo(monkeypatch):
     message = SimpleNamespace(text=None, reply_text=AsyncMock())
     query = SimpleNamespace(
         data="svc:7",
@@ -1050,12 +1050,16 @@ def test_offer_back_button_from_photo_opens_service_without_editing_photo(monkey
     monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
     monkeypatch.setattr("bot.db.get_service", lambda _sid: {"id": 7, "name": "Chat GPT", "emoji": "🤖"})
     monkeypatch.setattr("bot.db.list_offers", lambda _sid: [{"id": 9, "name": "30 days", "stock": 5}])
-    monkeypatch.setattr("bot.kb.offers_keyboard", lambda _lang, _sid: Mock())
+    monkeypatch.setattr(
+        "bot.db.get_offer",
+        lambda _oid: {"id": 9, "service_id": 7, "name": "30 days", "price": 5.0, "stock": 5},
+    )
 
     asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace()))
 
     message.reply_text.assert_awaited_once()
     query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+    assert "30 days" in message.reply_text.await_args.args[0]
 
 
 def test_support_button_from_photo_opens_ticket_categories(monkeypatch):
@@ -1448,6 +1452,46 @@ def test_manual_delivery_sends_admin_an_in_bot_reply_request(
     assert customer_keyboard.inline_keyboard[0][0].callback_data == "catalog"
 
 
+def test_created_supplier_order_never_triggers_manual_double_delivery(
+    monkeypatch, mock_mongodb,
+):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    mock_mongodb.orders.insert_one({
+        "id": 504,
+        "user_id": 42,
+        "service_name": "Coursera",
+        "offer_name": "Coursera account",
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+    notify_manual = AsyncMock()
+    monkeypatch.setattr("bot.admin.notify_manual_delivery_request", notify_manual)
+    message = SimpleNamespace(reply_text=AsyncMock())
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    asyncio.run(send_payment_result(
+        message,
+        SimpleNamespace(bot=bot_client),
+        "en",
+        504,
+        {
+            "status": "confirmed_no_delivery",
+            "affiliate": None,
+            "loyalty": None,
+            "delivered_content": None,
+            "error_code": "supplier_delivery_pending",
+            "error_message": "Supplier order created; delivery is pending.",
+        },
+        42,
+    ))
+
+    notify_manual.assert_not_awaited()
+    admin_alert = bot_client.send_message.await_args
+    assert admin_alert.args[0] == 999
+    assert "BM-504" in admin_alert.args[1]
+    assert "éviter un doublon" in admin_alert.args[1]
+
+
 def test_paid_codex_order_is_sent_to_admin_for_number(mock_mongodb):
     mock_mongodb.orders.insert_one({
         "id": 501,
@@ -1715,8 +1759,53 @@ def test_manual_order_is_delivered_only_after_content_reaches_customer(mock_mong
     assert delivered["delivery_text"] == "login:password"
     sent = bot_client.send_message.await_args
     assert sent.kwargs["parse_mode"] == ParseMode.HTML
-    assert "[HTML]" not in sent.args[1]
-    assert "<b>Your order #602 has been delivered!</b>" in sent.args[1]
+    assert "[HTML]" not in sent.kwargs["text"]
+    assert "<b>Your order #602 has been delivered!</b>" in sent.kwargs["text"]
+
+
+def test_manual_delivery_preserves_urls_and_special_characters(mock_mongodb):
+    content = "https://example.com/a_b?token=x&next=#part\nPassword: #a_b*c<d>"
+
+    rendered = premium_customer_text(
+        "en",
+        "delivery_received",
+        oid=602,
+        service="Manual service",
+        offer="Manual account",
+        content=content,
+    )
+
+    assert "https://example.com/a_b?token=x&amp;next=#part" in rendered
+    assert "Password: #a_b*c&lt;d&gt;" in rendered
+    assert "<i>" not in rendered
+
+
+def test_manual_order_can_be_delivered_as_a_photo(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 605,
+        "user_id": 42,
+        "service_name": "Manual service",
+        "offer_name": "Manual account",
+        "status": "payment_confirmed",
+        "delivery_text": "",
+    })
+    update = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()))
+    bot_client = SimpleNamespace(send_photo=AsyncMock())
+
+    delivered = asyncio.run(deliver_order(
+        update,
+        SimpleNamespace(bot=bot_client),
+        605,
+        "Image avec URL https://example.com/a_b?x=1&y=#part",
+        photo_file_id="telegram-photo-id",
+    ))
+
+    assert delivered is True
+    bot_client.send_photo.assert_awaited_once()
+    sent = bot_client.send_photo.await_args.kwargs
+    assert sent["photo"] == "telegram-photo-id"
+    assert "https://example.com/a_b?x=1&amp;y=#part" in sent["caption"]
+    assert db.get_order(605)["status"] == "delivered"
 
 
 def test_failed_manual_send_keeps_order_waiting(mock_mongodb):

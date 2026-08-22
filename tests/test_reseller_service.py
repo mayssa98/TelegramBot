@@ -36,6 +36,36 @@ def _supplier_payload():
     }
 
 
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ({"delivery": ["mail:user:pass:https://mail.test/read#code"]}, ["mail:user:pass:https://mail.test/read#code"]),
+        ({"result": {"items": ["shamekh:user:pass"]}}, ["shamekh:user:pass"]),
+        ({"data": {"credentials": "kakao:user:pass"}}, ["kakao:user:pass"]),
+        ({"data": "vex:user:pass"}, ["vex:user:pass"]),
+        ({"deliveredAccounts": [{
+            "user": "canboso@example.com",
+            "password": "secret#1",
+            "recoveryUrl": "https://canboso.test/recover?a=1&b=#code",
+        }]}, [
+            "canboso@example.com:secret#1:https://canboso.test/recover?a=1&b=#code",
+        ]),
+        ({"response": {"payload": {"delivered_accounts": ["nested:user:pass"]}}}, ["nested:user:pass"]),
+        ({"delivery": {"accounts": [{
+            "user": "canboso-current@example.com",
+            "password": "current-secret",
+            "verifyEmail": "verify@example.com",
+            "expiryText": "30 days",
+            "otherInfo": "keep this",
+        }]}}, [
+            "canboso-current@example.com:current-secret:verify@example.com:30 days:keep this",
+        ]),
+    ],
+)
+def test_delivery_extractor_supports_every_supplier_response_shape(payload, expected):
+    assert reseller_service._delivery_items(payload) == expected
+
+
 def test_catalog_overlays_admin_selection(monkeypatch, mock_mongodb):
     monkeypatch.setattr(reseller_service, "_request_json", lambda _path: _supplier_payload())
     db.save_reseller_product_config(
@@ -218,6 +248,84 @@ def test_paid_supplier_order_is_delivered_idempotently(monkeypatch, mock_mongodb
     assert db.get_order(91)["status"] == "delivered"
     assert mock_mongodb.inventory.count_documents({"delivered_order_id": 91}) == 2
     assert "user:a" not in str(mock_mongodb.reseller_fulfillments.find_one({"order_id": 91}))
+
+
+def test_mailreader_delivery_array_is_forwarded_without_manual_fallback(
+    monkeypatch, mock_mongodb,
+):
+    service_id = db.add_service("Coursera", "🎓")
+    offer_id = db.add_offer(
+        service_id,
+        "Coursera account",
+        2.0,
+        10,
+        supplier_provider="mailreader",
+        supplier_product_id="coursera-1",
+    )
+    mock_mongodb.orders.insert_one({
+        "id": 222,
+        "user_id": 123,
+        "offer_id": offer_id,
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+    account = (
+        "65. EloiseQuattrocchi101261@outlook.com:pasqq74516:"
+        "https://www.mailreader.tech/read_code?uuid=e538cdf9-b01b-0ef4-6982-fd42c96cf98a"
+    )
+    monkeypatch.setattr(
+        reseller_service,
+        "_request_json",
+        lambda *_args, **_kwargs: {
+            "success": True,
+            "order": {"id": "supplier-BM-222"},
+            "delivery": [account],
+        },
+    )
+
+    assert reseller_service.fulfill_paid_order(222) == [account]
+    assert db.get_order(222)["status"] == "delivered"
+    fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 222})
+    assert fulfillment["status"] == "completed"
+    assert fulfillment["supplier_order_id"] == "supplier-BM-222"
+
+
+def test_created_supplier_order_without_delivery_is_never_purchased_twice(
+    monkeypatch, mock_mongodb,
+):
+    service_id = db.add_service("API", "🔌")
+    offer_id = db.add_offer(
+        service_id,
+        "API account",
+        2.0,
+        10,
+        supplier_provider="mailreader",
+        supplier_product_id="api-1",
+    )
+    mock_mongodb.orders.insert_one({
+        "id": 223,
+        "user_id": 123,
+        "offer_id": offer_id,
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+    calls = []
+
+    def fake_request(*_args, **_kwargs):
+        calls.append(True)
+        return {"success": True, "order": {"id": "supplier-223"}, "delivery": []}
+
+    monkeypatch.setattr(reseller_service, "_request_json", fake_request)
+
+    with pytest.raises(reseller_service.ResellerApiError, match="pas encore disponible"):
+        reseller_service.fulfill_paid_order(223)
+    with pytest.raises(reseller_service.ResellerApiError, match="Aucun second achat"):
+        reseller_service.fulfill_paid_order(223)
+
+    assert len(calls) == 1
+    fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 223})
+    assert fulfillment["status"] == "delivery_pending"
+    assert fulfillment["supplier_order_id"] == "supplier-223"
 
 
 def test_shamekh_catalog_maps_products_balance_and_stock(monkeypatch, mock_mongodb):
@@ -549,11 +657,17 @@ def test_canboso_purchase_uses_stable_idempotency_key(monkeypatch, mock_mongodb)
         calls.append((path, kwargs))
         return {
             "success": True,
-            "orderCode": "ORDER1A2B3C4D5E",
-            "deliveredAccounts": [{
-                "user": "account@example.com",
-                "password": "supplier-secret",
-            }],
+            "order": {
+                "orderCode": "ORDER1A2B3C4D5E",
+                "status": "completed",
+            },
+            "delivery": {
+                "accounts": [{
+                    "user": "account@example.com",
+                    "password": "supplier-secret",
+                    "verifyEmail": "verify@example.com",
+                }],
+            },
         }
 
     monkeypatch.setattr(reseller_service, "_canboso_request_json", fake_request)
@@ -591,6 +705,101 @@ def test_canboso_purchase_uses_stable_idempotency_key(monkeypatch, mock_mongodb)
     fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 95})
     assert fulfillment["supplier_order_id"] == "ORDER1A2B3C4D5E"
     assert "supplier-secret" not in str(fulfillment)
+
+
+def test_ventebot_catalog_maps_wallet_and_stock_products_only(monkeypatch, mock_mongodb):
+    def fake_request(path, **_kwargs):
+        if path == "/api/reseller/me":
+            return {"success": True, "wallet_balance": 31.25}
+        return {
+            "success": True,
+            "products": [{
+                "id": 12,
+                "name": "Stock account",
+                "description": "Instant credentials",
+                "price_usd": 1.4,
+                "delivery_type": "stock",
+                "stock": 9,
+                "api_test": False,
+            }, {
+                "id": 13,
+                "name": "Activation service",
+                "price_usd": 2.0,
+                "delivery_type": "activation",
+                "stock": None,
+                "api_test": False,
+            }, {
+                "id": 99,
+                "name": "API test",
+                "price_usd": 0.01,
+                "delivery_type": "api_test",
+                "stock": 999,
+                "api_test": True,
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_ventebot_request_json", fake_request)
+
+    result = reseller_service.catalog("ventebot")
+
+    assert result["provider"] == "ventebot"
+    assert result["supplier_name"] == "VenteBot"
+    assert result["balance"] == 31.25
+    assert [product["id"] for product in result["products"]] == ["12"]
+    assert result["products"][0]["wholesale_price"] == 1.4
+    assert result["products"][0]["stock"] == 9
+
+
+def test_ventebot_purchase_is_idempotent_and_extracts_account_data(
+    monkeypatch, mock_mongodb,
+):
+    calls = []
+
+    def fake_request(path, **kwargs):
+        calls.append((path, kwargs))
+        return {
+            "success": True,
+            "order": {
+                "id": 812,
+                "status": "COMPLETED",
+                "items": [{"id": 1, "account_data": "user:password"}],
+            },
+        }
+
+    monkeypatch.setattr(reseller_service, "_ventebot_request_json", fake_request)
+    offer_id = db.add_offer(
+        db.add_service("VenteBot", "📦"),
+        "Stock account",
+        2.5,
+        5,
+        supplier_provider="ventebot",
+        supplier_product_id="12",
+    )
+    mock_mongodb.orders.insert_one({
+        "id": 96,
+        "user_id": 123,
+        "offer_id": offer_id,
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+
+    assert reseller_service.fulfill_paid_order(96) == ["user:password"]
+    assert reseller_service.fulfill_paid_order(96) == ["user:password"]
+    assert calls == [(
+        "/api/reseller/orders",
+        {
+            "method": "POST",
+            "body": {
+                "product_id": 12,
+                "quantity": 1,
+                "customer_reference": "telegram_user_123",
+                "idempotency_key": "BM-96",
+            },
+        },
+    )]
+    assert db.get_order(96)["status"] == "delivered"
+
+
 def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mock_mongodb):
     offer_id = db.add_offer(
         service_id=db.add_service("API stock", "📦"),
@@ -630,6 +839,7 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
     monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "catalog", fake_catalog)
 
     assert reseller_service.detect_restock_events()["events"] == []
@@ -672,6 +882,7 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(
         reseller_service,
         "catalog",

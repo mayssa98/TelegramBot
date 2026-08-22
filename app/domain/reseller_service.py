@@ -22,6 +22,8 @@ from config import (
     MAILREADER_API_KEY,
     SHAMEKH_API_BASE,
     SHAMEKH_API_KEY,
+    VENTEBOT_API_BASE,
+    VENTEBOT_API_KEY,
     VEX_API_BASE,
     VEX_API_KEY,
 )
@@ -31,17 +33,23 @@ SHAMEKH_PROVIDER = "shamekh"
 KAKAO_PROVIDER = "kakao"
 VEX_PROVIDER = "vex"
 CANBOSO_PROVIDER = "canboso"
+VENTEBOT_PROVIDER = "ventebot"
 SUPPORTED_PROVIDERS = {
     PROVIDER,
     SHAMEKH_PROVIDER,
     KAKAO_PROVIDER,
     VEX_PROVIDER,
     CANBOSO_PROVIDER,
+    VENTEBOT_PROVIDER,
 }
 
 
 class ResellerApiError(RuntimeError):
     """A safe, administrator-facing supplier error."""
+
+
+class ResellerOrderNotCreatedError(ResellerApiError):
+    """The supplier rejected the purchase before creating an order."""
 
 
 def _request_json(
@@ -75,11 +83,20 @@ def _request_json(
             raise ResellerApiError(
                 "Clé API MailReader refusée. Remplacez-la par une clé active."
             ) from exc
+        if exc.code == 402:
+            raise ResellerOrderNotCreatedError(
+                "Solde MailReader insuffisant : aucune commande fournisseur n’a été créée."
+            ) from exc
         raise ResellerApiError(f"MailReader a répondu avec l’erreur HTTP {exc.code}.") from exc
     except (URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise ResellerApiError("MailReader est temporairement indisponible.") from exc
     if not isinstance(payload, dict):
         raise ResellerApiError("Réponse MailReader invalide.")
+    if payload.get("success") is False or payload.get("ok") is False:
+        message = str(payload.get("message") or payload.get("error") or "Requête MailReader refusée.")[:300]
+        if any(word in message.lower() for word in ("balance", "solde", "insufficient")):
+            raise ResellerOrderNotCreatedError(message)
+        raise ResellerApiError(message)
     return payload
 
 
@@ -279,6 +296,60 @@ def _canboso_request_json(
     return payload
 
 
+def _ventebot_request_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Call VenteBot's reseller API without exposing its credential."""
+    if not VENTEBOT_API_KEY:
+        raise ResellerApiError(
+            "VenteBot n’est pas configuré. Ajoutez HP_VENTEBOT_API_KEY "
+            "dans les variables d’environnement."
+        )
+    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    request = Request(
+        f"{VENTEBOT_API_BASE}{path}",
+        headers={
+            "X-Reseller-Key": VENTEBOT_API_KEY,
+            "Accept": "application/json",
+            **({"Content-Type": "application/json"} if body is not None else {}),
+            "User-Agent": "BlackMarket-Reseller/1.0",
+        },
+        data=payload_bytes,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        messages = {
+            400: "Commande VenteBot invalide ou produit indisponible.",
+            401: "Clé API VenteBot refusée. Remplacez-la par une clé active.",
+            402: "Solde VenteBot insuffisant : aucune commande fournisseur n’a été créée.",
+            403: "Adresse IP refusée par la liste d’accès VenteBot.",
+            404: "Produit ou commande VenteBot introuvable.",
+            409: "Clé d’idempotence VenteBot déjà utilisée avec une autre commande.",
+            429: "Limite VenteBot atteinte. Respectez le délai Retry-After avant de réessayer.",
+            503: "VenteBot est temporairement indisponible.",
+        }
+        error_type = ResellerOrderNotCreatedError if exc.code == 402 else ResellerApiError
+        raise error_type(
+            messages.get(exc.code, f"VenteBot a répondu avec l’erreur HTTP {exc.code}.")
+        ) from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ResellerApiError("VenteBot est temporairement indisponible.") from exc
+    if not isinstance(payload, dict):
+        raise ResellerApiError("Réponse VenteBot invalide.")
+    if payload.get("success") is False:
+        message = str(payload.get("message") or payload.get("code") or "Requête VenteBot refusée.")[:300]
+        if any(word in message.lower() for word in ("balance", "solde", "insufficient")):
+            raise ResellerOrderNotCreatedError(message)
+        raise ResellerApiError(message)
+    return payload
+
+
 def provider_summaries() -> list[dict[str, Any]]:
     """Return safe provider metadata without exposing credentials."""
     return [
@@ -311,6 +382,12 @@ def provider_summaries() -> list[dict[str, Any]]:
             "name": "Canboso",
             "configured": bool(CANBOSO_API_KEY),
             "documentation_url": "https://canboso.com/api/swagger",
+        },
+        {
+            "id": VENTEBOT_PROVIDER,
+            "name": "VenteBot",
+            "configured": bool(VENTEBOT_API_KEY),
+            "documentation_url": f"{VENTEBOT_API_BASE}/api/swagger/",
         },
     ]
 
@@ -356,6 +433,11 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         )
         reseller = {"balance": balance}
         supplier_name = "Canboso"
+    elif provider == VENTEBOT_PROVIDER:
+        payload = _ventebot_request_json("/api/reseller/products?lang=en")
+        account = _ventebot_request_json("/api/reseller/me")
+        reseller = {"balance": account.get("wallet_balance", 0)}
+        supplier_name = "VenteBot"
     else:
         payload = _request_json("/api/reseller/products")
         reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
@@ -373,6 +455,13 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
     products = []
     for raw in raw_products:
         if not isinstance(raw, dict):
+            continue
+        # VenteBot activation products need a service-specific customer
+        # identifier that this generic stock checkout does not collect. Its
+        # synthetic API test product must never be published to customers.
+        if provider == VENTEBOT_PROVIDER and (
+            raw.get("api_test") is True or raw.get("delivery_type") != "stock"
+        ):
             continue
         raw_product_id = (
             raw.get("_id") or raw.get("productId") or raw.get("id")
@@ -392,6 +481,8 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 else (
                     raw.get("price")
                     if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER}
+                    else raw.get("price_usd")
+                    if provider == VENTEBOT_PROVIDER
                     else raw.get("wholesale_price", "0")
                 )
             )))
@@ -527,6 +618,7 @@ def detect_restock_events() -> dict[str, Any]:
         KAKAO_PROVIDER: bool(KAKAO_API_KEY),
         VEX_PROVIDER: bool(VEX_API_KEY),
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
+        VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
     }
     events: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
@@ -576,6 +668,7 @@ def detect_supplier_price_changes() -> dict[str, Any]:
         KAKAO_PROVIDER: bool(KAKAO_API_KEY),
         VEX_PROVIDER: bool(VEX_API_KEY),
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
+        VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
     }
     changes: list[dict[str, Any]] = []
     flash_sales: list[dict[str, Any]] = []
@@ -676,6 +769,7 @@ def save_catalog_product(
         KAKAO_PROVIDER: "Produit API Kakao Shop",
         VEX_PROVIDER: "Produit API VEX Reseller",
         CANBOSO_PROVIDER: "Produit API Canboso",
+        VENTEBOT_PROVIDER: "Produit API VenteBot",
     }.get(provider, "Produit API MailReader")
     warranty = str(warranty or default_warranty).strip()[:250]
     delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]
@@ -790,16 +884,27 @@ def save_catalog_product(
 
 def _delivery_items(payload: dict[str, Any]) -> list[str]:
     """Extract delivery strings from documented and common wrapped responses."""
-    candidates: list[Any] = [payload]
-    for key in ("order", "data", "result"):
-        value = payload.get(key)
-        if isinstance(value, dict):
-            candidates.append(value)
+    candidates: list[dict[str, Any]] = []
+    queue: list[dict[str, Any]] = [payload]
+    seen: set[int] = set()
+    while queue:
+        candidate = queue.pop(0)
+        if id(candidate) in seen:
+            continue
+        seen.add(id(candidate))
+        candidates.append(candidate)
+        for key in ("order", "data", "result", "response", "payload", "delivery"):
+            value = candidate.get(key)
+            if isinstance(value, dict):
+                queue.append(value)
     raw_items: Any = None
     for candidate in candidates:
         for key in (
+            "delivery",
             "delivery_items",
             "deliveredAccounts",
+            "delivered_accounts",
+            "accounts",
             "items",
             "credentials",
             "products",
@@ -808,6 +913,9 @@ def _delivery_items(payload: dict[str, Any]) -> list[str]:
             value = candidate.get(key)
             if isinstance(value, list):
                 raw_items = value
+                break
+            if isinstance(value, dict) and key not in {"data", "delivery"}:
+                raw_items = [value]
                 break
             if isinstance(value, str) and value.strip():
                 raw_items = [value]
@@ -821,13 +929,27 @@ def _delivery_items(payload: dict[str, Any]) -> list[str]:
         if isinstance(item, str):
             value = item.strip()
         elif isinstance(item, dict):
-            value = str(
+            direct = (
                 item.get("content")
                 or item.get("value")
                 or item.get("credentials")
                 or item.get("account")
+                or item.get("account_data")
+                or item.get("delivery")
                 or ""
-            ).strip()
+            )
+            value = str(direct).strip() if not isinstance(direct, dict) else ""
+            if not value:
+                credential_values = [
+                    str(item[key]).strip()
+                    for key in (
+                        "email", "username", "user", "login", "password", "pass",
+                        "verifyEmail", "url", "link", "recovery_url",
+                        "recoveryUrl", "recovery", "expiryText", "otherInfo",
+                    )
+                    if item.get(key) is not None and str(item[key]).strip()
+                ]
+                value = ":".join(credential_values)
             if not value:
                 value = json.dumps(item, ensure_ascii=False, separators=(",", ":"))
         else:
@@ -859,110 +981,133 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
             cipher.decrypt(value.encode()).decode()
             for value in existing.get("encrypted_items", [])
         ]
-    if existing and provider == SHAMEKH_PROVIDER:
+    if existing:
         raise ResellerApiError(
-            "Cette commande Shamekh nécessite une vérification manuelle avant toute nouvelle tentative."
+            "Cette commande fournisseur existe déjà et nécessite une vérification "
+            "avant toute nouvelle tentative. Aucun second achat API n’a été envoyé."
         )
     if order.get("status") not in {"paid", "payment_confirmed"}:
         return None
 
-    if provider == SHAMEKH_PROVIDER:
-        try:
-            conn.reseller_fulfillments.insert_one({
-                "provider": provider,
-                "external_order_id": external_order_id,
-                "order_id": int(order_id),
-                "supplier_product_id": str(offer["supplier_product_id"]),
-                "status": "purchasing",
-                "created_at": int(time.time()),
-                "updated_at": int(time.time()),
-            })
-        except DuplicateKeyError as exc:
-            raise ResellerApiError(
-                "Une livraison Shamekh est déjà en cours pour cette commande."
-            ) from exc
-        try:
-            raw_product_id = str(offer["supplier_product_id"])
+    try:
+        conn.reseller_fulfillments.insert_one({
+            "provider": provider,
+            "external_order_id": external_order_id,
+            "order_id": int(order_id),
+            "supplier_product_id": str(offer["supplier_product_id"]),
+            "status": "purchasing",
+            "created_at": int(time.time()),
+            "updated_at": int(time.time()),
+        })
+    except DuplicateKeyError as exc:
+        raise ResellerApiError(
+            "Une commande fournisseur existe déjà. Aucun second achat API n’a été envoyé."
+        ) from exc
+
+    try:
+        if provider == SHAMEKH_PROVIDER:
             response = _shamekh_request_json(
                 "/api/buy",
                 method="POST",
                 body={
                     "product_id": (
-                        int(raw_product_id)
-                        if raw_product_id.isdigit()
-                        else raw_product_id
+                        int(str(offer["supplier_product_id"]))
+                        if str(offer["supplier_product_id"]).isdigit()
+                        else str(offer["supplier_product_id"])
                     ),
                     "quantity": int(order.get("qty") or 1),
                 },
             )
-        except ResellerApiError:
-            conn.reseller_fulfillments.update_one(
-                {"provider": provider, "external_order_id": external_order_id},
-                {"$set": {"status": "review_required", "updated_at": int(time.time())}},
+        elif provider == KAKAO_PROVIDER:
+            response = _kakao_request_json(
+                "/api/purchase",
+                method="POST",
+                body={
+                    "product_id": str(offer["supplier_product_id"]),
+                    "quantity": int(order.get("qty") or 1),
+                    "external_order_id": external_order_id,
+                },
             )
-            raise
-    elif provider == KAKAO_PROVIDER:
-        response = _kakao_request_json(
-            "/api/purchase",
-            method="POST",
-            body={
-                "product_id": str(offer["supplier_product_id"]),
-                "quantity": int(order.get("qty") or 1),
-                "external_order_id": external_order_id,
-            },
-        )
-    elif provider == VEX_PROVIDER:
-        response = _vex_request_json(
-            "?action=order",
-            method="POST",
-            body={
-                "product_id": str(offer["supplier_product_id"]),
-                "quantity": int(order.get("qty") or 1),
-                "external_order_id": external_order_id,
-            },
-        )
-    elif provider == CANBOSO_PROVIDER:
-        response = _canboso_request_json(
-            "/purchase",
-            method="POST",
-            body={
-                "product_id": str(offer["supplier_product_id"]),
-                "quantity": int(order.get("qty") or 1),
-            },
-            idempotency_key=external_order_id,
-        )
-    else:
-        response = _request_json(
-            "/api/reseller?action=order",
-            method="POST",
-            body={
-                "product_id": str(offer["supplier_product_id"]),
-                "quantity": int(order.get("qty") or 1),
-                "external_order_id": external_order_id,
-            },
-        )
-    items = _delivery_items(response)
-    if len(items) < int(order.get("qty") or 1):
-        if provider == SHAMEKH_PROVIDER:
-            conn.reseller_fulfillments.update_one(
-                {"provider": provider, "external_order_id": external_order_id},
-                {"$set": {"status": "review_required", "updated_at": int(time.time())}},
+        elif provider == VEX_PROVIDER:
+            response = _vex_request_json(
+                "?action=order",
+                method="POST",
+                body={
+                    "product_id": str(offer["supplier_product_id"]),
+                    "quantity": int(order.get("qty") or 1),
+                    "external_order_id": external_order_id,
+                },
             )
-        raise ResellerApiError(
-            "La commande fournisseur a été créée mais la livraison n’est pas encore disponible."
+        elif provider == CANBOSO_PROVIDER:
+            response = _canboso_request_json(
+                "/purchase",
+                method="POST",
+                body={
+                    "product_id": str(offer["supplier_product_id"]),
+                    "quantity": int(order.get("qty") or 1),
+                },
+                idempotency_key=external_order_id,
+            )
+        elif provider == VENTEBOT_PROVIDER:
+            raw_product_id = str(offer["supplier_product_id"])
+            response = _ventebot_request_json(
+                "/api/reseller/orders",
+                method="POST",
+                body={
+                    "product_id": int(raw_product_id),
+                    "quantity": int(order.get("qty") or 1),
+                    "customer_reference": f"telegram_user_{int(order['user_id'])}",
+                    "idempotency_key": external_order_id,
+                },
+            )
+        else:
+            response = _request_json(
+                "/api/reseller?action=order",
+                method="POST",
+                body={
+                    "product_id": str(offer["supplier_product_id"]),
+                    "quantity": int(order.get("qty") or 1),
+                    "external_order_id": external_order_id,
+                },
+            )
+    except ResellerOrderNotCreatedError:
+        conn.reseller_fulfillments.update_one(
+            {"provider": provider, "external_order_id": external_order_id},
+            {"$set": {"status": "not_created", "updated_at": int(time.time())}},
         )
-
-    encrypted_items = [cipher.encrypt(item.encode()).decode() for item in items]
-    now = int(time.time())
+        raise
+    except ResellerApiError:
+        conn.reseller_fulfillments.update_one(
+            {"provider": provider, "external_order_id": external_order_id},
+            {"$set": {"status": "review_required", "updated_at": int(time.time())}},
+        )
+        raise
     order_payload = response.get("order")
     supplier_order_id = (
         response.get("transaction_id")
         or response.get("orderCode")
         or response.get("order_id")
         or response.get("id")
+        or (order_payload.get("orderCode") if isinstance(order_payload, dict) else "")
         or (order_payload.get("id") if isinstance(order_payload, dict) else "")
         or ""
     )
+    items = _delivery_items(response)
+    if len(items) < int(order.get("qty") or 1):
+        conn.reseller_fulfillments.update_one(
+            {"provider": provider, "external_order_id": external_order_id},
+            {"$set": {
+                "status": "delivery_pending",
+                "supplier_order_id": str(supplier_order_id),
+                "updated_at": int(time.time()),
+            }},
+        )
+        raise ResellerApiError(
+            "La commande fournisseur a été créée mais la livraison n’est pas encore disponible."
+        )
+
+    encrypted_items = [cipher.encrypt(item.encode()).decode() for item in items]
+    now = int(time.time())
     conn.reseller_fulfillments.update_one(
         {"provider": provider, "external_order_id": external_order_id},
         {

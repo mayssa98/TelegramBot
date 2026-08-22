@@ -15,55 +15,57 @@ from app.constants import InventoryStatus, OrderStatus
 
 log = logging.getLogger(__name__)
 
+ACCOUNT_DELIMITER = "===NOUVEAU_COMPTE==="
+MANUAL_STOCK_KEYWORD = "STOCK_MANUEL"
+
 
 def parse_bulk_inventory(text: str) -> list[str]:
-    """Split accounts on ``#`` markers without storing the marker itself.
+    """Split accounts only on an explicit delimiter line.
 
-    ``#`` may be placed alone before an account or directly before its first
-    content line. Numeric labels such as ``#1`` are treated only as markers.
+    Hashes, URLs, passwords and every other character inside an account are
+    preserved verbatim.  The delimiter must be alone on its line.
     """
     blocks: list[list[str]] = []
     current: list[str] | None = None
-    current_marker = "#"
     for raw_line in (text or "").splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if line.startswith("#"):
+        if raw_line.strip() == ACCOUNT_DELIMITER:
             if current is not None:
-                if not current:
-                    raise ValueError(f"Compte sans contenu après {current_marker}.")
-                blocks.append(current)
-            current_marker = line
-            marker_suffix = line[1:].strip()
+                value = "\n".join(current).strip()
+                if not value:
+                    raise ValueError(f"Compte sans contenu après {ACCOUNT_DELIMITER}.")
+                blocks.append(value)
             current = []
-            if marker_suffix and not marker_suffix.isdigit():
-                current.append(marker_suffix)
         elif current is None:
-            raise ValueError("Chaque compte doit commencer par #.")
+            if raw_line.strip():
+                raise ValueError(
+                    f"Chaque compte doit commencer par {ACCOUNT_DELIMITER}."
+                )
         else:
-            current.append(line)
+            current.append(raw_line)
     if current is not None:
-        if not current:
-            raise ValueError(f"Compte sans contenu après {current_marker}.")
-        blocks.append(current)
+        value = "\n".join(current).strip()
+        if not value:
+            raise ValueError(f"Compte sans contenu après {ACCOUNT_DELIMITER}.")
+        blocks.append(value)
     if not blocks:
-        raise ValueError("Aucun compte détecté. Commencez chaque compte par #.")
+        raise ValueError(
+            f"Aucun compte détecté. Commencez chaque compte par {ACCOUNT_DELIMITER}."
+        )
     if len(blocks) > 5000:
         raise ValueError("Un import est limité à 5000 comptes.")
-    return ["\n".join(block) for block in blocks]
+    return blocks
 
 
 def clean_delivery_value(value: str) -> str:
-    """Remove a legacy leading import marker before content reaches a client."""
+    """Remove only an unambiguous legacy numeric marker.
+
+    A leading ``#`` can be legitimate account content and must be preserved.
+    """
     value = str(value or "").strip()
-    if not value.startswith("#"):
-        return value
     first_line, separator, remainder = value.partition("\n")
-    marker_suffix = first_line[1:].strip()
-    if marker_suffix and not marker_suffix.isdigit():
-        return marker_suffix + (separator + remainder if separator else "")
-    return remainder.strip()
+    if separator and first_line.startswith("#") and first_line[1:].strip().isdigit():
+        return remainder.strip()
+    return value
 
 def sync_offer_stock(offer_id: int) -> int:
     conn = db.get_conn()

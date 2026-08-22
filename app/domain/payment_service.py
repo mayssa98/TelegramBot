@@ -95,7 +95,11 @@ def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: 
                 delivered = inventory_service.deliver_for_order(order_id)
         except reseller_service.ResellerApiError as exc:
             delivered = None
-            result["error_code"] = "supplier_delivery_pending"
+            result["error_code"] = (
+                "supplier_order_not_created"
+                if isinstance(exc, reseller_service.ResellerOrderNotCreatedError)
+                else "supplier_delivery_pending"
+            )
             result["error_message"] = str(exc)
             log.warning("Supplier delivery pending for order #%s: %s", order_id, exc)
             db.audit_event(

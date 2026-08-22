@@ -66,6 +66,7 @@ const PROVIDERS = [
   ["kakao", "Kakao Shop"],
   ["vex", "VEX Reseller"],
   ["canboso", "Canboso"],
+  ["ventebot", "VenteBot"],
 ];
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS);

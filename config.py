@@ -125,6 +125,15 @@ CANBOSO_API_KEY: str = os.environ.get("HP_CANBOSO_API_KEY", "").strip()
 CANBOSO_API_BASE: str = os.environ.get(
     "HP_CANBOSO_API_BASE", "https://canboso.com/api/v2/telegram-buyer"
 ).rstrip("/")
+
+# ---------------------------------------------------------------------------
+# Fournisseur revendeur VenteBot
+# ---------------------------------------------------------------------------
+VENTEBOT_API_KEY: str = env_value("HP_VENTEBOT_API_KEY")
+VENTEBOT_API_BASE: str = os.environ.get(
+    "HP_VENTEBOT_API_BASE",
+    "https://ventetelegrambotrailway-production.up.railway.app",
+).rstrip("/")
 _BINANCE_OFFICIAL_BASES = (
     "https://api.binance.com",
     "https://api-gcp.binance.com",

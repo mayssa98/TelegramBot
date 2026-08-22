@@ -210,7 +210,8 @@ def test_normal_catalog_does_not_launch_legacy_direct_preorder(monkeypatch):
         if button.callback_data
     ]
 
-    assert "svc:1" in callbacks
+    assert "off:11" in callbacks
+    assert "svc:1" not in callbacks
     assert "preorder_start:11" not in callbacks
     assert callbacks.count("preorder_catalog") == 1
 
@@ -662,7 +663,8 @@ def test_premium_service_icon_replaces_unicode_emoji_in_catalog_button(monkeypat
 
     button = kb.catalog_offers_keyboard("en").inline_keyboard[0][0]
 
-    assert button.text == "Chat GPT"
+    assert button.text == "Chat GPT Plus | $5 | Stock: 8"
+    assert button.callback_data == "off:11"
     assert button.icon_custom_emoji_id == "premium-chatgpt"
 
 

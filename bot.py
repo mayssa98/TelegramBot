@@ -332,17 +332,10 @@ async def block_maintenance_users(update: Update, context: ContextTypes.DEFAULT_
 
 
 def numbered_delivery_content(items):
-    """Number delivered accounts without exposing the # import delimiter."""
+    """Number delivered accounts while preserving their exact content."""
     cleaned = []
     for item in items or []:
-        value = str(item).strip()
-        if value.startswith("#"):
-            first_line, separator, remainder = value.partition("\n")
-            marker_suffix = first_line[1:].strip()
-            if marker_suffix and not marker_suffix.isdigit():
-                value = marker_suffix + (separator + remainder if separator else "")
-            else:
-                value = remainder.strip()
+        value = inventory_service.clean_delivery_value(item)
         if value:
             cleaned.append(value)
     return "\n\n".join(f"{index}.\n{value}" for index, value in enumerate(cleaned, start=1))
@@ -936,6 +929,30 @@ async def show_deep_link_offer(update, lang, offer_id):
         link_preview_options=LinkPreviewOptions(is_disabled=True), reply_markup=markup,
     )
 
+
+async def show_service_offers(update, context, lang, service_id):
+    """Open a service, skipping its catalogue screen when it has one offer."""
+    service = db.get_service(int(service_id))
+    if not service:
+        await show_catalog(update, context, lang)
+        return
+
+    offers = db.list_offers(int(service_id))
+    if len(offers) == 1:
+        await show_deep_link_offer(update, lang, offers[0]["id"])
+        return
+
+    await update.message.reply_text(
+        t(
+            lang,
+            "service_title",
+            emoji=service.get("emoji", "📦"),
+            name=service.get("name", ""),
+        ),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.offers_keyboard(lang, int(service_id)),
+    )
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
     is_new = db.upsert_user(u.id, u.username or "", u.first_name or "")
@@ -1307,12 +1324,32 @@ async def show_catalog(update, context, lang):
                          reply_markup=kb.catalog_offers_keyboard(lang))
 
 
-async def show_callback_screen(query, text, *, reply_markup, parse_mode=ParseMode.MARKDOWN):
+async def show_callback_screen(
+    query,
+    text,
+    *,
+    reply_markup,
+    parse_mode=ParseMode.MARKDOWN,
+    link_preview_options=None,
+):
     """Render a callback screen from either a text message or a photo caption."""
+    options = {}
+    if link_preview_options is not None:
+        options["link_preview_options"] = link_preview_options
     if getattr(query.message, "text", None):
-        await query.edit_message_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+        await query.edit_message_text(
+            text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            **options,
+        )
         return
-    await query.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+    await query.message.reply_text(
+        text,
+        parse_mode=parse_mode,
+        reply_markup=reply_markup,
+        **options,
+    )
     with contextlib.suppress(Exception):
         await query.edit_message_reply_markup(reply_markup=None)
 
@@ -1598,14 +1635,20 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=kb.catalog_offers_keyboard(lang),
             )
             return
-        emoji = service.get("emoji", "📦")
-        name = service.get("name", "")
-        await show_callback_screen(
-            q,
-            t(lang, "service_title", emoji=emoji, name=name),
-            reply_markup=kb.offers_keyboard(lang, sid),
-        )
-        return
+        offers = db.list_offers(sid)
+        if len(offers) == 1:
+            # Continue through the regular offer-detail branch below so old
+            # service buttons and links also skip the redundant catalogue.
+            data = f"off:{offers[0]['id']}"
+        else:
+            emoji = service.get("emoji", "📦")
+            name = service.get("name", "")
+            await show_callback_screen(
+                q,
+                t(lang, "service_title", emoji=emoji, name=name),
+                reply_markup=kb.offers_keyboard(lang, sid),
+            )
+            return
 
 
     if data.startswith("off:"):
@@ -1656,7 +1699,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             with contextlib.suppress(Exception):
                 await q.message.delete()
             return
-        await q.edit_message_text(
+        await show_callback_screen(
+            q,
             detail_text,
             parse_mode=ParseMode.HTML,
             link_preview_options=LinkPreviewOptions(is_disabled=True),
@@ -2547,7 +2591,7 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "adm_inventory" and uid == ADMIN_ID:
-        if text.strip() == "#":
+        if text.strip().upper() == inventory_service.MANUAL_STOCK_KEYWORD:
             PENDING[uid] = ("adm_manual_stock", ref)
             await update.message.reply_text(
                 "📦 *Stock manuel*\n\n"
@@ -2708,8 +2752,8 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "adm_deliver" and uid == ADMIN_ID:
-        await deliver_order(update, context, ref, text)
-        PENDING.pop(uid, None)
+        if await deliver_order(update, context, ref, text):
+            PENDING.pop(uid, None)
         return
 
     if kind == "adm_codex_number" and uid == ADMIN_ID:
@@ -2980,7 +3024,24 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                                      reply_markup=kb.post_delivery_keyboard(lang, order_id))
         with contextlib.suppress(Exception):
             if result["status"] == "confirmed_no_delivery":
-                await admin.notify_manual_delivery_request(context, paid_order)
+                # Manual fulfillment is safe for native/manual products and
+                # when the supplier explicitly rejected the purchase before
+                # creating an order (for example, insufficient API balance).
+                # If an API order may already exist, never risk a duplicate
+                # account or a second supplier charge.
+                if result.get("error_code") != "supplier_delivery_pending":
+                    await admin.notify_manual_delivery_request(context, paid_order)
+                else:
+                    await context.bot.send_message(
+                        ADMIN_ID,
+                        "⏳ <b>Livraison fournisseur en attente</b>\n\n"
+                        f"Commande locale : <b>#{order_id}</b>\n"
+                        f"Référence fournisseur : <code>BM-{order_id}</code>\n\n"
+                        "La commande API peut déjà avoir été débitée. La livraison "
+                        "manuelle n’a pas été activée afin d’éviter un doublon.\n\n"
+                        f"Détail : {html.escape(str(result.get('error_message') or 'contenu non retourné'))}",
+                        parse_mode=ParseMode.HTML,
+                    )
             else:
                 await admin.notify_new_order(context, paid_order)
     elif result["status"] == "already_paid":
@@ -3008,6 +3069,14 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
 
 def premium_customer_text(lang: str, key: str, **kwargs) -> str:
     """Render selected customer texts as HTML with their Premium emoji."""
+    protected_values = {}
+    if key == "delivery_received" and "content" in kwargs:
+        # Delivery data is opaque customer content, not bot markup. Protect it
+        # while rendering the customizable template, then insert escaped text.
+        token = "DELIVERYCONTENTPLACEHOLDER9F4A"
+        protected_values[token] = html.escape(str(kwargs["content"]))
+        kwargs = dict(kwargs)
+        kwargs["content"] = token
     raw_override = db.get_text_override(key, lang)
     if raw_override is not None and str(raw_override).strip():
         raw_value = str(raw_override)
@@ -3038,6 +3107,8 @@ def premium_customer_text(lang: str, key: str, **kwargs) -> str:
                 if f"`{{{name}}}`" not in raw_template:
                     raw_value = raw_value.replace(plain_value, f"`{plain_value}`", 1)
     value = render_stored_rich_text(raw_value)
+    for token, protected_value in protected_values.items():
+        value = value.replace(token, protected_value)
     inline_emojis = "<tg-emoji " in value
     emoji_id = db.get_text_override_icon(key, lang)
     if emoji_id and not inline_emojis:
@@ -3152,6 +3223,24 @@ async def handle_pending_attachment(update, context):
         return
     uid = update.effective_user.id
     pending = PENDING.get(uid)
+    message = update.effective_message
+    if uid == ADMIN_ID and pending and pending[0] == "adm_deliver":
+        document = getattr(message, "document", None)
+        if document and str(getattr(document, "mime_type", "")).startswith("image/"):
+            caption = str(getattr(message, "caption", None) or "").strip()
+            if await deliver_order(
+                update,
+                context,
+                int(pending[1]),
+                caption or "🖼️ Image de livraison",
+                document_file_id=document.file_id,
+            ):
+                PENDING.pop(uid, None)
+            return
+        await message.reply_text(
+            "⚠️ Pour livrer un média, envoyez une photo ou un fichier image."
+        )
+        return
     if uid != ADMIN_ID or not pending or pending[0] not in {
         "adm_svcemoji", "adm_offemoji",
     }:
@@ -3176,11 +3265,22 @@ async def handle_pending_attachment(update, context):
 
 
 async def handle_pending_photo(update, context):
-    """Capture the advertising image during the guided offer creation flow."""
+    """Handle pending admin advertising and order-delivery photos."""
     if await handle_ticket_attachment(update, context):
         return
     uid = update.effective_user.id
     pending = PENDING.get(uid)
+    if uid == ADMIN_ID and pending and pending[0] == "adm_deliver":
+        caption = str(update.message.caption or "").strip()
+        if await deliver_order(
+            update,
+            context,
+            int(pending[1]),
+            caption or "🖼️ Image de livraison",
+            photo_file_id=update.message.photo[-1].file_id,
+        ):
+            PENDING.pop(uid, None)
+        return
     if uid != ADMIN_ID or not pending or pending[0] not in {"adm_addoff_image", "adm_offimage"}:
         return
     if pending[0] == "adm_offimage":
@@ -3597,7 +3697,8 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         PENDING[uid] = ("adm_deliver", oid)
         await q.message.reply_text(
             f"🎁 Envoyez le contenu à livrer pour la commande #{oid} "
-            f"(compte / code / instructions). Il sera transmis au client.")
+            f"(texte, URL, compte, code, instructions ou image). "
+            "Tous les caractères seront transmis sans modification.")
         return
 
     if data.startswith("adm_codex_number:"):
@@ -3745,16 +3846,17 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats = db.inventory_stats(oid)
         await q.message.reply_text(
             "🔐 *Import massif sécurisé*\n\n"
-            "Pour une livraison manuelle, envoyez uniquement `#` : le bot vous demandera le stock public.\n\n"
-            "Placez `#` au début de chaque nouveau compte. Le séparateur `#` sert uniquement au calcul du stock et ne sera jamais livré au client.\n"
-            "Toutes les lignes suivantes appartiennent à ce compte jusqu'au prochain `#`.\n\n"
+            f"Pour une livraison manuelle, envoyez uniquement `{inventory_service.MANUAL_STOCK_KEYWORD}` : le bot vous demandera le stock public.\n\n"
+            f"Placez `{inventory_service.ACCOUNT_DELIMITER}` seul sur une ligne avant chaque nouveau compte.\n"
+            "Le caractère `#` est maintenant un caractère normal et sera conservé dans les comptes, mots de passe et URL.\n"
+            f"Toutes les lignes suivantes appartiennent à ce compte jusqu'au prochain `{inventory_service.ACCOUNT_DELIMITER}`.\n\n"
             "Exemple :\n"
-            "`#Email: client1@example.com`\n"
-
+            f"`{inventory_service.ACCOUNT_DELIMITER}`\n"
+            "`Email: client1@example.com`\n"
             "`Password: secret1`\n"
             "`Instructions: profil A`\n\n"
-            "`#Email: client2@example.com`\n"
-
+            f"`{inventory_service.ACCOUNT_DELIMITER}`\n"
+            "`Email: client2@example.com`\n"
             "`Password: secret2`\n\n"
             f"Actuellement disponibles : {stats['available']}",
             parse_mode=ParseMode.MARKDOWN,
@@ -3890,31 +3992,98 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN,
         )
         return
-async def deliver_order(update, context, order_id, content):
+async def _send_manual_delivery(
+    bot,
+    *,
+    customer_id,
+    delivery_text,
+    raw_content,
+    reply_markup,
+    photo_file_id=None,
+    document_file_id=None,
+):
+    """Send one complete delivery without Telegram markup or length corruption."""
+    media_kwargs = {"chat_id": customer_id}
+    if photo_file_id or document_file_id:
+        if len(delivery_text) <= 900:
+            media_kwargs.update({
+                "caption": delivery_text,
+                "parse_mode": ParseMode.HTML,
+                "reply_markup": reply_markup,
+            })
+            if photo_file_id:
+                await bot.send_photo(photo=photo_file_id, **media_kwargs)
+            else:
+                await bot.send_document(document=document_file_id, **media_kwargs)
+            return
+        if photo_file_id:
+            await bot.send_photo(photo=photo_file_id, **media_kwargs)
+        else:
+            await bot.send_document(document=document_file_id, **media_kwargs)
+
+    if len(delivery_text) <= 4000:
+        await bot.send_message(
+            chat_id=customer_id,
+            text=delivery_text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=reply_markup,
+        )
+        return
+
+    # Telegram text messages are capped at 4096 characters. Send a short
+    # receipt first, then the opaque delivery data in plain-text chunks.
+    header = delivery_text.replace(html.escape(str(raw_content)), "⬇️")
+    await bot.send_message(
+        chat_id=customer_id,
+        text=header,
+        parse_mode=ParseMode.HTML,
+    )
+    chunks = [str(raw_content)[start:start + 4000] for start in range(0, len(str(raw_content)), 4000)]
+    for index, chunk in enumerate(chunks):
+        await bot.send_message(
+            chat_id=customer_id,
+            text=chunk,
+            reply_markup=reply_markup if index == len(chunks) - 1 else None,
+        )
+
+
+async def deliver_order(
+    update,
+    context,
+    order_id,
+    content,
+    *,
+    photo_file_id=None,
+    document_file_id=None,
+):
     o = db.get_order(order_id)
     if not o:
         await update.message.reply_text("Commande introuvable.")
-        return
+        return False
     if is_otp_order(o):
         await update.message.reply_text(
             "⚠️ Codex number orders must use Send number, customer I agree, "
             "then Send OTP code. Generic delivery is disabled for this service."
         )
-        return
+        return False
     cl = lang_of(o["user_id"])
     try:
-        await context.bot.send_message(
-            o["user_id"],
-            premium_customer_text(
-                cl,
-                "delivery_received",
-                oid=order_id,
-                service=o["service_name"],
-                offer=o["offer_name"],
-                content=content,
-            ),
-            parse_mode=ParseMode.HTML,
+        delivery_text = premium_customer_text(
+            cl,
+            "delivery_received",
+            oid=order_id,
+            service=o["service_name"],
+            offer=o["offer_name"],
+            content=content,
+        )
+        await _send_manual_delivery(
+            context.bot,
+            customer_id=o["user_id"],
+            delivery_text=delivery_text,
+            raw_content=content,
             reply_markup=kb.post_delivery_keyboard(cl, order_id),
+            photo_file_id=photo_file_id,
+            document_file_id=document_file_id,
         )
         delivered = order_service.manual_deliver_order(order_id, content)
         if not delivered:
@@ -3922,10 +4091,12 @@ async def deliver_order(update, context, order_id, content):
                 f"⚠️ Le contenu a été envoyé, mais la commande #{order_id} "
                 "n’était plus en attente de livraison."
             )
-            return
+            return False
         await update.message.reply_text(f"✅ Commande #{order_id} livrée au client.")
+        return True
     except Exception as e:
         await update.message.reply_text(f"⚠️ Échec d'envoi au client : {e}")
+        return False
 
 
 async def send_admin_message_to_client(update, context, order_id, content):

@@ -336,7 +336,7 @@ def format_split_button_texts(name, price_str, right_text):
 
 
 def catalog_offers_keyboard(lang):
-    """Show grouped category buttons (Adobe, ChatGPT, Telegram, VPNs, Netflix) AT THE TOP in a 2-column grid, followed by individual offer buttons."""
+    """Group multi-offer services and show single offers directly."""
     buttons = []
     db.preload_text_overrides(
         (
@@ -366,11 +366,9 @@ def catalog_offers_keyboard(lang):
     for offer in all_offers:
         sid = offer.get("service_id")
         offers_in_service = service_offers.get(sid, [])
-        s_name = (offer.get("service_name") or "").lower()
-
-        # Group if service has multiple offers OR matches Adobe/ChatGPT/Telegram/VPN/Netflix
-        is_target_group = any(k in s_name for k in ("adobe", "chatgpt", "gpt", "telegram", "vpn", "netfli"))
-        should_group = len(offers_in_service) > 1 or is_target_group
+        # A service only needs its own catalogue screen when there is actually
+        # a choice to make.  Single offers are actionable from the main catalog.
+        should_group = len(offers_in_service) > 1
 
         if should_group:
             if sid not in added_services:

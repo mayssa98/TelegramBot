@@ -7,10 +7,11 @@ from app.constants import InventoryStatus, OrderStatus
 from app.domain import inventory_service
 
 
-def test_bulk_inventory_parser_uses_hash_as_account_delimiter():
+def test_bulk_inventory_parser_uses_explicit_account_delimiter():
+    delimiter = inventory_service.ACCOUNT_DELIMITER
     items = inventory_service.parse_bulk_inventory(
-        "#1\nEmail: one@example.com\nPassword: pass1\n"
-        "#2\nEmail: two@example.com\nPassword: pass2"
+        f"{delimiter}\nEmail: one@example.com\nPassword: pass1\n"
+        f"{delimiter}\nEmail: two@example.com\nPassword: pass2"
     )
     assert items == [
         "Email: one@example.com\nPassword: pass1",
@@ -18,35 +19,36 @@ def test_bulk_inventory_parser_uses_hash_as_account_delimiter():
     ]
 
 
-def test_hash_attached_to_first_account_line_is_removed():
+def test_hashes_inside_accounts_are_preserved():
+    delimiter = inventory_service.ACCOUNT_DELIMITER
     items = inventory_service.parse_bulk_inventory(
-        "#first@example.com|password1\nRecovery: code1\n"
-        "#second@example.com|password2\nRecovery: code2"
+        f"{delimiter}\n#first@example.com|password1\nRecovery: #code1\n"
+        f"{delimiter}\nhttps://example.com/reset#section\nPassword: #secret2"
     )
 
     assert items == [
-        "first@example.com|password1\nRecovery: code1",
-        "second@example.com|password2\nRecovery: code2",
+        "#first@example.com|password1\nRecovery: #code1",
+        "https://example.com/reset#section\nPassword: #secret2",
     ]
-    assert all(not item.startswith("#") for item in items)
 
 def test_legacy_delivery_markers_are_removed():
-    assert inventory_service.clean_delivery_value("#legacy@example.com|pass") == "legacy@example.com|pass"
+    assert inventory_service.clean_delivery_value("#legacy@example.com|pass") == "#legacy@example.com|pass"
     assert inventory_service.clean_delivery_value("#12\nlegacy@example.com|pass") == "legacy@example.com|pass"
     assert inventory_service.clean_delivery_value("clean@example.com|pass") == "clean@example.com|pass"
 
 def test_bulk_inventory_parser_rejects_content_before_first_marker():
     import pytest
 
-    with pytest.raises(ValueError, match="commencer par #"):
-        inventory_service.parse_bulk_inventory("Email: one@example.com\n#2\nEmail: two@example.com")
+    with pytest.raises(ValueError, match="NOUVEAU_COMPTE"):
+        inventory_service.parse_bulk_inventory("Email: one@example.com")
 
 
 def test_bulk_inventory_parser_rejects_empty_account_block():
     import pytest
 
+    delimiter = inventory_service.ACCOUNT_DELIMITER
     with pytest.raises(ValueError, match="sans contenu"):
-        inventory_service.parse_bulk_inventory("#1\n#2\nEmail: two@example.com")
+        inventory_service.parse_bulk_inventory(f"{delimiter}\n{delimiter}\nEmail: two@example.com")
 
 
 def test_add_inventory_items(mock_mongodb):
