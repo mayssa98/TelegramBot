@@ -30,9 +30,13 @@ def _normalized_service_name(value):
 def is_official_subscriptions_service(value):
     """Return whether a service is the catalogue that must stay pinned first."""
     name = value.get("name") if isinstance(value, dict) else value
-    return _normalized_service_name(name) in {
-        "officiels subscribes", "official subscribes",
-    }
+    tokens = _normalized_service_name(name).split()
+    has_official = any(
+        token.startswith("official") or token.startswith("officiel")
+        for token in tokens
+    )
+    has_subscription = any(token.startswith("subscri") for token in tokens)
+    return has_official and has_subscription
 
 
 def _service_sort_key(service):

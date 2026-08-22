@@ -57,6 +57,17 @@ def test_official_subscribes_catalog_is_always_first(mock_mongodb):
     assert admin_button.style is None
 
 
+def test_official_subscriptions_name_variant_is_pinned(mock_mongodb):
+    regular_id = db.add_service("Chat GPT", "🤖")
+    official_id = db.add_service("Officiels subscriptions", "✅")
+
+    services = db.list_services()
+
+    assert services[0]["id"] == official_id
+    assert services[1]["id"] == regular_id
+    assert db.is_official_subscriptions_service(services[0])
+
+
 def test_offer_can_move_between_services_and_keeps_api_config_in_sync(mock_mongodb):
     source_id = db.add_service("Source", "📦")
     destination_id = db.add_service("Destination", "🚀")

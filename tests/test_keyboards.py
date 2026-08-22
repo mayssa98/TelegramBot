@@ -396,6 +396,18 @@ def test_official_catalog_button_supports_left_and_right_emojis(monkeypatch):
     assert button.style is None
 
 
+def test_official_subscriptions_variant_is_first_without_background(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: sorted([
+        {"id": 1, "name": "Chat GPT", "total_stock": 5},
+        {"id": 2, "name": "Officiels subscriptions", "total_stock": 5},
+    ], key=db._service_sort_key))
+
+    button = kb.services_keyboard("fr").inline_keyboard[0][0]
+
+    assert button.callback_data == "svc:2"
+    assert button.style is None
+
+
 def test_official_grouped_catalog_is_first_and_has_no_background(mock_mongodb):
     regular_id = db.add_service("Streaming", "🎬")
     official_id = db.add_service("officiels subscribes", "⭐")
