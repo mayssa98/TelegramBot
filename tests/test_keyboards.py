@@ -393,6 +393,22 @@ def test_official_catalog_button_supports_left_and_right_emojis(monkeypatch):
 
     assert button.text == "⭐ officiels subscribes ✅"
     assert button.icon_custom_emoji_id is None
+    assert button.style is None
+
+
+def test_official_grouped_catalog_is_first_and_has_no_background(mock_mongodb):
+    regular_id = db.add_service("Streaming", "🎬")
+    official_id = db.add_service("officiels subscribes", "⭐")
+    db.add_offer(regular_id, "Netflix", 5.0, 4)
+    db.add_offer(regular_id, "Disney", 5.0, 4)
+    db.add_offer(official_id, "Official monthly", 4.0, 4)
+    db.add_offer(official_id, "Official yearly", 40.0, 4)
+
+    keyboard = kb.catalog_offers_keyboard("fr")
+    first_catalog_button = keyboard.inline_keyboard[0][0]
+
+    assert first_catalog_button.callback_data == f"svc:{official_id}"
+    assert first_catalog_button.style is None
 
 
 def test_premium_left_icon_keeps_unicode_suffix(monkeypatch):

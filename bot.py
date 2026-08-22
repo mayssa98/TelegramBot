@@ -3376,8 +3376,31 @@ async def handle_pending_attachment(update, context):
         )
         return
     if uid != ADMIN_ID or not pending or pending[0] not in {
-        "adm_svcemoji", "adm_offemoji",
+        "adm_svcemoji", "adm_svcsuffix", "adm_offemoji",
     }:
+        return
+    kind, object_id = pending
+    if kind == "adm_svcsuffix":
+        sticker = getattr(message, "sticker", None)
+        fallback_emoji = str(
+            getattr(message, "text", None)
+            or getattr(message, "caption", None)
+            or getattr(sticker, "emoji", None)
+            or ""
+        ).strip()
+        if not fallback_emoji:
+            await message.reply_text(
+                "⚠️ Cet emoji Premium n’a pas d’équivalent Unicode utilisable à droite. "
+                "Envoyez l’emoji depuis le clavier, par exemple : ✅"
+            )
+            return
+        suffix_emoji = fallback_emoji[:12]
+        db.update_service(int(object_id), suffix_emoji=suffix_emoji)
+        PENDING.pop(uid, None)
+        await message.reply_text(
+            f"✅ Emoji droit mis à jour : {suffix_emoji}",
+            reply_markup=admin.service_admin_keyboard(int(object_id)),
+        )
         return
     custom_emoji_id = custom_emoji_from_message(update.effective_message)
     if not custom_emoji_id:
@@ -3385,7 +3408,6 @@ async def handle_pending_attachment(update, context):
             "⚠️ Envoyez un emoji Telegram Premium, pas un sticker ordinaire."
         )
         return
-    kind, object_id = pending
     if kind == "adm_svcemoji":
         db.update_service(int(object_id), emoji="", custom_emoji_id=custom_emoji_id)
         markup = admin.service_admin_keyboard(int(object_id))

@@ -27,11 +27,18 @@ def _normalized_service_name(value):
     return " ".join(re.sub(r"[^a-z0-9]+", " ", value.encode("ascii", "ignore").decode()).split())
 
 
+def is_official_subscriptions_service(value):
+    """Return whether a service is the catalogue that must stay pinned first."""
+    name = value.get("name") if isinstance(value, dict) else value
+    return _normalized_service_name(name) in {
+        "officiels subscribes", "official subscribes",
+    }
+
+
 def _service_sort_key(service):
     # The owner's official-subscriptions catalogue is always pinned first,
     # independently of accents, casing, or its stored sort_order.
-    pinned_names = {"officiels subscribes", "official subscribes"}
-    pinned = 0 if _normalized_service_name(service.get("name")) in pinned_names else 1
+    pinned = 0 if is_official_subscriptions_service(service) else 1
     return pinned, int(service.get("sort_order", 0)), int(service.get("id", 0))
 
 

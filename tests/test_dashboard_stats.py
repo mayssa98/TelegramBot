@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from datetime import UTC, datetime
 
+import admin
 import database as db
 
 
@@ -50,6 +51,10 @@ def test_official_subscribes_catalog_is_always_first(mock_mongodb):
     assert db.list_services_with_stock()[0]["id"] == official_id
     assert db.dashboard_data()["services"][0]["id"] == official_id
     assert db.list_catalog_offers()[0]["id"] == official_offer
+
+    admin_button = admin.catalog_admin_keyboard().inline_keyboard[0][0]
+    assert admin_button.callback_data == f"adm_svc:{official_id}"
+    assert admin_button.style is None
 
 
 def test_offer_can_move_between_services_and_keeps_api_config_in_sync(mock_mongodb):

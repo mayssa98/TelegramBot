@@ -315,10 +315,13 @@ def services_keyboard(lang):
         for _i, svc in enumerate(svcs):
             total = svc.get("total_stock", 0)
             label = service_button_label(svc, 34)
+            is_official = db.is_official_subscriptions_service(svc)
             row.append(InlineKeyboardButton(
                 label,
                 callback_data=f"svc:{svc['id']}",
-                style="success" if svc.get("unlimited_stock") else stock_button_style(total),
+                style=None if is_official else (
+                    "success" if svc.get("unlimited_stock") else stock_button_style(total)
+                ),
                 icon_custom_emoji_id=svc.get("custom_emoji_id") or None,
             ))
             if len(row) == 2:
@@ -406,7 +409,10 @@ def catalog_offers_keyboard(lang):
                     "suffix_emoji": offer.get("service_suffix_emoji"),
                     "custom_emoji_id": service_icon,
                 }, 46)
-                cat_style = "success" if (has_unlimited or total_stock > 3) else ("primary" if total_stock > 0 else "danger")
+                cat_style = None if db.is_official_subscriptions_service(service_name) else (
+                    "success" if (has_unlimited or total_stock > 3)
+                    else ("primary" if total_stock > 0 else "danger")
+                )
                 grouped_category_buttons.append(InlineKeyboardButton(
                     label,
                     callback_data=f"svc:{sid}",
@@ -554,7 +560,7 @@ def preorder_services_keyboard(lang):
         row.append(InlineKeyboardButton(
             label,
             callback_data=f"preorder_svc:{service_id}",
-            style="danger",
+            style=None if db.is_official_subscriptions_service(service_name) else "danger",
             icon_custom_emoji_id=service_icon,
         ))
         if len(row) == 2:

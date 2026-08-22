@@ -680,6 +680,33 @@ def test_admin_offer_accepts_custom_emoji_sticker(monkeypatch, mock_mongodb):
     message.reply_text.assert_awaited_once()
 
 
+def test_admin_right_emoji_accepts_premium_sticker_fallback(monkeypatch, mock_mongodb):
+    monkeypatch.setattr("bot.ADMIN_ID", 42)
+    service_id = db.add_service("officiels subscribes", "⭐")
+    PENDING[42] = ("adm_svcsuffix", service_id)
+    message = SimpleNamespace(
+        text=None,
+        caption=None,
+        entities=[],
+        caption_entities=[],
+        sticker=SimpleNamespace(
+            custom_emoji_id="5413879192267805083",
+            emoji="✅",
+        ),
+        reply_text=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        effective_message=message,
+    )
+
+    asyncio.run(handle_pending_attachment(update, SimpleNamespace()))
+
+    assert db.get_service(service_id)["suffix_emoji"] == "✅"
+    assert PENDING.get(42) is None
+    message.reply_text.assert_awaited_once()
+
+
 def test_admin_text_category_button_opens_category(monkeypatch):
     query = SimpleNamespace(
         data="adm_text_cat:payments:0",
