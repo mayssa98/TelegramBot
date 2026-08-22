@@ -83,6 +83,8 @@ def test_catalog_overlays_admin_selection(monkeypatch, mock_mongodb):
     assert result["supplier_name"] == "Demo Reseller"
     assert result["balance"] == 42.5
     assert result["selected_count"] == 1
+    assert result["used_count"] == 1
+    assert result["unused_count"] == 1
     assert result["products"][0]["enabled"] is True
     assert result["products"][0]["retail_price"] == 4.5
     assert result["products"][0]["profit"] == 2.25

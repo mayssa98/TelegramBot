@@ -616,6 +616,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             "low_stock_threshold": int(config.get("low_stock_threshold") or 5),
             "published": bool(config.get("local_offer_id")),
         })
+    used_count = sum(1 for product in products if product["enabled"])
     return {
         "ok": True,
         "configured": True,
@@ -629,7 +630,11 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         ),
         "providers": provider_summaries(),
         "products": products,
-        "selected_count": sum(1 for product in products if product["enabled"]),
+        # Keep selected_count for older dashboards while exposing explicit
+        # usage buckets shared by every external provider.
+        "selected_count": used_count,
+        "used_count": used_count,
+        "unused_count": len(products) - used_count,
     }
 
 

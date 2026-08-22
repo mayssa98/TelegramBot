@@ -1370,6 +1370,7 @@ function ApiProductsPage({ data, onAction, setToast }) {
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("all");
+  const [usageFilter, setUsageFilter] = useState("all");
   const [comparison, setComparison] = useState(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const loadProvider = async (providerId, { showToast = false, selectCatalog = true } = {}) => {
@@ -1396,7 +1397,7 @@ function ApiProductsPage({ data, onAction, setToast }) {
           currency: payload.currency || "USDT",
           products: payload.products?.length || 0,
           inStock: (payload.products || []).filter((item) => Number(item.stock || 0) > 0).length,
-          published: payload.selected_count || 0,
+          used: payload.used_count ?? payload.selected_count ?? 0,
           checkedAt: new Date().toISOString(),
           error: "",
         },
@@ -1495,7 +1496,12 @@ function ApiProductsPage({ data, onAction, setToast }) {
       setToast({ type: "error", title: "Sélection impossible", message: error.message });
     }
   };
-  const visibleProducts = (catalog?.products || []).filter((product) => {
+  const catalogProducts = catalog?.products || [];
+  const usedCount = catalog?.used_count ?? catalogProducts.filter((product) => product.enabled).length;
+  const unusedCount = catalog?.unused_count ?? catalogProducts.length - usedCount;
+  const visibleProducts = catalogProducts.filter((product) => {
+    if (usageFilter === "used" && !product.enabled) return false;
+    if (usageFilter === "unused" && product.enabled) return false;
     const searchable = {
       name: `${product.display_name || ""} ${product.name || ""}`,
       product_id: `${product.id || ""}`,
@@ -1503,7 +1509,12 @@ function ApiProductsPage({ data, onAction, setToast }) {
     };
     const haystack = searchField === "all" ? Object.values(searchable).join(" ") : searchable[searchField] || "";
     return !search || haystack.toLowerCase().includes(search.toLowerCase());
-  });
+  }).sort((left, right) => Number(Boolean(right.enabled)) - Number(Boolean(left.enabled)));
+  const saveProduct = async (payload) => {
+    const result = await onAction(payload);
+    if (result) await loadProvider(provider, { selectCatalog: true });
+    return result;
+  };
   return (
     <>
       <PageHeader
@@ -1533,7 +1544,7 @@ function ApiProductsPage({ data, onAction, setToast }) {
             return <article className={`provider-health-card ${state} ${provider === item.id ? "selected" : ""}`} key={item.id}>
               <button className="provider-health-main" onClick={() => setProvider(item.id)}>
                 <div className="provider-health-title"><span className="provider-health-icon"><Cloud size={17} /></span><div><strong>{item.name}</strong><small>{item.configured ? "Clé configurée" : "Non configurée"}</small></div><i /></div>
-                <div className="provider-health-stats"><span><small>Solde</small><b>{health.balance == null ? "—" : money(health.balance, health.currency)}</b></span><span><small>Produits</small><b>{health.products ?? "—"}</b></span><span><small>En stock</small><b>{health.inStock ?? "—"}</b></span></div>
+                <div className="provider-health-stats"><span><small>Solde</small><b>{health.balance == null ? "—" : money(health.balance, health.currency)}</b></span><span><small>Produits</small><b>{health.products ?? "—"}</b></span><span><small>Utilisés</small><b>{health.used ?? "—"}</b></span><span><small>En stock</small><b>{health.inStock ?? "—"}</b></span></div>
                 <div className="provider-health-foot"><span>{state === "online" ? `Opérationnelle · ${health.latency} ms` : state === "offline" ? "Connexion échouée" : state === "checking" ? "Test en cours…" : state === "unconfigured" ? "Ajoutez la clé dans Railway" : "Pas encore testée"}</span>{health.checkedAt && <small>{date(health.checkedAt)}</small>}</div>
                 {health.error && <p title={health.error}>{health.error}</p>}
               </button>
@@ -1632,8 +1643,8 @@ function ApiProductsPage({ data, onAction, setToast }) {
             </strong>
           </div>
           <div>
-            <span>Produits publiés</span>
-            <strong>{catalog.selected_count || 0}</strong>
+            <span>Produits utilisés</span>
+            <strong>{usedCount}</strong>
           </div>
           <div>
             <span>Produits disponibles</span>
@@ -1641,6 +1652,7 @@ function ApiProductsPage({ data, onAction, setToast }) {
           </div>
         </div>
       )}
+      {catalog && <div className="api-usage-classifier" aria-label="Classer les produits API"><button className={usageFilter === "all" ? "active" : ""} onClick={() => setUsageFilter("all")}><Boxes size={16} /><span><strong>Tous les produits</strong><small>Catalogue complet</small></span><b>{catalogProducts.length}</b></button><button className={`used ${usageFilter === "used" ? "active" : ""}`} onClick={() => setUsageFilter("used")}><CheckCircle2 size={16} /><span><strong>Produits utilisés</strong><small>Actifs dans votre catalogue</small></span><b>{usedCount}</b></button><button className={`unused ${usageFilter === "unused" ? "active" : ""}`} onClick={() => setUsageFilter("unused")}><Archive size={16} /><span><strong>Produits non utilisés</strong><small>Disponibles chez le fournisseur</small></span><b>{unusedCount}</b></button></div>}
       <FilterBar
         search={search}
         setSearch={setSearch}
@@ -1653,13 +1665,13 @@ function ApiProductsPage({ data, onAction, setToast }) {
       <section className="data-panel">
         <div className="product-api-grid">
           {visibleProducts.map((product) => (
-            <article key={product.id}>
+            <article className={product.enabled ? "api-product-used" : "api-product-unused"} key={product.id}>
               <header>
-                <span
+                <div className="api-product-badges"><span className={product.enabled ? "api-usage-badge used" : "api-usage-badge unused"}>{product.enabled ? <CheckCircle2 size={11} /> : <Archive size={11} />}{product.enabled ? "Utilisé" : "Non utilisé"}</span><span
                   className={product.stock > 0 ? "api-online" : "api-offline"}
                 >
                   {product.stock > 0 ? `${product.stock} en stock` : "Épuisé"}
-                </span>
+                </span></div>
                 <button onClick={() => setEditing(product)}>
                   <Edit3 size={15} />
                 </button>
@@ -1693,7 +1705,7 @@ function ApiProductsPage({ data, onAction, setToast }) {
           product={editing}
           provider={provider}
           services={data.services || []}
-          onAction={onAction}
+          onAction={saveProduct}
           onClose={() => setEditing(null)}
         />
       )}
