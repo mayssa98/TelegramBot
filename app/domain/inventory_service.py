@@ -16,7 +16,7 @@ from app.constants import InventoryStatus, OrderStatus
 log = logging.getLogger(__name__)
 
 ACCOUNT_DELIMITER = "===NOUVEAU_COMPTE==="
-MANUAL_STOCK_KEYWORD = "STOCK_MANUEL"
+MANUAL_STOCK_KEYWORD = "#"
 
 
 def parse_bulk_inventory(text: str) -> list[str]:
