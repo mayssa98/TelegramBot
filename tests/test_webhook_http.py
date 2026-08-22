@@ -161,6 +161,43 @@ def test_admin_reseller_clients_endpoint_returns_safe_profiles(monkeypatch, mock
     assert "never-return-this-hash" not in str(payload)
 
 
+def test_admin_reseller_comparison_endpoint_is_authenticated(monkeypatch):
+    monkeypatch.setattr(webhook_module, "DASHBOARD_PASSWORD", "secret")
+    with running_server() as base_url:
+        try:
+            urlopen(f"{base_url}/admin/api/reseller-comparison", timeout=5)
+        except HTTPError as exc:
+            assert exc.code == 401
+        else:
+            raise AssertionError("Supplier comparison was accessible without authentication")
+
+
+def test_admin_reseller_comparison_endpoint_returns_ranked_groups(monkeypatch):
+    monkeypatch.setattr(webhook_module, "DASHBOARD_PASSWORD", "secret")
+    monkeypatch.setattr(
+        webhook_module.reseller_comparison_service,
+        "compare_catalogs",
+        lambda force=False: {
+            "ok": True,
+            "groups": [{"label": "Canva Pro", "offers": []}],
+            "force": force,
+        },
+    )
+    encoded = base64.b64encode(b"admin:secret").decode()
+    request = Request(
+        "http://placeholder/admin/api/reseller-comparison?refresh=1",
+        headers={"Authorization": f"Basic {encoded}"},
+    )
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/admin/api/reseller-comparison?refresh=1"
+        with urlopen(request, timeout=5) as response:
+            payload = json.load(response)
+
+    assert response.status == 200
+    assert payload["groups"][0]["label"] == "Canva Pro"
+    assert payload["force"] is True
+
+
 def test_webhook_rejects_missing_secret(monkeypatch):
     monkeypatch.setenv("HP_WEBHOOK_SECRET", "expected-secret")
     request = Request(

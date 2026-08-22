@@ -128,6 +128,31 @@ CANBOSO_API_BASE: str = os.environ.get(
 GPT_CHEAP_API_KEY: str = env_value("HP_GPT_CHEAP_API_KEY")
 
 # ---------------------------------------------------------------------------
+# Comparateur IA des catalogues fournisseurs (API externe configurable)
+# ---------------------------------------------------------------------------
+AI_COMPARISON_API_URL: str = env_value(
+    "HP_AI_API_URL", "https://agentrouter.org/v1/chat/completions"
+).rstrip("/")
+AI_COMPARISON_API_KEY: str = env_value("HP_AI_API_KEY")
+_AI_COMPARISON_MODELS_RAW: str = env_value(
+    "HP_AI_MODELS",
+    env_value(
+        "HP_AI_MODEL",
+        "claude-opus-4-8,claude-opus-5,gpt-5.6-sol",
+    ),
+)
+AI_COMPARISON_MODELS: tuple[str, ...] = tuple(dict.fromkeys(
+    model.strip()
+    for model in _AI_COMPARISON_MODELS_RAW.split(",")
+    if model.strip()
+))
+AI_COMPARISON_MODEL: str = AI_COMPARISON_MODELS[0] if AI_COMPARISON_MODELS else ""
+AI_COMPARISON_AUTH_HEADER: str = env_value(
+    "HP_AI_AUTH_HEADER", "Authorization"
+)
+AI_COMPARISON_AUTH_SCHEME: str = env_value("HP_AI_AUTH_SCHEME", "Bearer")
+
+# ---------------------------------------------------------------------------
 # Fournisseur revendeur VenteBot
 # ---------------------------------------------------------------------------
 VENTEBOT_API_KEY: str = env_value("HP_VENTEBOT_API_KEY")

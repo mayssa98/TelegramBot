@@ -37,6 +37,7 @@ from app.domain import (
     external_api_service,
     inventory_service,
     order_service,
+    reseller_comparison_service,
     reseller_service,
     storefront_service,
     support_service,
@@ -700,6 +701,24 @@ class handler(BaseHTTPRequestHandler):
                     "configured": bool(summary["configured"]),
                     "provider": summary["id"],
                     "error": str(exc),
+                })
+            return
+
+        elif path == "/admin/api/reseller-comparison":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                refresh = parse_qs(url.query).get("refresh", ["0"])[0] == "1"
+                self._reply(
+                    200,
+                    reseller_comparison_service.compare_catalogs(force=refresh),
+                )
+            except Exception as exc:
+                log.exception("Supplier comparison failed")
+                self._reply(503, {
+                    "ok": False,
+                    "error": str(exc)[:300] or "Comparaison indisponible",
                 })
             return
 

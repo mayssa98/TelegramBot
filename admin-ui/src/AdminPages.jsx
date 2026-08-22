@@ -29,6 +29,7 @@ import {
   Settings,
   ShieldCheck,
   ShoppingBag,
+  Sparkles,
   ToggleLeft,
   ToggleRight,
   TrendingUp,
@@ -1299,6 +1300,8 @@ function ApiProductsPage({ data, onAction, setToast }) {
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("all");
+  const [comparison, setComparison] = useState(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
   const load = async () => {
     setLoading(true);
     try {
@@ -1323,6 +1326,50 @@ function ApiProductsPage({ data, onAction, setToast }) {
   useEffect(() => {
     load();
   }, [provider]);
+  const comparePrices = async () => {
+    setComparisonLoading(true);
+    try {
+      const response = await fetch(
+        "/admin/api/reseller-comparison?refresh=1",
+        { credentials: "same-origin", cache: "no-store" },
+      );
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Comparaison indisponible");
+      }
+      setComparison(payload);
+      if (payload.method !== "external_ai") {
+        setToast({
+          type: "warning",
+          title: "Mode de secours utilisé",
+          message: "Configurez HP_AI_API_URL, HP_AI_API_KEY et HP_AI_MODELS dans Railway.",
+        });
+      }
+    } catch (error) {
+      setToast({ type: "error", title: "Comparaison impossible", message: error.message });
+    } finally {
+      setComparisonLoading(false);
+    }
+  };
+  const chooseComparedOffer = async (offer) => {
+    setProvider(offer.provider);
+    try {
+      const response = await fetch(
+        `/admin/api/reseller-products?provider=${encodeURIComponent(offer.provider)}`,
+        { credentials: "same-origin", cache: "no-store" },
+      );
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Produit indisponible");
+      setCatalog(payload);
+      const product = (payload.products || []).find(
+        (item) => String(item.id) === String(offer.product_id),
+      );
+      if (!product) throw new Error("Ce produit n’est plus disponible chez le fournisseur.");
+      setEditing(product);
+    } catch (error) {
+      setToast({ type: "error", title: "Sélection impossible", message: error.message });
+    }
+  };
   const visibleProducts = (catalog?.products || []).filter((product) => {
     const searchable = {
       name: `${product.display_name || ""} ${product.name || ""}`,
@@ -1339,11 +1386,81 @@ function ApiProductsPage({ data, onAction, setToast }) {
         title="Produits API"
         description="Connectez les fournisseurs et publiez leurs produits dans votre boutique."
         actions={
-          <ActionButton secondary icon={RefreshCw} onClick={load}>
-            Synchroniser
-          </ActionButton>
+          <div className="inline-actions">
+            <ActionButton icon={Sparkles} onClick={comparePrices} disabled={comparisonLoading}>
+              {comparisonLoading ? "Analyse IA…" : "Comparer les prix avec l’IA"}
+            </ActionButton>
+            <ActionButton secondary icon={RefreshCw} onClick={load}>
+              Synchroniser
+            </ActionButton>
+          </div>
         }
       />
+      {comparison && (
+        <section className="ai-comparison-panel">
+          <header>
+            <div>
+              <span className="comparison-kicker"><Sparkles size={14} /> Comparateur intelligent</span>
+              <h2>{comparison.compared_group_count} service(s) commun(s) détecté(s)</h2>
+              <p>
+                {comparison.method === "external_ai"
+                  ? `Analyse IA avec ${comparison.ai_model}`
+                  : "Analyse locale de secours — configurez votre API IA pour une détection sémantique"}
+                {` · ${comparison.catalog_product_count} produits · ${comparison.provider_count} fournisseurs`}
+              </p>
+            </div>
+            <button className="comparison-close" onClick={() => setComparison(null)} aria-label="Fermer">
+              <X size={17} />
+            </button>
+          </header>
+          {!!comparison.provider_errors?.length && (
+            <div className="comparison-warning">
+              {comparison.provider_errors.length} fournisseur(s) indisponible(s) pendant l’analyse.
+            </div>
+          )}
+          <div className="comparison-grid">
+            {(comparison.groups || []).map((group, groupIndex) => (
+              <article className="comparison-card" key={`${group.label}-${groupIndex}`}>
+                <div className="comparison-title">
+                  <div>
+                    <h3>{group.label}</h3>
+                    <span>Confiance {Math.round((group.confidence || 0) * 100)}%</span>
+                  </div>
+                  {!!group.savings_vs_next && (
+                    <strong>Économie {money(group.savings_vs_next, group.currency)}</strong>
+                  )}
+                </div>
+                <p>{group.reason}</p>
+                <div className="comparison-offers">
+                  {group.offers.map((offer) => {
+                    const cheapest = offer.item_id === group.cheapest_item_id;
+                    return (
+                      <div className={cheapest ? "cheapest" : ""} key={offer.item_id}>
+                        <div>
+                          <span>{offer.provider_name}</span>
+                          <small>{offer.name} · {offer.stock > 0 ? `${offer.stock} en stock` : "épuisé"}</small>
+                        </div>
+                        <strong>{money(offer.price, group.currency)}</strong>
+                        {cheapest && <b>Meilleur prix</b>}
+                        <button disabled={offer.stock <= 0} onClick={() => chooseComparedOffer(offer)}>
+                          Choisir
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+            ))}
+          </div>
+          {!comparison.groups?.length && (
+            <Empty
+              icon={Sparkles}
+              title="Aucun service commun détecté"
+              text="Les catalogues disponibles ne contiennent pas encore d’offres suffisamment équivalentes."
+            />
+          )}
+        </section>
+      )}
       <div className="provider-tabs">
         {PROVIDERS.map(([id, label]) => (
           <button

@@ -330,6 +330,29 @@ td strong { color: #e6edf6; }
 .product-api-grid p { min-height:32px; margin:0 0 14px; color:var(--muted); font-size:9px; line-height:1.5; }
 .product-api-grid article > div { display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:8px; }
 .product-api-grid article > div strong { color:#ddd6fe; font-size:10px; }
+.ai-comparison-panel { margin-bottom:14px; padding:15px; border:1px solid rgba(167,139,250,.3); border-radius:13px; background:linear-gradient(145deg,rgba(124,58,237,.1),rgba(13,25,40,.98) 42%); }
+.ai-comparison-panel > header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:13px; }
+.ai-comparison-panel h2 { margin:7px 0 4px; font-size:17px; }
+.ai-comparison-panel header p { margin:0; color:var(--muted); font-size:9px; }
+.comparison-kicker { display:flex; align-items:center; gap:6px; color:#c4b5fd; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+.comparison-close { width:31px; height:31px; display:grid; place-items:center; flex:0 0 auto; border:1px solid var(--line); border-radius:8px; color:var(--muted); background:#0a1624; cursor:pointer; }
+.comparison-warning { margin-bottom:11px; padding:9px 11px; border:1px solid rgba(251,191,36,.25); border-radius:8px; color:#fde68a; background:rgba(251,191,36,.07); font-size:9px; }
+.comparison-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.comparison-card { padding:13px; border:1px solid var(--line); border-radius:11px; background:rgba(6,13,24,.72); }
+.comparison-title { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.comparison-title h3 { margin:0 0 4px; font-size:12px; }
+.comparison-title span { color:var(--muted); font-size:8px; }
+.comparison-title > strong { padding:5px 7px; border-radius:7px; color:#6ee7b7; background:rgba(52,211,153,.1); font-size:8px; white-space:nowrap; }
+.comparison-card > p { min-height:28px; margin:10px 0; color:var(--muted); font-size:8px; line-height:1.5; }
+.comparison-offers { display:grid; gap:7px; }
+.comparison-offers > div { display:grid; grid-template-columns:minmax(0,1fr) auto auto auto; align-items:center; gap:8px; padding:9px; border:1px solid var(--line); border-radius:8px; background:#0b1725; }
+.comparison-offers > div.cheapest { border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.07); }
+.comparison-offers span { display:block; font-size:9px; font-weight:700; }
+.comparison-offers small { display:block; margin-top:3px; overflow:hidden; color:var(--muted); font-size:7px; text-overflow:ellipsis; white-space:nowrap; }
+.comparison-offers strong { color:#e9e3ff; font-size:10px; white-space:nowrap; }
+.comparison-offers b { padding:4px 6px; border-radius:6px; color:#6ee7b7; background:rgba(52,211,153,.12); font-size:7px; white-space:nowrap; }
+.comparison-offers button { padding:6px 8px; border:1px solid rgba(167,139,250,.35); border-radius:7px; color:#ddd6fe; background:rgba(124,58,237,.15); font-size:8px; cursor:pointer; }
+.comparison-offers button:disabled { opacity:.4; cursor:not-allowed; }
 .buyer-keys { margin-top:13px; }
 .buyer-keys > header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line); }
 .buyer-keys h3 { margin:4px 0 0; font-size:13px; }
@@ -409,6 +432,7 @@ td strong { color: #e6edf6; }
   .catalog-react-grid,.settings-layout { grid-template-columns:1fr; }
   .settings-card.full,.settings-submit { grid-column:auto; }
   .product-api-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .comparison-grid { grid-template-columns:1fr; }
   .custom-api-grid { grid-template-columns:1fr; }
   .order-analytics-grid { grid-template-columns:1fr; }
 }
@@ -450,6 +474,8 @@ td strong { color: #e6edf6; }
   .filter-bar > label.smart-search,.search-field-select { min-width:0; width:100%; }
   .search-result-count { justify-content:center; }
   .pagination { justify-content:space-between; }
+  .comparison-offers > div { grid-template-columns:minmax(0,1fr) auto; }
+  .comparison-offers b { justify-self:start; }
   .pagination span { display:none; }
   .form-grid,.detail-grid { grid-template-columns:1fr; }
   .field.wide { grid-column:auto; }
