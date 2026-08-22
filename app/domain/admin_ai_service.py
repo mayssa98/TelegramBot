@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from config import (
@@ -43,11 +44,43 @@ class AdminAIError(RuntimeError):
     """Safe error surfaced to the admin client."""
 
 
+def _provider_error_message(exc: HTTPError) -> str:
+    """Extract a short provider message without leaking headers or credentials."""
+    detail = ""
+    try:
+        payload = json.loads(exc.read().decode("utf-8", errors="replace"))
+        error = payload.get("error") if isinstance(payload, dict) else None
+        if isinstance(error, dict):
+            detail = str(error.get("message") or error.get("type") or "")
+        elif isinstance(error, str):
+            detail = error
+        if not detail and isinstance(payload, dict):
+            detail = str(payload.get("message") or payload.get("msg") or "")
+    except (AttributeError, json.JSONDecodeError, OSError):
+        detail = ""
+    detail = " ".join(detail.split())[:240]
+    if exc.code == 401:
+        if "unauthorized client" in detail.lower():
+            return (
+                "AgentRouter refuse les appels depuis ce serveur (unauthorized client). "
+                "Contactez leur support pour autoriser Railway, ou utilisez une API compatible serveur."
+            )
+        return "Clé API refusée par le fournisseur IA (HTTP 401). Vérifiez HP_AI_API_URL et HP_AI_API_KEY."
+    if exc.code == 403:
+        return "Accès interdit par le fournisseur IA (HTTP 403). Vérifiez les permissions du token."
+    if exc.code == 429:
+        return "Quota ou limite du fournisseur IA atteint (HTTP 429)."
+    suffix = f" : {detail}" if detail else "."
+    return f"Le fournisseur IA répond HTTP {exc.code}{suffix}"
+
+
 def public_config() -> dict[str, Any]:
+    endpoint_host = urlsplit(AI_COMPARISON_API_URL).hostname or ""
     return {
         "ok": True,
         "configured": bool(AI_COMPARISON_API_URL and AI_COMPARISON_API_KEY and AI_COMPARISON_MODELS),
         "models": list(AI_COMPARISON_MODELS),
+        "endpoint_host": endpoint_host,
     }
 
 
@@ -209,8 +242,11 @@ def chat(messages: Any, model: Any, dashboard_data: dict[str, Any]) -> dict[str,
     selected_model = str(model or "").strip()
     if selected_model not in AI_COMPARISON_MODELS:
         raise AdminAIError("Modèle non autorisé.")
+    parsed_url = urlsplit(AI_COMPARISON_API_URL)
     if not AI_COMPARISON_API_URL or not AI_COMPARISON_API_KEY:
         raise AdminAIError("Configurez HP_AI_API_URL et HP_AI_API_KEY dans Railway.")
+    if parsed_url.scheme != "https" or not parsed_url.hostname:
+        raise AdminAIError("HP_AI_API_URL est invalide. Utilisez une URL HTTPS sans syntaxe Markdown.")
     if not re.fullmatch(r"[A-Za-z0-9-]+", AI_COMPARISON_AUTH_HEADER.strip()):
         raise AdminAIError("Configuration d’authentification IA invalide.")
 
@@ -256,9 +292,12 @@ def chat(messages: Any, model: Any, dashboard_data: dict[str, Any]) -> dict[str,
             text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I)
         result = json.loads(text)
     except HTTPError as exc:
-        raise AdminAIError(f"Le fournisseur IA refuse la requête (HTTP {exc.code}).") from exc
-    except (URLError, TimeoutError):
-        raise AdminAIError("Le fournisseur IA est temporairement indisponible.")
+        raise AdminAIError(_provider_error_message(exc)) from exc
+    except URLError as exc:
+        reason = " ".join(str(exc.reason or "erreur réseau").split())[:180]
+        raise AdminAIError(f"Connexion impossible vers {parsed_url.hostname} : {reason}.") from exc
+    except TimeoutError as exc:
+        raise AdminAIError(f"Délai dépassé lors de la connexion à {parsed_url.hostname}.") from exc
     except (json.JSONDecodeError, ValueError) as exc:
         raise AdminAIError("Le modèle a retourné une réponse invalide.") from exc
 

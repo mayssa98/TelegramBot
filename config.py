@@ -25,6 +25,14 @@ def env_value(name: str, default: str = "") -> str:
     return value
 
 
+def normalized_http_url(value: str) -> str:
+    """Accept a plain URL and repair Markdown links copied from a chat."""
+    value = str(value or "").strip()
+    if value.startswith("[") and "](" in value and value.endswith(")"):
+        value = value.split("](", 1)[1][:-1].strip()
+    return value.rstrip("/")
+
+
 def mongodb_uri_from_environment() -> str:
     """Return the MongoDB connection string injected by the deployment."""
     return env_value("HP_MONGODB_URI")
@@ -132,7 +140,8 @@ GPT_CHEAP_API_KEY: str = env_value("HP_GPT_CHEAP_API_KEY")
 # ---------------------------------------------------------------------------
 AI_COMPARISON_API_URL: str = env_value(
     "HP_AI_API_URL", "https://agentrouter.org/v1/chat/completions"
-).rstrip("/")
+)
+AI_COMPARISON_API_URL = normalized_http_url(AI_COMPARISON_API_URL)
 AI_COMPARISON_API_KEY: str = env_value("HP_AI_API_KEY")
 _AI_COMPARISON_MODELS_RAW: str = env_value(
     "HP_AI_MODELS",

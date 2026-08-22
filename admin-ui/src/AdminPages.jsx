@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Columns3,
   Clock3,
   ClipboardList,
   Cloud,
@@ -241,6 +242,7 @@ function useRemoteList(endpoint, filters) {
     total: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [syncVersion, setSyncVersion] = useState(0);
   const query = new URLSearchParams(
     Object.entries(filters)
       .filter(([, value]) => value !== "" && value != null)
@@ -252,25 +254,31 @@ function useRemoteList(endpoint, filters) {
     return () => window.clearTimeout(timer);
   }, [query]);
   useEffect(() => {
+    const synchronize = () => setSyncVersion((value) => value + 1);
+    window.addEventListener("admin:data-synced", synchronize);
+    return () => window.removeEventListener("admin:data-synced", synchronize);
+  }, []);
+  useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     setLoading(true);
     fetch(`${endpoint}?${debouncedQuery}`, {
       credentials: "same-origin",
       cache: "no-store",
+      signal: controller.signal,
     })
       .then((response) => {
         if (!response.ok) throw new Error(`Erreur ${response.status}`);
         return response.json();
       })
       .then((payload) => active && setResult(payload))
-      .catch(
-        () => active && setResult({ items: [], page: 1, pages: 1, total: 0 }),
-      )
+      .catch(() => undefined)
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [endpoint, debouncedQuery]);
+  }, [endpoint, debouncedQuery, syncVersion]);
   return [result, loading];
 }
 
@@ -468,6 +476,24 @@ function OrdersPage({ data, onAction }) {
   const [sort, setSort] = useState("date");
   const [direction, setDirection] = useState("desc");
   const [selected, setSelected] = useState(null);
+  const [viewMode, setViewMode] = useState(window.localStorage.getItem("admin-orders-view") || "table");
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    const defaults = ["customer", "product", "amount", "status", "date"];
+    try {
+      const stored = JSON.parse(window.localStorage.getItem("admin-orders-columns") || "null");
+      return Array.isArray(stored) ? stored : defaults;
+    } catch {
+      return defaults;
+    }
+  });
+  const toggleColumn = (column) => {
+    const next = visibleColumns.includes(column)
+      ? visibleColumns.filter((item) => item !== column)
+      : [...visibleColumns, column];
+    setVisibleColumns(next);
+    window.localStorage.setItem("admin-orders-columns", JSON.stringify(next));
+  };
   const [result, loading] = useRemoteList("/admin/api/orders", {
     search,
     search_field: searchField,
@@ -501,6 +527,16 @@ function OrdersPage({ data, onAction }) {
       .map(([key, value]) => ({ key, value, color: colors[key] || "#64748b" }))
       .sort((a, b) => b.value - a.value);
   }, [analytics.statuses]);
+  const kanbanColumns = useMemo(() => [
+    { id: "waiting", label: "À vérifier", statuses: ["pending_payment", "awaiting_verification", "manual_review"] },
+    { id: "confirmed", label: "Confirmées", statuses: ["paid", "payment_confirmed"] },
+    { id: "delivery", label: "Livraison", statuses: ["preparing_delivery", "stock_issue"] },
+    { id: "completed", label: "Terminées", statuses: ["delivered", "refunded", "cancelled", "rejected", "expired", "verification_failed"] },
+  ].map((column) => ({
+    ...column,
+    items: (result.items || []).filter((item) => column.statuses.includes(item.status)),
+    total: column.statuses.reduce((sum, itemStatus) => sum + Number(analytics.statuses?.[itemStatus] || 0), 0),
+  })), [result.items, analytics.statuses]);
   const totalStatuses = statusSegments.reduce((sum, item) => sum + item.value, 0);
   let donutCursor = 0;
   const donutBackground = statusSegments.length
@@ -593,18 +629,20 @@ function OrdersPage({ data, onAction }) {
           <option value="amount-desc">Montant décroissant</option>
           <option value="amount-asc">Montant croissant</option>
         </select>
+        <div className="order-view-switch" aria-label="Mode d’affichage"><button className={viewMode === "table" ? "active" : ""} onClick={() => { setViewMode("table"); window.localStorage.setItem("admin-orders-view", "table"); }} type="button"><ClipboardList size={14} />Tableau</button><button className={viewMode === "kanban" ? "active" : ""} onClick={() => { setViewMode("kanban"); window.localStorage.setItem("admin-orders-view", "kanban"); }} type="button"><Boxes size={14} />Kanban</button></div>
+        {viewMode === "table" && <button className="column-picker-trigger" type="button" onClick={() => setColumnsOpen(true)}><Columns3 size={14} />Colonnes</button>}
       </FilterBar>
       <section className="data-panel">
-        <div className="responsive-table">
+        {viewMode === "table" ? <div className="responsive-table">
           <table>
             <thead>
               <tr>
                 <th><button className={`sort-button ${sort === "date" ? "active" : ""}`} onClick={() => toggleSort("date")}>Commande <span>{sort === "date" ? (direction === "desc" ? "↓" : "↑") : "↕"}</span></button></th>
-                <th>Client</th>
-                <th>Produit</th>
-                <th><button className={`sort-button ${sort === "amount" ? "active" : ""}`} onClick={() => toggleSort("amount")}>Montant <span>{sort === "amount" ? (direction === "desc" ? "↓" : "↑") : "↕"}</span></button></th>
-                <th>Statut</th>
-                <th>Date</th>
+                {visibleColumns.includes("customer") && <th>Client</th>}
+                {visibleColumns.includes("product") && <th>Produit</th>}
+                {visibleColumns.includes("amount") && <th><button className={`sort-button ${sort === "amount" ? "active" : ""}`} onClick={() => toggleSort("amount")}>Montant <span>{sort === "amount" ? (direction === "desc" ? "↓" : "↑") : "↕"}</span></button></th>}
+                {visibleColumns.includes("status") && <th>Statut</th>}
+                {visibleColumns.includes("date") && <th>Date</th>}
                 <th />
               </tr>
             </thead>
@@ -614,19 +652,19 @@ function OrdersPage({ data, onAction }) {
                   <td>
                     <strong>#{order.id}</strong>
                   </td>
-                  <td>
+                  {visibleColumns.includes("customer") && <td>
                     {order.username ? `@${order.username}` : order.user_id}
-                  </td>
-                  <td>{order.offer_name || order.service_name || "—"}</td>
-                  <td>
+                  </td>}
+                  {visibleColumns.includes("product") && <td>{order.offer_name || order.service_name || "—"}</td>}
+                  {visibleColumns.includes("amount") && <td>
                     <strong>{money(order.total_price, data.currency)}</strong>
-                  </td>
-                  <td>
+                  </td>}
+                  {visibleColumns.includes("status") && <td>
                     <span className={`status ${order.status}`}>
                       {STATUS_LABELS[order.status] || order.status}
                     </span>
-                  </td>
-                  <td>{date(order.created_at)}</td>
+                  </td>}
+                  {visibleColumns.includes("date") && <td>{date(order.created_at)}</td>}
                   <td>
                     <button className="row-action">
                       <Edit3 size={15} />
@@ -636,7 +674,7 @@ function OrdersPage({ data, onAction }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </div> : <div className="orders-kanban">{kanbanColumns.map((column) => <section className={`kanban-column ${column.id}`} key={column.id}><header><div><span>{column.label}</span><small>{column.items.length} sur cette page</small></div><strong>{column.total}</strong></header><div className="kanban-cards">{column.items.map((order) => <button className="kanban-order" onClick={() => openOrder(order)} key={order.id}><div><strong>#{order.id}</strong><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></div><h4>{order.offer_name || order.service_name || "Produit"}</h4><p>{order.username ? `@${order.username}` : `Client ${order.user_id}`}</p><footer><b>{money(order.total_price, data.currency)}</b><small>{date(order.created_at)}</small></footer></button>)}{!column.items.length && <div className="kanban-empty">Aucune commande sur cette page</div>}</div></section>)}</div>}
         {loading ? (
           <div className="table-loading">Chargement…</div>
         ) : (
@@ -654,6 +692,7 @@ function OrdersPage({ data, onAction }) {
           onClose={() => setSelected(null)}
         />
       )}
+      {columnsOpen && <Modal title="Colonnes du tableau" onClose={() => setColumnsOpen(false)}><div className="column-picker"><p>Choisissez les informations visibles. Ce réglage est mémorisé sur cet appareil.</p>{[["customer", "Client"], ["product", "Produit"], ["amount", "Montant"], ["status", "Statut"], ["date", "Date"]].map(([key, label]) => <label key={key}><input type="checkbox" checked={visibleColumns.includes(key)} onChange={() => toggleColumn(key)} /><span>{label}</span><Check size={15} /></label>)}<div><ActionButton secondary onClick={() => { const all = ["customer", "product", "amount", "status", "date"]; setVisibleColumns(all); window.localStorage.setItem("admin-orders-columns", JSON.stringify(all)); }}>Tout afficher</ActionButton><ActionButton onClick={() => setColumnsOpen(false)}>Terminer</ActionButton></div></div></Modal>}
     </>
   );
 }
@@ -932,6 +971,9 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
   const [editServiceEmoji, setEditServiceEmoji] = useState("📦");
   const [editServiceChannel, setEditServiceChannel] = useState("both");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedOffers, setSelectedOffers] = useState(new Set());
+  const [bulkOfferAction, setBulkOfferAction] = useState(null);
+  const [bulkOfferValue, setBulkOfferValue] = useState("");
 
   const startEditService = (service) => {
     setEditService(service);
@@ -990,6 +1032,25 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
     });
     return { ...service, offers, searchMatch: serviceMatch || offers.length > 0 };
   }).filter((service) => !normalizedSearch || service.searchMatch);
+  const visibleOfferIds = visibleServices.flatMap((service) => (service.offers || []).map((item) => item.id));
+  const toggleOfferSelection = (offerId) => setSelectedOffers((current) => {
+    const next = new Set(current);
+    if (next.has(offerId)) next.delete(offerId); else next.add(offerId);
+    return next;
+  });
+  const applyBulkOfferAction = async () => {
+    if (!bulkOfferAction || !selectedOffers.size) return;
+    const toggle = ["activate", "deactivate"].includes(bulkOfferAction);
+    const operation = bulkOfferAction === "price" ? "price_percent" : bulkOfferAction === "move" ? "move_service" : bulkOfferAction;
+    const result = await onAction(toggle ? {
+      action: "bulk_toggle_offers", offer_ids: [...selectedOffers].join(","), active: bulkOfferAction === "activate" ? "1" : "0",
+    } : {
+      action: "bulk_update_offers", offer_ids: [...selectedOffers].join(","), operation, value: bulkOfferValue,
+    });
+    if (result) setSelectedOffers(new Set());
+    setBulkOfferAction(null);
+    setBulkOfferValue("");
+  };
   return (
     <>
       <PageHeader
@@ -1026,6 +1087,10 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
         resultCount={visibleServices.length}
         placeholder="Nom du service, produit ou API…"
       />
+      <div className={`catalog-bulk-bar ${selectedOffers.size ? "visible" : ""}`}>
+        <div><span>{selectedOffers.size}</span><strong>produit(s) sélectionné(s)</strong><button type="button" onClick={() => setSelectedOffers(new Set(visibleOfferIds))}>Tout sélectionner</button><button type="button" onClick={() => setSelectedOffers(new Set())}>Effacer</button></div>
+        <div><ActionButton secondary icon={ToggleRight} disabled={!selectedOffers.size} onClick={() => setBulkOfferAction("activate")}>Activer</ActionButton><ActionButton secondary icon={ToggleLeft} disabled={!selectedOffers.size} onClick={() => setBulkOfferAction("deactivate")}>Désactiver</ActionButton><ActionButton secondary icon={CircleDollarSign} disabled={!selectedOffers.size} onClick={() => setBulkOfferAction("price")}>Prix</ActionButton><ActionButton secondary icon={ShoppingBag} disabled={!selectedOffers.size} onClick={() => setBulkOfferAction("move")}>Service</ActionButton><ActionButton danger icon={Archive} disabled={!selectedOffers.size} onClick={() => setBulkOfferAction("archive")}>Archiver</ActionButton></div>
+      </div>
       <div className="catalog-react-grid">
         {visibleServices.map((service, serviceIndex) => {
           const providers = [...new Set((service.offers || []).map((item) => item.supplier_provider || "").filter(Boolean))];
@@ -1064,9 +1129,10 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
             <div>
               {service.offers?.map((item, index) => (
                 <article
-                  className="offer-card"
+                  className={`offer-card ${selectedOffers.has(item.id) ? "selected" : ""}`}
                   key={item.id || `${service.id}-${item.name}-${index}`}
                 >
+                  <button className="offer-select" type="button" onClick={() => toggleOfferSelection(item.id)} aria-label={`${selectedOffers.has(item.id) ? "Désélectionner" : "Sélectionner"} ${item.name}`}>{selectedOffers.has(item.id) ? <Check size={13} /> : null}</button>
                   {item.site_image_url && <img className="offer-thumb" src={item.site_image_url} alt="" />}
                   <div>
                     <strong>{item.name}</strong>
@@ -1152,6 +1218,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
           defaultChannel={workspace === "site" ? "tn_site" : "bot"}
         />
       )}
+      {bulkOfferAction && <Modal title="Confirmer l’action groupée" onClose={() => { setBulkOfferAction(null); setBulkOfferValue(""); }}><div className="bulk-confirm"><span className={["deactivate", "archive"].includes(bulkOfferAction) ? "deactivate" : "activate"}>{bulkOfferAction === "activate" ? <ToggleRight size={28} /> : bulkOfferAction === "price" ? <CircleDollarSign size={28} /> : bulkOfferAction === "move" ? <ShoppingBag size={28} /> : bulkOfferAction === "archive" ? <Archive size={28} /> : <ToggleLeft size={28} />}</span><strong>{{ activate: "Activer", deactivate: "Désactiver", price: "Modifier le prix de", move: "Déplacer", archive: "Archiver" }[bulkOfferAction]} {selectedOffers.size} produit(s) ?</strong>{bulkOfferAction === "price" && <Field label="Variation en pourcentage"><input type="number" min="-90" max="500" step="0.1" value={bulkOfferValue} onChange={(event) => setBulkOfferValue(event.target.value)} placeholder="Ex. 10 ou -5" /></Field>}{bulkOfferAction === "move" && <Field label="Service de destination"><select value={bulkOfferValue} onChange={(event) => setBulkOfferValue(event.target.value)}><option value="">Choisir un service</option>{(data.services || []).map((service) => <option value={service.id} key={service.id}>{service.name}</option>)}</select></Field>}<p>{bulkOfferAction === "archive" ? "Les produits disparaîtront du catalogue. Cette action pourra être restaurée depuis le journal pendant 24 heures." : "La modification sera auditée et pourra être restaurée depuis le journal pendant 24 heures."}</p><div><ActionButton secondary onClick={() => { setBulkOfferAction(null); setBulkOfferValue(""); }}>Annuler</ActionButton><ActionButton danger={["deactivate", "archive"].includes(bulkOfferAction)} icon={Check} disabled={["price", "move"].includes(bulkOfferAction) && !bulkOfferValue} onClick={applyBulkOfferAction}>Confirmer</ActionButton></div></div></Modal>}
       {showService && (
         <Modal title="Nouveau service" onClose={() => setShowService(false)}>
           <form onSubmit={createService}>
@@ -1297,35 +1364,93 @@ function ApiProductsPage({ data, onAction, setToast }) {
   const [provider, setProvider] = useState("mailreader");
   const [catalog, setCatalog] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [providerMeta, setProviderMeta] = useState([]);
+  const [providerHealth, setProviderHealth] = useState({});
+  const [checkingAll, setCheckingAll] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("all");
   const [comparison, setComparison] = useState(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
-  const load = async () => {
-    setLoading(true);
+  const loadProvider = async (providerId, { showToast = false, selectCatalog = true } = {}) => {
+    const startedAt = performance.now();
+    if (selectCatalog) setLoading(true);
+    setProviderHealth((current) => ({
+      ...current,
+      [providerId]: { ...current[providerId], status: "checking", error: "" },
+    }));
     try {
       const response = await fetch(
-        `/admin/api/reseller-products?provider=${provider}`,
+        `/admin/api/reseller-products?provider=${encodeURIComponent(providerId)}`,
         { credentials: "same-origin", cache: "no-store" },
       );
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "API indisponible");
-      setCatalog(payload);
+      if (selectCatalog) setCatalog(payload);
+      setProviderHealth((current) => ({
+        ...current,
+        [providerId]: {
+          status: "online",
+          latency: Math.max(1, Math.round(performance.now() - startedAt)),
+          balance: payload.balance,
+          currency: payload.currency || "USDT",
+          products: payload.products?.length || 0,
+          inStock: (payload.products || []).filter((item) => Number(item.stock || 0) > 0).length,
+          published: payload.selected_count || 0,
+          checkedAt: new Date().toISOString(),
+          error: "",
+        },
+      }));
+      return true;
     } catch (error) {
-      setCatalog(null);
-      setToast({
-        type: "error",
-        title: "Fournisseur indisponible",
-        message: error.message,
-      });
+      if (selectCatalog) setCatalog(null);
+      setProviderHealth((current) => ({
+        ...current,
+        [providerId]: {
+          ...current[providerId],
+          status: "offline",
+          latency: Math.max(1, Math.round(performance.now() - startedAt)),
+          checkedAt: new Date().toISOString(),
+          error: error.message,
+        },
+      }));
+      if (showToast) setToast({ type: "error", title: "Fournisseur indisponible", message: error.message });
+      return false;
     } finally {
-      setLoading(false);
+      if (selectCatalog) setLoading(false);
     }
   };
+  const load = () => loadProvider(provider, { showToast: true, selectCatalog: true });
+  useEffect(() => {
+    fetch("/admin/api/reseller-providers", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Configuration fournisseurs indisponible");
+        setProviderMeta(payload.providers || []);
+      })
+      .catch((error) => setToast({ type: "error", title: "Centre API indisponible", message: error.message }));
+  }, []);
   useEffect(() => {
     load();
   }, [provider]);
+  const testAllProviders = async () => {
+    const configured = providerMeta.filter((item) => item.configured);
+    if (!configured.length) {
+      setToast({ type: "warning", title: "Aucune API configurée", message: "Ajoutez au moins une clé fournisseur dans Railway." });
+      return;
+    }
+    setCheckingAll(true);
+    const results = await Promise.all(configured.map((item) => loadProvider(item.id, {
+      selectCatalog: item.id === provider,
+    })));
+    const online = results.filter(Boolean).length;
+    setToast({
+      type: online === configured.length ? "success" : "warning",
+      title: "Diagnostic terminé",
+      message: `${online}/${configured.length} fournisseur(s) opérationnel(s).`,
+    });
+    setCheckingAll(false);
+  };
   const comparePrices = async () => {
     setComparisonLoading(true);
     try {
@@ -1396,6 +1521,27 @@ function ApiProductsPage({ data, onAction, setToast }) {
           </div>
         }
       />
+      <section className="provider-health-center">
+        <header>
+          <div><span className="comparison-kicker"><Cloud size={14} /> Centre de santé API</span><h2>État des fournisseurs externes</h2><p>Testez les connexions uniquement à la demande pour éviter les appels inutiles.</p></div>
+          <ActionButton secondary icon={RefreshCw} onClick={testAllProviders} disabled={checkingAll || !providerMeta.length}>{checkingAll ? "Diagnostic…" : "Tester toutes les API"}</ActionButton>
+        </header>
+        <div className="provider-health-grid">
+          {providerMeta.map((item) => {
+            const health = providerHealth[item.id] || {};
+            const state = !item.configured ? "unconfigured" : health.status || "unknown";
+            return <article className={`provider-health-card ${state} ${provider === item.id ? "selected" : ""}`} key={item.id}>
+              <button className="provider-health-main" onClick={() => setProvider(item.id)}>
+                <div className="provider-health-title"><span className="provider-health-icon"><Cloud size={17} /></span><div><strong>{item.name}</strong><small>{item.configured ? "Clé configurée" : "Non configurée"}</small></div><i /></div>
+                <div className="provider-health-stats"><span><small>Solde</small><b>{health.balance == null ? "—" : money(health.balance, health.currency)}</b></span><span><small>Produits</small><b>{health.products ?? "—"}</b></span><span><small>En stock</small><b>{health.inStock ?? "—"}</b></span></div>
+                <div className="provider-health-foot"><span>{state === "online" ? `Opérationnelle · ${health.latency} ms` : state === "offline" ? "Connexion échouée" : state === "checking" ? "Test en cours…" : state === "unconfigured" ? "Ajoutez la clé dans Railway" : "Pas encore testée"}</span>{health.checkedAt && <small>{date(health.checkedAt)}</small>}</div>
+                {health.error && <p title={health.error}>{health.error}</p>}
+              </button>
+              <button className="provider-test-button" disabled={!item.configured || state === "checking"} onClick={() => loadProvider(item.id, { showToast: true, selectCatalog: item.id === provider })}>{state === "checking" ? <RefreshCw className="spin" size={13} /> : <ShieldCheck size={13} />}Tester</button>
+            </article>;
+          })}
+        </div>
+      </section>
       {comparison && (
         <section className="ai-comparison-panel">
           <header>
@@ -2170,6 +2316,7 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
   const [reason, setReason] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loadingOrder, setLoadingOrder] = useState(null);
+  const [customerTab, setCustomerTab] = useState("orders");
   const openOrder = async (order) => {
     setLoadingOrder(order.id);
     try {
@@ -2193,6 +2340,7 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
         onClose={onClose}
         wide
       >
+      <div className="customer-profile-head"><span>{(customer.first_name || customer.username || "C").slice(0, 1).toUpperCase()}</span><div><strong>{[customer.first_name, customer.last_name].filter(Boolean).join(" ") || (customer.username ? `@${customer.username}` : `Client ${customer.telegram_id}`)}</strong><small>{customer.username ? `@${customer.username} · ` : ""}{customer.banned ? "Compte bloqué" : "Compte actif"}</small></div><i className={customer.banned ? "blocked" : "active"}>{customer.banned ? "Bloqué" : "Actif"}</i></div>
       <div className="detail-grid">
         <div>
           <span>Telegram ID</span>
@@ -2210,6 +2358,10 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
           <span>Total dépensé</span>
           <strong>{money(customer.total_spent, currency)}</strong>
         </div>
+        <div><span>Affiliés</span><strong>{customer.referrals || 0}</strong></div>
+        <div><span>Tickets</span><strong>{customer.tickets?.length || 0}</strong></div>
+        <div><span>Langue</span><strong>{String(customer.lang || "fr").toUpperCase()}</strong></div>
+        <div><span>Inscription</span><strong>{date(customer.created_at)}</strong></div>
       </div>
       <div className="form-grid">
         <Field label="Ajustement du solde">
@@ -2257,7 +2409,8 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
           {customer.banned ? "Débloquer" : "Bloquer"}
         </ActionButton>
       </div>
-      <section className="customer-orders">
+      <div className="customer-detail-tabs"><button className={customerTab === "orders" ? "active" : ""} onClick={() => setCustomerTab("orders")}><ShoppingBag size={14} />Commandes <span>{customer.orders?.length || 0}</span></button><button className={customerTab === "tickets" ? "active" : ""} onClick={() => setCustomerTab("tickets")}><Headphones size={14} />Support <span>{customer.tickets?.length || 0}</span></button></div>
+      {customerTab === "orders" ? <section className="customer-orders">
         <header>
           <div>
             <span className="eyebrow">Historique complet</span>
@@ -2289,7 +2442,7 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
           <Empty icon={ShoppingBag} title="Aucune commande" text="Ce client n’a encore passé aucune commande." />
         )}
         {loadingOrder && <div className="table-loading">Chargement de la commande #{loadingOrder}…</div>}
-      </section>
+      </section> : <section className="customer-orders customer-tickets"><header><div><span className="eyebrow">Support client</span><h4>Tickets récents</h4></div><strong>{customer.tickets?.length || 0}</strong></header>{customer.tickets?.length ? <div className="customer-ticket-list">{customer.tickets.map((ticket) => <article key={ticket.id}><div><strong>Ticket #{ticket.id}</strong><span className={`status ${ticket.status}`}>{STATUS_LABELS[ticket.status] || ticket.status}</span></div><p>{ticket.subject || ticket.category || ticket.message || "Demande de support"}</p><small>Mis à jour {date(ticket.updated_at || ticket.created_at)}</small></article>)}</div> : <Empty icon={Headphones} title="Aucun ticket" text="Ce client n’a aucune demande de support." />}</section>}
       </Modal>
       {selectedOrder && (
         <OrderEditor
@@ -3249,9 +3402,10 @@ function InteractionsPage({ data }) {
   );
 }
 
-function ActivityPage({ data }) {
+function ActivityPage({ data, onAction }) {
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("all");
+  const [undoTarget, setUndoTarget] = useState(null);
   const events = (data.audits || []).filter(
     (item) => {
       const searchable = {
@@ -3288,6 +3442,7 @@ function ActivityPage({ data }) {
                 <th>Action</th>
                 <th>Acteur</th>
                 <th>Détails</th>
+                <th>Restauration</th>
               </tr>
             </thead>
             <tbody>
@@ -3305,6 +3460,7 @@ function ActivityPage({ data }) {
                         : JSON.stringify(item.details || {})}
                     </code>
                   </td>
+                  <td>{item.details?.undone ? <span className="status delivered">Restauré</span> : item.id && item.details?.reversible ? <button className="audit-undo-button" onClick={() => setUndoTarget(item)}><RefreshCw size={13} />Annuler</button> : <span className="audit-not-reversible">—</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -3312,6 +3468,7 @@ function ActivityPage({ data }) {
         </div>
         {!events.length && <Empty icon={Activity} title="Aucun événement" />}
       </section>
+      {undoTarget && <Modal title="Restaurer cette modification ?" onClose={() => setUndoTarget(null)}><div className="undo-confirm"><span><RefreshCw size={27} /></span><strong>{undoTarget.action}</strong><p>La restauration fonctionne pendant 24 heures. Les éléments modifiés depuis cet événement seront ignorés afin de ne pas écraser un changement plus récent.</p><code>Événement #{undoTarget.id}</code><div><ActionButton secondary onClick={() => setUndoTarget(null)}>Conserver</ActionButton><ActionButton icon={RefreshCw} onClick={async () => { await onAction({ action: "undo_audit_event", event_id: undoTarget.id }); setUndoTarget(null); }}>Restaurer</ActionButton></div></div></Modal>}
     </>
   );
 }
@@ -3640,7 +3797,7 @@ function AiManagerPage({ data, onAction, setToast }) {
       <section className="ai-manager-layout">
         <aside className="ai-manager-sidebar">
           <div className="ai-manager-brand"><Sparkles size={21} /><div><strong>Assistant complet</strong><span>Contexte actualisé à chaque message</span></div></div>
-          <label className="ai-model-select"><span>Modèle actif</span><select value={model} onChange={(event) => selectModel(event.target.value)}>{config.models?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label className="ai-model-select"><span>Modèle actif</span><select value={model} onChange={(event) => selectModel(event.target.value)}>{config.models?.map((item) => <option key={item} value={item}>{item}</option>)}</select>{config.endpoint_host && <small>API : {config.endpoint_host}</small>}</label>
           <div className="ai-quick-list"><span>Questions rapides</span>{AI_QUICK_PROMPTS.map(([label, prompt]) => <button key={label} disabled={sending || !config.configured} onClick={() => send(prompt)}><Sparkles size={13} />{label}</button>)}</div>
           <div className="ai-safety-note"><ShieldCheck size={17} /><div><strong>Contrôle humain</strong><span>L’IA propose. Vous confirmez chaque action avant exécution.</span></div></div>
         </aside>

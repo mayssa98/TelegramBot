@@ -1,8 +1,11 @@
 import json
+from io import BytesIO
+from urllib.error import HTTPError
 
 import pytest
 
 from app.domain import admin_ai_service as service
+from config import normalized_http_url
 
 
 def dashboard_data():
@@ -67,6 +70,24 @@ def test_chat_rejects_model_outside_configured_list(monkeypatch):
 
     with pytest.raises(service.AdminAIError, match="Modèle non autorisé"):
         service.chat([{"role": "user", "content": "Résumé"}], "other-model", dashboard_data())
+
+
+def test_markdown_url_copied_from_chat_is_repaired():
+    assert normalized_http_url(
+        "[https://co.agentrouter.org/v1/chat/completions](https://agentrouter.org/v1/chat/completions)"
+    ) == "https://agentrouter.org/v1/chat/completions"
+
+
+def test_agentrouter_unauthorized_client_error_is_explicit():
+    body = BytesIO(json.dumps({
+        "error": {"message": "unauthorized client detected, contact support"}
+    }).encode())
+    error = HTTPError("https://agentrouter.org", 401, "Unauthorized", {}, body)
+
+    message = service._provider_error_message(error)
+
+    assert "unauthorized client" in message
+    assert "Railway" in message
 
 
 def test_chat_returns_sanitized_suggestions(monkeypatch):

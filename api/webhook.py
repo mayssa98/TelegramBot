@@ -173,6 +173,71 @@ def dashboard_write_token() -> str:
     ).hexdigest()
 
 
+def undo_audit_event(event_id: int) -> dict:
+    """Restore a recent reversible admin event only when its target is unchanged."""
+    conn = db.get_conn()
+    event = conn.audit_events.find_one({"id": int(event_id)})
+    if not event:
+        raise ValueError("Événement introuvable")
+    details = event.get("details") if isinstance(event.get("details"), dict) else {}
+    if not details.get("reversible") or details.get("undone"):
+        raise ValueError("Cet événement ne peut pas être restauré")
+    created_at = event.get("created_at")
+    if isinstance(created_at, datetime):
+        normalized_created_at = created_at.replace(tzinfo=UTC) if created_at.tzinfo is None else created_at.astimezone(UTC)
+    else:
+        normalized_created_at = None
+    if normalized_created_at and (datetime.now(UTC) - normalized_created_at).total_seconds() > 86_400:
+        raise ValueError("Le délai de restauration de 24 heures est dépassé")
+
+    action = str(event.get("action") or "")
+    collection = conn.services if action == "service.toggled" else conn.offers
+    if action not in {"service.toggled", "offer.toggled", "offer.bulk_toggled", "offer.bulk_updated"}:
+        raise ValueError("Type d’événement non restaurable")
+    if isinstance(details.get("changes"), list):
+        changes = details["changes"]
+    else:
+        entity_id = details.get("service_id") if action == "service.toggled" else details.get("offer_id")
+        changes = [{"id": entity_id, "before": details.get("before") or {}, "after": details.get("after") or {}}]
+
+    restored = 0
+    skipped = 0
+    for change in changes[:100]:
+        entity_id = change.get("id")
+        before = change.get("before") if isinstance(change.get("before"), dict) else {}
+        after = change.get("after") if isinstance(change.get("after"), dict) else {}
+        current = collection.find_one({"id": entity_id})
+        if not current or any(current.get(key) != value for key, value in after.items()):
+            skipped += 1
+            continue
+        set_values = {key: value for key, value in before.items() if value is not None}
+        unset_values = {key: "" for key, value in before.items() if value is None}
+        update = {}
+        if set_values:
+            update["$set"] = set_values
+        if unset_values:
+            update["$unset"] = unset_values
+        if update:
+            collection.update_one({"id": entity_id}, update)
+        restored += 1
+
+    conn.audit_events.update_one({"id": int(event_id)}, {"$set": {
+        "details.undone": True,
+        "details.undone_at": datetime.now(UTC),
+        "details.undo_restored": restored,
+        "details.undo_skipped": skipped,
+    }})
+    db.audit_event("audit.undo", actor_id=ADMIN_ID, details={
+        "event_id": int(event_id), "source_action": action, "restored": restored, "skipped": skipped,
+    })
+    return {
+        "ok": True,
+        "restored": restored,
+        "skipped": skipped,
+        "message": f"{restored} élément(s) restauré(s), {skipped} ignoré(s).",
+    }
+
+
 def public_site_html() -> str:
     bot_username = os.environ.get("HP_BOT_USERNAME", "blackmarketa_bot").strip().lstrip("@")
     shop_name = os.environ.get("HP_SHOP_NAME", "BlackMarket").strip() or "BlackMarket"
@@ -680,6 +745,16 @@ class handler(BaseHTTPRequestHandler):
             self._reply(200 if result.get("ok") else 503, result)
             return
 
+        elif path == "/admin/api/reseller-providers":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, {
+                "ok": True,
+                "providers": reseller_service.provider_summaries(),
+            })
+            return
+
         elif path == "/admin/api/reseller-products":
             if not self._dashboard_authorized():
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
@@ -1112,8 +1187,15 @@ class handler(BaseHTTPRequestHandler):
             elif action == "toggle_service":
                 sid = int(form["service_id"])
                 service = db.get_service(sid)
-                db.update_service(sid, active=0 if service["active"] else 1)
-                db.audit_event("service.toggled", details={"service_id": sid, "active": not service["active"]})
+                next_active = 0 if service["active"] else 1
+                db.update_service(sid, active=next_active)
+                db.audit_event("service.toggled", details={
+                    "service_id": sid,
+                    "active": bool(next_active),
+                    "reversible": True,
+                    "before": {"active": int(service["active"])},
+                    "after": {"active": next_active},
+                })
 
             elif action == "archive_service":
                 sid = int(form["service_id"])
@@ -1278,8 +1360,123 @@ class handler(BaseHTTPRequestHandler):
             elif action == "toggle_offer":
                 oid = int(form["offer_id"])
                 offer = db.get_offer(oid)
-                db.update_offer(oid, active=0 if offer["active"] else 1)
-                db.audit_event("offer.toggled", details={"offer_id": oid, "active": not offer["active"]})
+                next_active = 0 if offer["active"] else 1
+                db.update_offer(oid, active=next_active)
+                db.audit_event("offer.toggled", details={
+                    "offer_id": oid,
+                    "active": bool(next_active),
+                    "reversible": True,
+                    "before": {"active": int(offer["active"])},
+                    "after": {"active": next_active},
+                })
+
+            elif action == "bulk_toggle_offers":
+                offer_ids = list(dict.fromkeys(
+                    int(value) for value in form.get("offer_ids", "").split(",")
+                    if value.strip().isdigit()
+                ))
+                if not offer_ids or len(offer_ids) > 100:
+                    raise ValueError("Sélection de produits invalide")
+                active = 1 if form.get("active") == "1" else 0
+                before_rows = list(db.get_conn().offers.find(
+                    {"id": {"$in": offer_ids}, "archived": {"$ne": 1}},
+                    {"id": 1, "active": 1},
+                ))
+                result = db.get_conn().offers.update_many(
+                    {"id": {"$in": offer_ids}, "archived": {"$ne": 1}},
+                    {"$set": {"active": active}},
+                )
+                db.audit_event(
+                    "offer.bulk_toggled",
+                    details={
+                        "offer_ids": offer_ids,
+                        "active": bool(active),
+                        "modified": result.modified_count,
+                        "reversible": True,
+                        "changes": [{
+                            "id": row["id"],
+                            "before": {"active": int(row.get("active", 1))},
+                            "after": {"active": active},
+                        } for row in before_rows],
+                    },
+                )
+                self._reply(200, {
+                    "ok": True,
+                    "modified": result.modified_count,
+                    "message": f"{result.modified_count} produit(s) mis à jour.",
+                })
+                return
+
+            elif action == "bulk_update_offers":
+                offer_ids = list(dict.fromkeys(
+                    int(value) for value in form.get("offer_ids", "").split(",")
+                    if value.strip().isdigit()
+                ))
+                if not offer_ids or len(offer_ids) > 100:
+                    raise ValueError("Sélection de produits invalide")
+                operation = form.get("operation", "")
+                rows = list(db.get_conn().offers.find({
+                    "id": {"$in": offer_ids}, "archived": {"$ne": 1},
+                }))
+                changes = []
+                if operation == "price_percent":
+                    percent = float(form.get("value", "0").replace(",", "."))
+                    if percent < -90 or percent > 500 or percent == 0:
+                        raise ValueError("Pourcentage invalide (-90 à 500, hors zéro)")
+                    factor = 1 + percent / 100
+                    for row in rows:
+                        before = {
+                            "price": row.get("price"),
+                            "tn_price_millimes": row.get("tn_price_millimes"),
+                        }
+                        after = {
+                            "price": round(float(row.get("price") or 0) * factor, 4),
+                            "tn_price_millimes": (
+                                max(0, round(int(row["tn_price_millimes"]) * factor))
+                                if row.get("tn_price_millimes") is not None else None
+                            ),
+                        }
+                        update = {"price": after["price"]}
+                        if after["tn_price_millimes"] is not None:
+                            update["tn_price_millimes"] = after["tn_price_millimes"]
+                        db.get_conn().offers.update_one({"id": row["id"]}, {"$set": update})
+                        changes.append({"id": row["id"], "before": before, "after": after})
+                elif operation == "move_service":
+                    service_id = int(form.get("value", "0"))
+                    service = db.get_conn().services.find_one({"id": service_id, "archived": {"$ne": 1}})
+                    if not service:
+                        raise ValueError("Service de destination introuvable")
+                    for row in rows:
+                        before = {"service_id": row.get("service_id")}
+                        after = {"service_id": service_id}
+                        db.get_conn().offers.update_one({"id": row["id"]}, {"$set": after})
+                        changes.append({"id": row["id"], "before": before, "after": after})
+                elif operation == "archive":
+                    archived_at = int(time.time())
+                    for row in rows:
+                        before = {
+                            "active": row.get("active", 1),
+                            "archived": row.get("archived"),
+                            "archived_at": row.get("archived_at"),
+                        }
+                        after = {"active": 0, "archived": 1, "archived_at": archived_at}
+                        db.get_conn().offers.update_one({"id": row["id"]}, {"$set": after})
+                        changes.append({"id": row["id"], "before": before, "after": after})
+                else:
+                    raise ValueError("Action groupée inconnue")
+                db.audit_event("offer.bulk_updated", details={
+                    "operation": operation,
+                    "offer_ids": offer_ids,
+                    "modified": len(changes),
+                    "reversible": True,
+                    "changes": changes,
+                })
+                self._reply(200, {
+                    "ok": True,
+                    "modified": len(changes),
+                    "message": f"{len(changes)} produit(s) mis à jour.",
+                })
+                return
 
             elif action == "archive_offer":
                 oid = int(form["offer_id"])
@@ -1632,6 +1829,10 @@ class handler(BaseHTTPRequestHandler):
                     details={"connector_id": connector_id, "status": result["status"], "duration_ms": result["duration_ms"]},
                 )
                 self._reply(200 if result["ok"] else 502, result)
+                return
+
+            elif action == "undo_audit_event":
+                self._reply(200, undo_audit_event(int(form["event_id"])))
                 return
 
             elif action == "repair_telegram_webhook":

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminPage from "./AdminPages";
 import {
   Activity,
@@ -17,12 +17,14 @@ import {
   LayoutDashboard,
   Menu,
   MessageSquareText,
+  Moon,
   PackageSearch,
   RefreshCw,
   Search,
   ShieldCheck,
   Settings,
   ShoppingBag,
+  Sun,
   Users,
   Wrench,
   X,
@@ -136,7 +138,7 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspac
   );
 }
 
-function Header({ activePage, alertCount, busyAction, isRefreshing, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance, workspace }) {
+function Header({ activePage, alertCount, busyAction, density, isRefreshing, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance, onToggleDensity, onToggleTheme, theme, workspace }) {
   const navItems = workspace === "site" ? SITE_NAV_ITEMS : BOT_NAV_ITEMS;
   const current = navItems.find((item) => item.id === activePage) || navItems[0];
   return (
@@ -157,6 +159,8 @@ function Header({ activePage, alertCount, busyAction, isRefreshing, onMenu, onNo
         {workspace === "bot" && <button className="header-action" onClick={onTestBinance} disabled={Boolean(busyAction)}>
           <ShieldCheck size={16} className={busyAction === "binance" ? "spin" : ""} /><span>Tester Binance</span>
         </button>}
+        <button className={`icon-button density-button ${density === "compact" ? "active" : ""}`} onClick={onToggleDensity} aria-label="Changer la densité" title={density === "compact" ? "Affichage confortable" : "Affichage compact"}><Database size={18} /></button>
+        <button className="icon-button theme-button" onClick={onToggleTheme} aria-label="Changer le thème" title={theme === "dark" ? "Activer le thème clair" : "Activer le thème sombre"}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button>
         <button className="icon-button" onClick={onRefresh} aria-label="Actualiser" title="Actualiser les données">
           <RefreshCw size={19} className={isRefreshing ? "spin" : ""} />
         </button>
@@ -298,11 +302,45 @@ function ServicePanel({ services = [], currency, onSelect }) {
 function Overview({ data, onNavigate, onOpenBot }) {
   const summary = data.summary || {};
   const currency = data.currency || "USDT";
+  const defaultWidgets = ["revenue", "alerts", "orders", "services"];
+  const widgetLabels = { revenue: "Chiffre d’affaires", alerts: "Alertes actives", orders: "Commandes récentes", services: "Services performants" };
+  const readStoredArray = (key, fallback) => {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(key) || "null");
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch { return fallback; }
+  };
+  const [widgetOrder, setWidgetOrder] = useState(() => {
+    const stored = readStoredArray("admin-dashboard-order", defaultWidgets);
+    return [...stored.filter((item) => defaultWidgets.includes(item)), ...defaultWidgets.filter((item) => !stored.includes(item))];
+  });
+  const [hiddenWidgets, setHiddenWidgets] = useState(() => readStoredArray("admin-dashboard-hidden", []));
+  const [customizing, setCustomizing] = useState(false);
+  const saveOrder = (next) => { setWidgetOrder(next); window.localStorage.setItem("admin-dashboard-order", JSON.stringify(next)); };
+  const moveWidget = (id, direction) => {
+    const index = widgetOrder.indexOf(id);
+    const target = index + direction;
+    if (target < 0 || target >= widgetOrder.length) return;
+    const next = [...widgetOrder];
+    [next[index], next[target]] = [next[target], next[index]];
+    saveOrder(next);
+  };
+  const toggleWidget = (id) => {
+    const next = hiddenWidgets.includes(id) ? hiddenWidgets.filter((item) => item !== id) : [...hiddenWidgets, id];
+    setHiddenWidgets(next);
+    window.localStorage.setItem("admin-dashboard-hidden", JSON.stringify(next));
+  };
+  const widgets = {
+    revenue: <RevenueChart key="revenue" data={summary} currency={currency} />,
+    alerts: <AlertsPanel key="alerts" alerts={data.alerts} onSelect={(alert) => onNavigate(alert.type?.includes("stock") ? "inventory" : alert.type?.includes("ticket") ? "support" : "orders")} />,
+    orders: <RecentOrders key="orders" orders={data.orders} currency={currency} onOpenLegacy={() => onNavigate("orders")} onSelectOrder={() => onNavigate("orders")} />,
+    services: <ServicePanel key="services" services={data.services} currency={currency} onSelect={() => onNavigate("catalog")} />,
+  };
   return (
     <>
       <div className="welcome-row">
         <div><span className="eyebrow">Centre de contrôle</span><h2>Bonjour, Admin</h2><p>Voici ce qui se passe dans votre boutique aujourd’hui.</p></div>
-        <button className="primary-button" onClick={onOpenBot}>Ouvrir le bot <ChevronRight size={17} /></button>
+        <div className="welcome-actions"><button className="secondary-button" onClick={() => setCustomizing(true)}><Settings size={16} />Personnaliser</button><button className="primary-button" onClick={onOpenBot}>Ouvrir le bot <ChevronRight size={17} /></button></div>
       </div>
 
       <div className="stats-grid">
@@ -312,12 +350,10 @@ function Overview({ data, onNavigate, onOpenBot }) {
         <StatCard label="Stock disponible" value={summary.available_inventory || 0} detail={`${summary.low_stock_offers || 0} offre(s) faible(s)`} icon={Database} onClick={() => onNavigate("inventory")} tone="amber" />
       </div>
 
-      <div className="dashboard-grid">
-        <RevenueChart data={summary} currency={currency} />
-        <AlertsPanel alerts={data.alerts} onSelect={(alert) => onNavigate(alert.type?.includes("stock") ? "inventory" : alert.type?.includes("ticket") ? "support" : "orders")} />
-        <RecentOrders orders={data.orders} currency={currency} onOpenLegacy={() => onNavigate("orders")} onSelectOrder={() => onNavigate("orders")} />
-        <ServicePanel services={data.services} currency={currency} onSelect={() => onNavigate("catalog")} />
+      <div className="dashboard-grid custom-layout">
+        {widgetOrder.filter((id) => !hiddenWidgets.includes(id)).map((id) => widgets[id])}
       </div>
+      {customizing && <div className="dialog-backdrop" onMouseDown={() => setCustomizing(false)}><section className="dashboard-customizer" onMouseDown={(event) => event.stopPropagation()}><header><div><span className="eyebrow">Mise en page</span><h3>Personnaliser le dashboard</h3></div><button className="icon-button" onClick={() => setCustomizing(false)}><X size={17} /></button></header><div className="dashboard-widget-list">{widgetOrder.map((id, index) => <article className={hiddenWidgets.includes(id) ? "hidden" : ""} key={id}><label><input type="checkbox" checked={!hiddenWidgets.includes(id)} onChange={() => toggleWidget(id)} /><span>{widgetLabels[id]}</span></label><div><button disabled={index === 0} onClick={() => moveWidget(id, -1)}>↑</button><button disabled={index === widgetOrder.length - 1} onClick={() => moveWidget(id, 1)}>↓</button></div></article>)}</div><footer><button onClick={() => { saveOrder(defaultWidgets); setHiddenWidgets([]); window.localStorage.removeItem("admin-dashboard-hidden"); }}>Réinitialiser</button><button className="primary-button" onClick={() => setCustomizing(false)}>Terminer</button></footer></section></div>}
     </>
   );
 }
@@ -358,14 +394,27 @@ function SearchDialog({ data, onClose, onNavigate }) {
 }
 
 function NotificationsDrawer({ alerts = [], onClose, onNavigate }) {
+  const [filter, setFilter] = useState("all");
+  const criticalCount = alerts.filter((alert) => alert.severity === "error").length;
+  const warningCount = alerts.length - criticalCount;
+  const visible = [...alerts]
+    .filter((alert) => filter === "all" || (filter === "critical" ? alert.severity === "error" : alert.severity !== "error"))
+    .sort((a, b) => (a.severity === "error" ? 0 : 1) - (b.severity === "error" ? 0 : 1));
+  const destination = (alert) => alert.type?.includes("stock")
+    ? "inventory"
+    : alert.type?.includes("ticket") ? "support"
+      : alert.type?.includes("api") || alert.type?.includes("provider") ? "api-products"
+        : alert.type?.includes("error") ? "activity" : "orders";
   return (
     <div className="drawer-backdrop" onMouseDown={onClose}>
       <aside className="notifications-drawer" onMouseDown={(event) => event.stopPropagation()}>
         <header><div><span className="eyebrow">Centre d’alertes</span><h2>Notifications</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></header>
+        <div className="alert-summary"><div className="critical"><strong>{criticalCount}</strong><span>Critiques</span></div><div><strong>{warningCount}</strong><span>Attention</span></div><div><strong>{alerts.length}</strong><span>Total</span></div></div>
+        <div className="alert-filters"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Toutes <span>{alerts.length}</span></button><button className={filter === "critical" ? "active" : ""} onClick={() => setFilter("critical")}>Critiques <span>{criticalCount}</span></button><button className={filter === "warning" ? "active" : ""} onClick={() => setFilter("warning")}>Attention <span>{warningCount}</span></button></div>
         <div className="drawer-alerts">
-          {alerts.length === 0 ? <div className="search-empty"><strong>Aucune alerte</strong><span>Votre boutique fonctionne normalement.</span></div> : alerts.map((alert, index) => (
-            <button key={`${alert.type}-${index}`} onClick={() => { onNavigate(alert.type?.includes("stock") ? "inventory" : alert.type?.includes("ticket") ? "support" : "orders"); onClose(); }} className={alert.severity || "warning"}>
-              <span><AlertTriangle size={17} /></span><div><strong>{alert.severity === "error" ? "Action requise" : "Attention"}</strong><small>{alert.message}</small></div><ChevronRight size={16} />
+          {visible.length === 0 ? <div className="search-empty"><strong>Aucune alerte</strong><span>{alerts.length ? "Aucune alerte dans ce filtre." : "Votre boutique fonctionne normalement."}</span></div> : visible.map((alert, index) => (
+            <button key={`${alert.type}-${index}`} onClick={() => { onNavigate(destination(alert)); onClose(); }} className={alert.severity || "warning"}>
+              <span><AlertTriangle size={17} /></span><div><strong>{alert.severity === "error" ? "Action requise" : "À surveiller"}</strong><small>{alert.message}</small><em>Ouvrir la section concernée</em></div><ChevronRight size={16} />
             </button>
           ))}
         </div>
@@ -408,24 +457,73 @@ export default function App() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [busyAction, setBusyAction] = useState("");
   const [toast, setToast] = useState(null);
-  const [actionVersion, setActionVersion] = useState(0);
+  const [pendingActionCount, setPendingActionCount] = useState(0);
+  const [density, setDensity] = useState(window.localStorage.getItem("admin-density") === "compact" ? "compact" : "comfortable");
+  const [theme, setTheme] = useState(window.localStorage.getItem("admin-theme") === "light" ? "light" : "dark");
+  const dataRequestRef = useRef(null);
+  const lastSyncRef = useRef(0);
+  const pendingActionsRef = useRef(new Set());
+  const syncChannelRef = useRef(null);
 
-  const loadData = useCallback(async (background = false) => {
-    background ? setRefreshing(true) : setLoading(true);
-    setError("");
+  const loadData = useCallback(async (background = false, forceFresh = false) => {
+    if (dataRequestRef.current) {
+      await dataRequestRef.current;
+      if (!forceFresh) return;
+    }
+    const request = (async () => {
+      background ? setRefreshing(true) : setLoading(true);
+      if (!background) setError("");
+      try {
+        const response = await fetch("/admin/api/data", { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) throw new Error(response.status === 401 ? "Authentification administrateur requise." : `Erreur serveur (${response.status}).`);
+        setData(await response.json());
+        lastSyncRef.current = Date.now();
+        if (background) window.dispatchEvent(new Event("admin:data-synced"));
+      } catch (requestError) {
+        if (!background) setError(requestError.message || "Une erreur inattendue est survenue.");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    })();
+    dataRequestRef.current = request;
     try {
-      const response = await fetch("/admin/api/data", { credentials: "same-origin", cache: "no-store" });
-      if (!response.ok) throw new Error(response.status === 401 ? "Authentification administrateur requise." : `Erreur serveur (${response.status}).`);
-      setData(await response.json());
-    } catch (requestError) {
-      setError(requestError.message || "Une erreur inattendue est survenue.");
+      await request;
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (dataRequestRef.current === request) dataRequestRef.current = null;
     }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    const refreshWhenUseful = () => {
+      if (document.visibilityState === "visible" && navigator.onLine && Date.now() - lastSyncRef.current > 15_000) loadData(true);
+    };
+    const timer = window.setInterval(refreshWhenUseful, 30_000);
+    window.addEventListener("focus", refreshWhenUseful);
+    window.addEventListener("online", refreshWhenUseful);
+    document.addEventListener("visibilitychange", refreshWhenUseful);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshWhenUseful);
+      window.removeEventListener("online", refreshWhenUseful);
+      document.removeEventListener("visibilitychange", refreshWhenUseful);
+    };
+  }, [loadData]);
+  useEffect(() => {
+    if (!("BroadcastChannel" in window)) return undefined;
+    const channel = new BroadcastChannel("blackmarket-admin-sync");
+    syncChannelRef.current = channel;
+    channel.onmessage = (event) => {
+      if (event.data?.type === "data-changed") loadData(true, true);
+    };
+    return () => {
+      syncChannelRef.current = null;
+      channel.close();
+    };
+  }, [loadData]);
+  useEffect(() => { document.documentElement.dataset.adminDensity = density; }, [density]);
+  useEffect(() => { document.documentElement.dataset.adminTheme = theme; }, [theme]);
   useEffect(() => {
     const openSearch = (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -461,6 +559,10 @@ export default function App() {
   };
 
   const adminAction = async (params) => {
+    const actionSignature = JSON.stringify(Object.entries(params).sort(([left], [right]) => left.localeCompare(right)));
+    if (pendingActionsRef.current.has(actionSignature)) return null;
+    pendingActionsRef.current.add(actionSignature);
+    setPendingActionCount(pendingActionsRef.current.size);
     try {
       const response = await fetch("/admin", {
         method: "POST",
@@ -474,12 +576,15 @@ export default function App() {
       const payload = await response.json();
       if (!response.ok || payload.ok === false) throw new Error(payload.message || payload.error || "Action refusée.");
       setToast({ title: "Action enregistrée", message: payload.message || "Les modifications ont été appliquées." });
-      await loadData(true);
-      setActionVersion((value) => value + 1);
+      await loadData(true, true);
+      syncChannelRef.current?.postMessage({ type: "data-changed", at: Date.now() });
       return payload;
     } catch (actionError) {
       setToast({ type: "error", title: "Action impossible", message: actionError.message });
       return null;
+    } finally {
+      pendingActionsRef.current.delete(actionSignature);
+      setPendingActionCount(pendingActionsRef.current.size);
     }
   };
 
@@ -515,12 +620,12 @@ export default function App() {
   const alertCount = useMemo(() => data?.alerts?.length || 0, [data]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${refreshing || pendingActionCount ? "is-synchronizing" : ""}`} aria-busy={refreshing || pendingActionCount > 0}>
       <Sidebar activePage={activePage} data={data} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={navigate} onWorkspaceChange={switchWorkspace} workspace={workspace} />
       <div className="main-shell">
-        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} isRefreshing={refreshing} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} workspace={workspace} />
+        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} density={density} isRefreshing={refreshing || pendingActionCount > 0} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} onToggleDensity={() => setDensity((current) => { const next = current === "compact" ? "comfortable" : "compact"; window.localStorage.setItem("admin-density", next); return next; })} onToggleTheme={() => setTheme((current) => { const next = current === "dark" ? "light" : "dark"; window.localStorage.setItem("admin-theme", next); return next; })} theme={theme} workspace={workspace} />
         <main className="content">
-          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={`${activePage}-${actionVersion}`} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} onNavigate={navigate} setToast={setToast} workspace={workspace} />}
+          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} onNavigate={navigate} setToast={setToast} workspace={workspace} />}
         </main>
       </div>
       {searchOpen && data && <SearchDialog data={data} onClose={() => setSearchOpen(false)} onNavigate={navigate} />}

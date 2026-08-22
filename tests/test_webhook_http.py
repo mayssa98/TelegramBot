@@ -8,9 +8,11 @@ import threading
 from contextlib import contextmanager
 from http.server import HTTPServer
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import api.webhook as webhook_module
+import database as database_module
 from api.webhook import handler
 
 
@@ -69,6 +71,90 @@ def test_react_admin_requires_authentication(monkeypatch):
             assert exc.headers["WWW-Authenticate"] == 'Basic realm="TelegramBot Admin"'
         else:
             raise AssertionError("React admin dashboard was accessible without authentication")
+
+
+def test_reseller_provider_health_metadata_is_authenticated_and_safe(monkeypatch):
+    monkeypatch.setattr(webhook_module, "DASHBOARD_PASSWORD", "secret")
+    monkeypatch.setattr(
+        webhook_module.reseller_service,
+        "provider_summaries",
+        lambda: [{"id": "one", "name": "One API", "configured": True}],
+    )
+    encoded = base64.b64encode(b"admin:secret").decode()
+    request = Request(
+        "http://placeholder/admin/api/reseller-providers",
+        headers={"Authorization": f"Basic {encoded}"},
+    )
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/admin/api/reseller-providers"
+        with urlopen(request, timeout=5) as response:
+            payload = json.load(response)
+
+    assert response.status == 200
+    assert payload == {
+        "ok": True,
+        "providers": [{"id": "one", "name": "One API", "configured": True}],
+    }
+
+
+def test_bulk_price_update_is_audited_and_reversible(monkeypatch, mock_mongodb):
+    monkeypatch.setattr(webhook_module, "DASHBOARD_PASSWORD", "secret")
+    mock_mongodb.services.insert_one({"id": 1, "name": "Service", "active": 1})
+    mock_mongodb.offers.insert_many([
+        {"id": 10, "service_id": 1, "name": "One", "price": 2.0, "tn_price_millimes": 10000, "active": 1},
+        {"id": 11, "service_id": 1, "name": "Two", "price": 4.0, "active": 1},
+    ])
+    encoded = base64.b64encode(b"admin:secret").decode()
+    body = urlencode({
+        "action": "bulk_update_offers",
+        "offer_ids": "10,11",
+        "operation": "price_percent",
+        "value": "10",
+    }).encode()
+    request = Request(
+        "http://placeholder/admin",
+        data=body,
+        headers={
+            "Authorization": f"Basic {encoded}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        method="POST",
+    )
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/admin"
+        with urlopen(request, timeout=5) as response:
+            payload = json.load(response)
+
+    assert payload["modified"] == 2
+    assert database_module.get_offer(10)["price"] == 2.2
+    assert database_module.get_offer(10)["tn_price_millimes"] == 11000
+    event = mock_mongodb.audit_events.find_one({"action": "offer.bulk_updated"})
+    assert event["id"]
+    assert event["details"]["reversible"] is True
+    assert event["details"]["changes"][0]["before"]["price"] == 2.0
+
+    restored = webhook_module.undo_audit_event(event["id"])
+    assert restored["restored"] == 2
+    assert database_module.get_offer(10)["price"] == 2.0
+    assert database_module.get_offer(10)["tn_price_millimes"] == 10000
+
+
+def test_undo_skips_an_entity_changed_after_the_audited_action(mock_mongodb):
+    mock_mongodb.offers.insert_one({"id": 10, "name": "One", "price": 9.0, "active": 1})
+    event_id = database_module.audit_event("offer.bulk_updated", details={
+        "reversible": True,
+        "changes": [{"id": 10, "before": {"price": 2.0}, "after": {"price": 3.0}}],
+    })
+
+    result = webhook_module.undo_audit_event(event_id)
+
+    assert result == {
+        "ok": True,
+        "restored": 0,
+        "skipped": 1,
+        "message": "0 élément(s) restauré(s), 1 ignoré(s).",
+    }
+    assert database_module.get_offer(10)["price"] == 9.0
 
 
 def test_react_admin_serves_production_build(monkeypatch):
