@@ -335,6 +335,7 @@ def offer_admin_keyboard(offer_id):
             callback_data=f"adm_unlimited:{offer_id}",
         )],
         [InlineKeyboardButton("✏️ Modifier le nom", callback_data=f"adm_offname:{offer_id}")],
+        [InlineKeyboardButton("📂 Déplacer vers un autre service", callback_data=f"adm_offmove:{offer_id}")],
         [InlineKeyboardButton("🎨 Emoji animé", callback_data=f"adm_offemoji:{offer_id}")],
         [InlineKeyboardButton("📄 Description", callback_data=f"adm_offdesc:{offer_id}")],
         [InlineKeyboardButton("⏸ Désactiver" if off["active"] else "▶️ Activer",
@@ -342,6 +343,22 @@ def offer_admin_keyboard(offer_id):
          InlineKeyboardButton("🗑 Archiver", callback_data=f"adm_offdel:{offer_id}")],
         [InlineKeyboardButton("⬅️ Retour", callback_data=f"adm_svc:{off['service_id']}")],
     ])
+
+
+def move_offer_keyboard(offer_id):
+    offer = db.get_offer(int(offer_id))
+    current_service_id = int((offer or {}).get("service_id") or 0)
+    rows = []
+    for service in db.list_services():
+        if int(service["id"]) == current_service_id or db.is_otp_service_name(service.get("name")):
+            continue
+        service_name = service.get("name") or f"Service #{service['id']}"
+        rows.append([InlineKeyboardButton(
+            f"{service.get('emoji') or '📦'} {service_name}",
+            callback_data=f"adm_offmove_to:{offer_id}:{service['id']}",
+        )])
+    rows.append([InlineKeyboardButton("⬅️ Annuler", callback_data=f"adm_off:{offer_id}")])
+    return InlineKeyboardMarkup(rows)
 
 
 import html

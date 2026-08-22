@@ -46,10 +46,9 @@ from app.domain import (
 )
 from app.web import dashboard_api
 from bot import (
-    announce_api_flash_sale,
-    announce_channel_restock,
     build_app,
     monitor_codex_number_deadlines,
+    queue_broadcast,
 )
 from config import (
     ADMIN_ID,
@@ -219,6 +218,11 @@ def undo_audit_event(event_id: int) -> dict:
             update["$unset"] = unset_values
         if update:
             collection.update_one({"id": entity_id}, update)
+            if action != "service.toggled" and "service_id" in before:
+                conn.reseller_products.update_many(
+                    {"local_offer_id": int(entity_id)},
+                    {"$set": {"service_id": before["service_id"], "updated_at": int(time.time())}},
+                )
         restored += 1
 
     conn.audit_events.update_one({"id": int(event_id)}, {"$set": {
@@ -486,22 +490,22 @@ class handler(BaseHTTPRequestHandler):
                 return
             try:
                 result = reseller_service.detect_restock_events()
-                announced = 0
-                for event in result["events"]:
-                    announced += _run_async(
-                        announce_channel_restock(
-                            _application(),
-                            event["offer_id"],
-                            event["added"],
-                            event["stock"],
-                        )
+                queued = None
+                if result["events"]:
+                    digest_source = {"window": int(time.time() // 300), "events": result["events"]}
+                    digest_key = "restock:" + hashlib.sha256(json.dumps(digest_source, sort_keys=True).encode()).hexdigest()[:32]
+                    queued = queue_broadcast(
+                        "restock_digest", events=result["events"], dedupe_key=digest_key,
                     )
-                result["announced_messages"] = announced
+                result["queued_broadcasts"] = 1 if queued and queued["queued"] else 0
+                result["queued_recipients"] = (queued or {}).get("recipient_count", 0)
+                result["announced_messages"] = 0
                 db.set_setting("stock_cron_last_run_at", int(time.time()))
                 db.set_setting("stock_cron_last_status", "ok" if result["ok"] else "partial")
                 db.set_setting("stock_cron_last_checked", int(result["checked"]))
                 db.set_setting("stock_cron_last_events", len(result["events"]))
-                db.set_setting("stock_cron_last_announced", announced)
+                db.set_setting("stock_cron_last_announced", 0)
+                db.set_setting("stock_cron_last_queued", result["queued_broadcasts"])
                 self._reply(200 if result["ok"] else 207, result)
             except Exception as exc:
                 log.exception("Automatic reseller stock check failed")
@@ -518,19 +522,25 @@ class handler(BaseHTTPRequestHandler):
                 return
             try:
                 result = reseller_service.detect_supplier_price_changes()
-                announced = 0
                 db.set_setting("price_cron_last_run_at", int(time.time()))
-                db.set_setting("price_cron_last_status", "announcing")
+                db.set_setting("price_cron_last_status", "queueing")
                 db.set_setting("price_cron_last_checked", int(result["checked"]))
                 db.set_setting("price_cron_last_changes", len(result["changes"]))
                 db.set_setting("price_cron_last_flash_sales", len(result["flash_sales"]))
+                queued = 0
+                queued_recipients = 0
                 for event in result["flash_sales"]:
-                    announced += _run_async(
-                        announce_api_flash_sale(_application(), event)
-                    )
-                result["announced_messages"] = announced
+                    dedupe_source = {"window": int(time.time() // 300), "event": event}
+                    dedupe_key = "api-price:" + hashlib.sha256(json.dumps(dedupe_source, sort_keys=True).encode()).hexdigest()[:32]
+                    job = queue_broadcast("api_flash_sale", event=event, dedupe_key=dedupe_key)
+                    queued += int(job["queued"])
+                    queued_recipients = max(queued_recipients, job["recipient_count"])
+                result["queued_broadcasts"] = queued
+                result["queued_recipients"] = queued_recipients
+                result["announced_messages"] = 0
                 db.set_setting("price_cron_last_status", "ok" if result["ok"] else "partial")
-                db.set_setting("price_cron_last_announced", announced)
+                db.set_setting("price_cron_last_announced", 0)
+                db.set_setting("price_cron_last_queued", queued)
                 self._reply(200 if result["ok"] else 207, result)
             except Exception as exc:
                 log.exception("Automatic reseller price check failed")
@@ -1307,6 +1317,10 @@ class handler(BaseHTTPRequestHandler):
                         form["site_portrait_data"], form.get("site_portrait_type", ""),
                     )
                 oid = int(form["offer_id"])
+                previous_offer = db.get_offer(oid)
+                if not previous_offer:
+                    raise ValueError("Produit introuvable")
+                target_service_id = int(form.get("service_id") or previous_offer["service_id"])
                 name = form["name"].strip()[:120]
                 price = None if form.get("price", "") == "" else float(form["price"])
                 note = form.get("note", "")[:250]
@@ -1316,6 +1330,7 @@ class handler(BaseHTTPRequestHandler):
                 emoji_val = form.get("custom_emoji_id", form.get("emoji", "")).strip()
                 db.update_offer(
                     oid,
+                    service_id=target_service_id,
                     price=price,
                     name=name,
                     note=note,
@@ -1341,7 +1356,12 @@ class handler(BaseHTTPRequestHandler):
                 existing_offer = db.get_offer(oid)
                 if emoji_val and existing_offer and existing_offer.get("service_id"):
                     db.update_service(int(existing_offer["service_id"]), emoji=emoji_val)
-                db.audit_event("offer.updated", details={"offer_id": oid, "name": name})
+                db.audit_event("offer.updated", details={
+                    "offer_id": oid,
+                    "name": name,
+                    "previous_service_id": previous_offer.get("service_id"),
+                    "service_id": target_service_id,
+                })
                 if form.get("site_image_data"):
                     storefront_service.save_product_image(
                         oid,
@@ -1449,7 +1469,7 @@ class handler(BaseHTTPRequestHandler):
                     for row in rows:
                         before = {"service_id": row.get("service_id")}
                         after = {"service_id": service_id}
-                        db.get_conn().offers.update_one({"id": row["id"]}, {"$set": after})
+                        db.move_offer(row["id"], service_id)
                         changes.append({"id": row["id"], "before": before, "after": after})
                 elif operation == "archive":
                     archived_at = int(time.time())

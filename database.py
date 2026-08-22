@@ -4,7 +4,8 @@ import hashlib
 import os
 import re
 import time
-from datetime import UTC, datetime
+import unicodedata
+from datetime import UTC, datetime, timedelta
 
 from cryptography.fernet import Fernet
 from pymongo import ASCENDING, DESCENDING, MongoClient, ReturnDocument
@@ -19,6 +20,19 @@ SCHEMA_VERSION = 13
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
+
+
+def _normalized_service_name(value):
+    value = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", value.encode("ascii", "ignore").decode()).split())
+
+
+def _service_sort_key(service):
+    # The owner's official-subscriptions catalogue is always pinned first,
+    # independently of accents, casing, or its stored sort_order.
+    pinned_names = {"officiels subscribes", "official subscribes"}
+    pinned = 0 if _normalized_service_name(service.get("name")) in pinned_names else 1
+    return pinned, int(service.get("sort_order", 0)), int(service.get("id", 0))
 
 
 def is_otp_service_name(value):
@@ -186,6 +200,8 @@ def init_db():
     db.offers.create_index("id", unique=True)
     db.offers.create_index([("service_id", ASCENDING), ("id", ASCENDING)])
     db.offers.create_index([("supplier_provider", ASCENDING), ("supplier_product_id", ASCENDING)])
+    db.broadcast_jobs.create_index("id", unique=True)
+    db.broadcast_jobs.create_index("dedupe_key", unique=True, sparse=True)
     db.orders.create_index("id", unique=True)
     db.orders.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
     db.orders.create_index("status")
@@ -362,18 +378,17 @@ def affiliate_stats(user_id, target=10):
 
 def list_services(active_only=True):
     query = {"active": 1} if active_only else {}
-    return [_public(x) for x in get_conn().services.find(query).sort([("sort_order", ASCENDING), ("id", ASCENDING)])]
+    services = [_public(x) for x in get_conn().services.find(query)]
+    return sorted(services, key=_service_sort_key)
 
 
 def list_services_with_stock(active_only=True):
     """Return services and stock totals with two queries instead of one per service."""
     conn = get_conn()
-    services = [
-        _public(item)
-        for item in conn.services.find({"active": 1} if active_only else {}).sort(
-            [("sort_order", ASCENDING), ("id", ASCENDING)]
-        )
-    ]
+    services = sorted(
+        [_public(item) for item in conn.services.find({"active": 1} if active_only else {})],
+        key=_service_sort_key,
+    )
     totals = {
         row["_id"]: row["total"]
         for row in conn.offers.aggregate([
@@ -438,7 +453,7 @@ def list_catalog_offers():
         offer["service_custom_emoji_id"] = service.get("custom_emoji_id", "")
         offers.append(offer)
     offers.sort(key=lambda offer: (
-        int(service_by_id[offer["service_id"]].get("sort_order", 0)),
+        *_service_sort_key(service_by_id[offer["service_id"]]),
         int(offer.get("sort_order", 0)),
         int(offer["id"]),
     ))
@@ -536,6 +551,7 @@ def service_total_stock(service_id):
 
 def update_offer(
     offer_id,
+    service_id=None,
     price=None,
     stock=None,
     name=None,
@@ -568,9 +584,18 @@ def update_offer(
     site_badge_ar=None,
     site_featured=None,
 ):
+    existing = get_conn().offers.find_one({"id": offer_id}, {"service_id": 1}) or {}
+    if service_id is not None and int(service_id) != int(existing.get("service_id") or 0):
+        source_service = get_service(existing.get("service_id"))
+        target_service = get_service(int(service_id))
+        if not target_service or target_service.get("archived") == 1:
+            raise ValueError("Service de destination introuvable")
+        if (source_service and is_otp_service_name(source_service.get("name"))) or is_otp_service_name(target_service.get("name")):
+            raise ValueError("Les offres Codex number ne peuvent pas être déplacées")
     values = {
         key: value
         for key, value in {
+            "service_id": int(service_id) if service_id is not None else None,
             "price": price,
             "stock": stock,
             "name": name,
@@ -605,12 +630,31 @@ def update_offer(
         }.items()
         if value is not None
     }
-    existing = get_conn().offers.find_one({"id": offer_id}, {"service_id": 1}) or {}
-    service = get_service(existing.get("service_id")) if existing else None
+    effective_service_id = int(service_id) if service_id is not None else existing.get("service_id")
+    service = get_service(effective_service_id) if existing else None
     if service and is_otp_service_name(service.get("name")):
         values.update(_otp_offer_values())
     if values:
         get_conn().offers.update_one({"id": offer_id}, {"$set": values})
+        if service_id is not None:
+            get_conn().reseller_products.update_many(
+                {"local_offer_id": int(offer_id)},
+                {"$set": {"service_id": int(service_id), "updated_at": int(time.time())}},
+            )
+
+
+def move_offer(offer_id, service_id):
+    offer = get_offer(int(offer_id))
+    if not offer:
+        raise ValueError("Offre introuvable")
+    previous_service_id = int(offer.get("service_id") or 0)
+    update_offer(int(offer_id), service_id=int(service_id))
+    return {
+        "offer_id": int(offer_id),
+        "previous_service_id": previous_service_id,
+        "service_id": int(service_id),
+        "offer": get_offer(int(offer_id)),
+    }
 
 
 def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar=""):
@@ -1551,7 +1595,11 @@ def dashboard_data():
 
     # --- Services enrichis ---
     services_enriched = []
-    for svc in db.services.find({"archived": {"$ne": 1}}).sort([("sort_order", ASCENDING), ("id", ASCENDING)]):
+    service_rows = sorted(
+        list(db.services.find({"archived": {"$ne": 1}})),
+        key=_service_sort_key,
+    )
+    for svc in service_rows:
         svc_data = _public(svc)
         offers = list(db.offers.find({"service_id": svc["id"], "archived": {"$ne": 1}}))
         svc_data["offers"] = [_public(offer) for offer in offers]
@@ -1653,6 +1701,78 @@ def list_broadcast_users():
             },
             {"telegram_id": 1, "lang": 1},
         )
+    ]
+
+
+def create_broadcast_job(kind, payload, *, dedupe_key=""):
+    """Persist a Telegram broadcast before a background worker starts it."""
+    dedupe_key = str(dedupe_key or "").strip()[:240]
+    if dedupe_key:
+        existing = get_conn().broadcast_jobs.find_one({"dedupe_key": dedupe_key})
+        if existing:
+            return _public(existing), False
+    job = {
+        "id": _next_id("broadcast_jobs"),
+        "kind": str(kind or "")[:60],
+        "payload": dict(payload or {}),
+        "status": "queued",
+        "attempts": 0,
+        "recipient_count": get_conn().users.count_documents({
+            "telegram_id": {"$exists": True},
+            "banned": {"$ne": True},
+            "broadcast_blocked": {"$ne": True},
+        }),
+        "sent_count": 0,
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
+    }
+    if dedupe_key:
+        job["dedupe_key"] = dedupe_key
+    try:
+        get_conn().broadcast_jobs.insert_one(job)
+    except DuplicateKeyError:
+        existing = get_conn().broadcast_jobs.find_one({"dedupe_key": dedupe_key})
+        return _public(existing), False
+    return _public(job), True
+
+
+def claim_broadcast_job(job_id):
+    row = get_conn().broadcast_jobs.find_one_and_update(
+        {"id": int(job_id), "status": {"$in": ["queued", "retry"]}, "attempts": {"$lt": 3}},
+        {"$set": {"status": "running", "started_at": datetime.now(UTC), "updated_at": datetime.now(UTC)}, "$inc": {"attempts": 1}},
+        return_document=ReturnDocument.AFTER,
+    )
+    return _public(row)
+
+
+def complete_broadcast_job(job_id, sent_count):
+    get_conn().broadcast_jobs.update_one(
+        {"id": int(job_id)},
+        {"$set": {"status": "completed", "sent_count": int(sent_count), "completed_at": datetime.now(UTC), "updated_at": datetime.now(UTC), "error": ""}},
+    )
+
+
+def fail_broadcast_job(job_id, error):
+    row = get_conn().broadcast_jobs.find_one({"id": int(job_id)}, {"attempts": 1}) or {}
+    status = "retry" if int(row.get("attempts") or 0) < 3 else "failed"
+    get_conn().broadcast_jobs.update_one(
+        {"id": int(job_id)},
+        {"$set": {"status": status, "error": str(error or "")[:500], "updated_at": datetime.now(UTC)}},
+    )
+    return status
+
+
+def pending_broadcast_jobs(limit=20):
+    # A deployment can stop while a worker is sending. Make abandoned jobs
+    # eligible for retry on the next bot startup.
+    get_conn().broadcast_jobs.update_many(
+        {"status": "running", "started_at": {"$lt": datetime.now(UTC) - timedelta(minutes=10)}},
+        {"$set": {"status": "retry", "updated_at": datetime.now(UTC)}},
+    )
+    return [
+        _public(row) for row in get_conn().broadcast_jobs.find(
+            {"status": {"$in": ["queued", "retry"]}, "attempts": {"$lt": 3}},
+        ).sort("created_at", ASCENDING).limit(max(1, int(limit)))
     ]
 
 

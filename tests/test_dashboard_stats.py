@@ -40,6 +40,34 @@ def test_dashboard_services_include_offers(mock_mongodb):
     assert service["offer_count"] == 1
 
 
+def test_official_subscribes_catalog_is_always_first(mock_mongodb):
+    regular_id = db.add_service("Streaming", "🎬")
+    official_id = db.add_service("officiels subscribes", "✅")
+    db.add_offer(regular_id, "Regular", 2.0, 1)
+    official_offer = db.add_offer(official_id, "Official", 3.0, 1)
+
+    assert db.list_services()[0]["id"] == official_id
+    assert db.list_services_with_stock()[0]["id"] == official_id
+    assert db.dashboard_data()["services"][0]["id"] == official_id
+    assert db.list_catalog_offers()[0]["id"] == official_offer
+
+
+def test_offer_can_move_between_services_and_keeps_api_config_in_sync(mock_mongodb):
+    source_id = db.add_service("Source", "📦")
+    destination_id = db.add_service("Destination", "🚀")
+    offer_id = db.add_offer(source_id, "Movable", 4.0, 2)
+    mock_mongodb.reseller_products.insert_one({
+        "provider": "mailreader", "product_id": "sku-move",
+        "local_offer_id": offer_id, "service_id": source_id,
+    })
+
+    result = db.move_offer(offer_id, destination_id)
+
+    assert result["previous_service_id"] == source_id
+    assert db.get_offer(offer_id)["service_id"] == destination_id
+    assert mock_mongodb.reseller_products.find_one({"product_id": "sku-move"})["service_id"] == destination_id
+
+
 def test_archived_catalog_items_are_hidden_but_preserved(mock_mongodb):
     service_id = db.add_service("Archive me", "📦")
     offer_id = db.add_offer(service_id, "Old product", 5.0, 2)

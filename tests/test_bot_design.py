@@ -17,6 +17,7 @@ from bot import (
     announce_channel_purchase,
     announce_channel_restock,
     announce_flash_sale,
+    announce_restock_digest,
     block_maintenance_users,
     block_non_channel_members,
     broadcast_admin_message,
@@ -71,6 +72,51 @@ def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb)
         call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
         for call in calls
     )
+
+
+def test_api_restocks_are_grouped_into_one_message_per_user(mock_mongodb):
+    first_service = db.add_service("AI", "🤖")
+    second_service = db.add_service("Learning", "🎓")
+    first_offer = db.add_offer(first_service, "ChatGPT Plus", 5.0, 8)
+    second_offer = db.add_offer(second_service, "Coursera Plus", 3.0, 4)
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101, "lang": "en"},
+        {"telegram_id": 202, "lang": "fr"},
+    ])
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(announce_restock_digest(SimpleNamespace(bot=bot_client), [
+        {"offer_id": first_offer, "added": 3, "stock": 8},
+        {"offer_id": second_offer, "added": 2, "stock": 4},
+    ]))
+
+    assert sent == 2
+    assert bot_client.send_message.await_count == 2
+    for call in bot_client.send_message.await_args_list:
+        assert "ChatGPT Plus" in call.kwargs["text"]
+        assert "Coursera Plus" in call.kwargs["text"]
+        assert len(call.kwargs["reply_markup"].inline_keyboard) == 2
+
+
+def test_broadcast_jobs_are_persisted_claimed_and_completed(mock_mongodb):
+    mock_mongodb.users.insert_one({"telegram_id": 101, "lang": "en"})
+    job, created = db.create_broadcast_job(
+        "stock", {"offer_id": 7, "added": 2, "stock": 3}, dedupe_key="stock:test:3",
+    )
+
+    assert created is True
+    assert job["status"] == "queued"
+    assert job["recipient_count"] == 1
+    assert db.claim_broadcast_job(job["id"])["status"] == "running"
+    db.complete_broadcast_job(job["id"], 1)
+    saved = mock_mongodb.broadcast_jobs.find_one({"id": job["id"]})
+    assert saved["status"] == "completed"
+    assert saved["sent_count"] == 1
+    duplicate, duplicate_created = db.create_broadcast_job(
+        "stock", {"offer_id": 7}, dedupe_key="stock:test:3",
+    )
+    assert duplicate_created is False
+    assert duplicate["id"] == job["id"]
 
 
 def test_flash_sale_is_broadcast_with_buy_button(mock_mongodb):

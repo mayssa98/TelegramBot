@@ -10,10 +10,14 @@ import logging
 import os
 import re
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
-from telegram import ForceReply, InputFile, LinkPreviewOptions, Update
+from telegram import Bot, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, LinkPreviewOptions, Update
 from telegram.constants import ParseMode
+from telegram.error import NetworkError, RetryAfter, TimedOut
 from telegram.ext import (
     Application,
     ApplicationHandlerStop,
@@ -69,6 +73,12 @@ logging.basicConfig(
 log = logging.getLogger("bot")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+BROADCAST_BATCH_SIZE = max(1, min(20, int(os.environ.get("HP_BROADCAST_BATCH_SIZE", "15"))))
+BROADCAST_BATCH_DELAY = max(0.25, float(os.environ.get("HP_BROADCAST_BATCH_DELAY", "0.55")))
+_broadcast_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="telegram-broadcast")
+_submitted_broadcast_jobs: set[int] = set()
+_broadcast_jobs_lock = threading.Lock()
 
 # états utilisateurs en mémoire (clé = user_id)
 # "await_txid": order_id  |  "adm_setprice": offer_id
@@ -672,6 +682,48 @@ async def send_channel_member_welcome(send, context, user_id, lang):
     )
 
 
+def _is_blocked_broadcast_error(exc):
+    message = str(exc).lower()
+    return "blocked" in message or "chat not found" in message or "deactivated" in message
+
+
+async def _broadcast_in_batches(send_one, *, label):
+    """Send concurrently in Telegram-safe chunks, with retries for rate limits."""
+    users = [row for row in db.list_broadcast_users() if row.get("telegram_id")]
+
+    async def deliver(user):
+        user_id = int(user["telegram_id"])
+        for attempt in range(3):
+            try:
+                await send_one(user)
+                return 1
+            except RetryAfter as exc:
+                retry_after = exc.retry_after
+                delay = retry_after.total_seconds() if hasattr(retry_after, "total_seconds") else float(retry_after)
+                await asyncio.sleep(delay + 0.15)
+            except (TimedOut, NetworkError) as exc:
+                if attempt < 2:
+                    await asyncio.sleep(0.4 * (attempt + 1))
+                    continue
+                log.warning("%s failed for user %s: %s", label, user_id, exc)
+                return 0
+            except Exception as exc:
+                if _is_blocked_broadcast_error(exc):
+                    db.mark_broadcast_blocked(user_id)
+                else:
+                    log.warning("%s failed for user %s: %s", label, user_id, exc)
+                return 0
+        return 0
+
+    sent = 0
+    for offset in range(0, len(users), BROADCAST_BATCH_SIZE):
+        batch = users[offset:offset + BROADCAST_BATCH_SIZE]
+        sent += sum(await asyncio.gather(*(deliver(user) for user in batch)))
+        if offset + BROADCAST_BATCH_SIZE < len(users):
+            await asyncio.sleep(BROADCAST_BATCH_DELAY)
+    return sent
+
+
 async def announce_channel_restock(context, offer_id, added, stock):
     """Broadcast a private new-stock advert to every active bot user."""
     offer = db.get_offer(int(offer_id))
@@ -684,48 +736,27 @@ async def announce_channel_restock(context, offer_id, added, stock):
         return 0
     service = db.get_service(offer["service_id"]) or {}
     price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f}"
-    sent = 0
-    for user in db.list_broadcast_users():
-        user_id = user.get("telegram_id")
-        if not user_id:
-            continue
+    async def send_one(user):
+        user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
-        try:
-            message_key = (
-                "channel_stock_announcement"
-                if added is not None
-                else "offer_stock_announcement"
-            )
-            values = {
-                "emoji": service.get("emoji") or "📦",
-                "service": service.get("name") or SHOP_NAME,
-                "offer": offer.get("name") or f"Offer #{offer_id}",
-                "price": price,
-                "cur": CURRENCY,
-                "stock": "∞" if unlimited else int(stock),
-            }
-            if added is not None:
-                values["added"] = int(added)
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=premium_customer_text(
-                    lang,
-                    message_key,
-                    **values,
-                ),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.offer_detail_keyboard(lang, offer),
-            )
-            sent += 1
-        except Exception as exc:
-            # Telegram rejects future messages when a user blocks/deletes the bot.
-            message = str(exc).lower()
-            if "blocked" in message or "chat not found" in message or "deactivated" in message:
-                db.mark_broadcast_blocked(user_id)
-            else:
-                log.warning("New-stock broadcast failed for user %s: %s", user_id, exc)
-        await asyncio.sleep(0.04)
-    return sent
+        message_key = "channel_stock_announcement" if added is not None else "offer_stock_announcement"
+        values = {
+            "emoji": service.get("emoji") or "📦",
+            "service": service.get("name") or SHOP_NAME,
+            "offer": offer.get("name") or f"Offer #{offer_id}",
+            "price": price,
+            "cur": CURRENCY,
+            "stock": "∞" if unlimited else int(stock),
+        }
+        if added is not None:
+            values["added"] = int(added)
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=premium_customer_text(lang, message_key, **values),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.offer_detail_keyboard(lang, offer),
+        )
+    return await _broadcast_in_batches(send_one, label="New-stock broadcast")
 
 
 async def send_new_stock_broadcast(context, offer_id, added, stock):
@@ -743,37 +774,25 @@ async def announce_flash_sale(context, offer_id):
     hours, remainder = divmod(remaining_seconds, 3600)
     minutes = max(1, remainder // 60)
     remaining = f"{hours}h {minutes}m" if hours else f"{minutes}m"
-    sent = 0
-    for user in db.list_broadcast_users():
-        user_id = user.get("telegram_id")
-        if not user_id:
-            continue
+    async def send_one(user):
+        user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
-        try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=premium_customer_text(
-                    lang,
-                    "flash_sale_announcement",
-                    emoji=service.get("emoji") or "🎁",
-                    offer=offer.get("name") or f"Offer #{offer_id}",
-                    old_price=f"{float(offer['flash_sale_original_price']):.2f}",
-                    price=f"{float(offer['price']):.2f}",
-                    cur=CURRENCY,
-                    remaining=remaining,
-                ),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.offer_detail_keyboard(lang, offer),
-            )
-            sent += 1
-        except Exception as exc:
-            message = str(exc).lower()
-            if "blocked" in message or "chat not found" in message or "deactivated" in message:
-                db.mark_broadcast_blocked(user_id)
-            else:
-                log.warning("Flash-sale broadcast failed for user %s: %s", user_id, exc)
-        await asyncio.sleep(0.04)
-    return sent
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=premium_customer_text(
+                lang,
+                "flash_sale_announcement",
+                emoji=service.get("emoji") or "🎁",
+                offer=offer.get("name") or f"Offer #{offer_id}",
+                old_price=f"{float(offer['flash_sale_original_price']):.2f}",
+                price=f"{float(offer['price']):.2f}",
+                cur=CURRENCY,
+                remaining=remaining,
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.offer_detail_keyboard(lang, offer),
+        )
+    return await _broadcast_in_batches(send_one, label="Flash-sale broadcast")
 
 
 async def announce_api_flash_sale(context, event):
@@ -785,62 +804,161 @@ async def announce_api_flash_sale(context, event):
     old_price = float(event["previous_price"])
     new_price = float(event["price"])
     discount_percent = round(((old_price - new_price) / old_price) * 100) if old_price else 0
-    sent = 0
-    for user in db.list_broadcast_users():
-        user_id = user.get("telegram_id")
-        if not user_id:
-            continue
+    async def send_one(user):
+        user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
-        try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=premium_customer_text(
-                    lang,
-                    "api_flash_sale_announcement",
-                    emoji=service.get("emoji") or "🔥",
-                    service=service.get("name") or SHOP_NAME,
-                    offer=offer.get("name") or f"Offer #{offer['id']}",
-                    old_price=f"{old_price:.2f}",
-                    price=f"{new_price:.2f}",
-                    cur=CURRENCY,
-                    discount=discount_percent,
-                ),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.offer_detail_keyboard(lang, offer),
-            )
-            sent += 1
-        except Exception as exc:
-            message = str(exc).lower()
-            if "blocked" in message or "chat not found" in message or "deactivated" in message:
-                db.mark_broadcast_blocked(user_id)
-            else:
-                log.warning("API flash-sale broadcast failed for user %s: %s", user_id, exc)
-        await asyncio.sleep(0.04)
-    return sent
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=premium_customer_text(
+                lang,
+                "api_flash_sale_announcement",
+                emoji=service.get("emoji") or "🔥",
+                service=service.get("name") or SHOP_NAME,
+                offer=offer.get("name") or f"Offer #{offer['id']}",
+                old_price=f"{old_price:.2f}",
+                price=f"{new_price:.2f}",
+                cur=CURRENCY,
+                discount=discount_percent,
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.offer_detail_keyboard(lang, offer),
+        )
+    return await _broadcast_in_batches(send_one, label="API flash-sale broadcast")
 
 
 async def broadcast_admin_message(context, source_chat_id, message_id):
     """Copy an admin-authored Telegram message to every active bot user."""
-    sent = 0
-    for user in db.list_broadcast_users():
-        user_id = user.get("telegram_id")
-        if not user_id:
+    async def send_one(user):
+        await context.bot.copy_message(
+            chat_id=int(user["telegram_id"]),
+            from_chat_id=source_chat_id,
+            message_id=message_id,
+        )
+    return await _broadcast_in_batches(send_one, label="Admin announcement")
+
+
+async def announce_restock_digest(context, events):
+    """Combine multiple supplier restocks into one customer alert."""
+    products = []
+    for event in list(events or [])[:12]:
+        offer = db.get_offer(int(event.get("offer_id") or 0))
+        if not offer or not offer.get("active", 1) or not db.offer_has_stock(offer):
             continue
-        try:
-            await context.bot.copy_message(
-                chat_id=user_id,
-                from_chat_id=source_chat_id,
-                message_id=message_id,
-            )
-            sent += 1
-        except Exception as exc:
-            message = str(exc).lower()
-            if "blocked" in message or "chat not found" in message or "deactivated" in message:
-                db.mark_broadcast_blocked(user_id)
-            else:
-                log.warning("Admin announcement failed for user %s: %s", user_id, exc)
-        await asyncio.sleep(0.04)
-    return sent
+        service = db.get_service(offer.get("service_id")) or {}
+        products.append({
+            "offer": offer,
+            "service": service,
+            "added": max(0, int(event.get("added") or 0)),
+            "stock": max(0, int(event.get("stock") or 0)),
+        })
+    if not products:
+        return 0
+    if len(products) == 1:
+        item = products[0]
+        return await announce_channel_restock(
+            context, item["offer"]["id"], item["added"], item["stock"],
+        )
+
+    lines = ["🚨 <b>NEW API STOCKS JUST DROPPED</b>", ""]
+    buttons = []
+    for item in products[:8]:
+        offer = item["offer"]
+        service = item["service"]
+        price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f} {html.escape(CURRENCY)}"
+        offer_name = offer.get("name") or f"Offer #{offer['id']}"
+        lines.append(
+            f"{html.escape(str(service.get('emoji') or '📦'))} "
+            f"<b>{html.escape(str(offer_name))}</b>\n"
+            f"   +{item['added']} · stock {item['stock']} · {price}"
+        )
+        buttons.append([InlineKeyboardButton(
+            f"🛒 {str(offer.get('name') or offer['id'])[:40]}",
+            callback_data=f"buy:{offer['id']}",
+        )])
+    if len(products) > 8:
+        lines.append(f"\n➕ {len(products) - 8} autre(s) produit(s) réapprovisionné(s).")
+    lines.append("\n⚡ Secure yours before the stock runs out!")
+    text = "\n".join(lines)
+    markup = InlineKeyboardMarkup(buttons)
+
+    async def send_one(user):
+        await context.bot.send_message(
+            chat_id=int(user["telegram_id"]), text=text,
+            parse_mode=ParseMode.HTML, reply_markup=markup,
+        )
+    return await _broadcast_in_batches(send_one, label="API restock digest")
+
+
+async def _execute_broadcast_job(job):
+    from telegram.request import HTTPXRequest
+
+    request = HTTPXRequest(connect_timeout=20, read_timeout=30)
+    bot_client = Bot(token=BOT_TOKEN, request=request)
+    await bot_client.initialize()
+    try:
+        context = SimpleNamespace(bot=bot_client)
+        payload = job.get("payload") or {}
+        kind = job.get("kind")
+        if kind == "stock":
+            return await announce_channel_restock(context, payload["offer_id"], payload.get("added"), payload.get("stock"))
+        if kind == "restock_digest":
+            return await announce_restock_digest(context, payload.get("events") or [])
+        if kind == "flash_sale":
+            return await announce_flash_sale(context, payload["offer_id"])
+        if kind == "api_flash_sale":
+            return await announce_api_flash_sale(context, payload["event"])
+        if kind == "admin_message":
+            return await broadcast_admin_message(context, payload["source_chat_id"], payload["message_id"])
+        raise ValueError(f"Unknown broadcast job: {kind}")
+    finally:
+        await bot_client.shutdown()
+
+
+def _run_broadcast_job(job_id):
+    retry = False
+    try:
+        job = db.claim_broadcast_job(job_id)
+        if not job:
+            return
+        sent = asyncio.run(_execute_broadcast_job(job))
+        db.complete_broadcast_job(job_id, sent)
+        log.info("Broadcast job %s completed: %s message(s)", job_id, sent)
+    except Exception as exc:
+        log.exception("Broadcast job %s failed", job_id)
+        retry = db.fail_broadcast_job(job_id, exc) == "retry"
+    finally:
+        with _broadcast_jobs_lock:
+            _submitted_broadcast_jobs.discard(int(job_id))
+        if retry:
+            time.sleep(1.5)
+            _submit_broadcast_job(job_id)
+
+
+def _submit_broadcast_job(job_id):
+    job_id = int(job_id)
+    with _broadcast_jobs_lock:
+        if job_id in _submitted_broadcast_jobs:
+            return False
+        _submitted_broadcast_jobs.add(job_id)
+    _broadcast_executor.submit(_run_broadcast_job, job_id)
+    return True
+
+
+def queue_broadcast(kind, *, dedupe_key="", **payload):
+    """Queue a reliable broadcast and return immediately to the admin/cron."""
+    job, created = db.create_broadcast_job(kind, payload, dedupe_key=dedupe_key)
+    if job and job.get("status") in {"queued", "retry"}:
+        _submit_broadcast_job(job["id"])
+    return {
+        "job_id": job.get("id") if job else None,
+        "queued": bool(created),
+        "recipient_count": int((job or {}).get("recipient_count") or 0),
+    }
+
+
+def resume_pending_broadcasts():
+    for job in db.pending_broadcast_jobs():
+        _submit_broadcast_job(job["id"])
 
 
 async def broadcast_maintenance_notice(context, message):
@@ -2174,11 +2292,11 @@ async def handle_pending_input(update, context, lang):
             )
             return
         PENDING.pop(uid, None)
-        sent = await announce_flash_sale(context, ref)
+        queued = queue_broadcast("flash_sale", offer_id=ref)
         await update.message.reply_text(
             f"⚡ Vente flash lancée pour *{offer['name']}*.\n"
             f"Prix : *{offer['flash_sale_original_price']:.2f} → {offer['price']:.2f} {CURRENCY}*\n"
-            f"Annonce envoyée à *{sent} utilisateur(s)*.",
+            f"📣 Envoi lancé en arrière-plan pour *{queued['recipient_count']} utilisateur(s)*.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(ref),
         )
@@ -2186,13 +2304,14 @@ async def handle_pending_input(update, context, lang):
 
     if kind == "adm_broadcast_message" and uid == ADMIN_ID:
         PENDING.pop(uid, None)
-        sent = await broadcast_admin_message(
-            context,
-            update.effective_chat.id,
-            update.message.message_id,
+        queued = queue_broadcast(
+            "admin_message",
+            source_chat_id=update.effective_chat.id,
+            message_id=update.message.message_id,
         )
         await update.message.reply_text(
-            f"✅ Annonce envoyée à {sent} utilisateur(s).",
+            f"✅ Annonce mise en file pour {queued['recipient_count']} utilisateur(s).\n"
+            "L’envoi continue en arrière-plan.",
             reply_markup=admin.admin_panel_keyboard(),
         )
         return
@@ -2608,13 +2727,13 @@ async def handle_pending_input(update, context, lang):
             return
         PENDING.pop(uid, None)
         stock = inventory_service.sync_offer_stock(ref)
-        sent = 0
+        queued = None
         if added:
-            sent = await send_new_stock_broadcast(context, ref, added, stock)
+            queued = queue_broadcast("stock", offer_id=ref, added=added, stock=stock)
         await update.message.reply_text(
             f"✅ {added} compte(s) ajouté(s) et chiffré(s).\n"
             f"📦 Stock affiché synchronisé dans le bot : {stock}\n"
-            f"📣 Publicité privée envoyée à {sent} utilisateur(s).",
+            f"📣 Alerte mise en file pour {(queued or {}).get('recipient_count', 0)} utilisateur(s).",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
         return
@@ -2636,13 +2755,13 @@ async def handle_pending_input(update, context, lang):
             unlimited_stock=False,
         )
         PENDING.pop(uid, None)
-        sent = 0
+        queued = None
         if stock > 0:
-            sent = await send_new_stock_broadcast(context, ref, stock, stock)
+            queued = queue_broadcast("stock", offer_id=ref, added=stock, stock=stock)
         await update.message.reply_text(
             f"✅ Stock manuel activé : {stock}\n"
             "📦 Ce nombre est maintenant visible publiquement.\n"
-            f"📣 Publicité privée envoyée à {sent} utilisateur(s).\n"
+            f"📣 Alerte mise en file pour {(queued or {}).get('recipient_count', 0)} utilisateur(s).\n"
             "🤖 Après paiement, le bot vous demandera de répondre directement au client.",
             reply_markup=admin.offer_admin_keyboard(ref),
         )
@@ -3888,6 +4007,26 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                   parse_mode=ParseMode.MARKDOWN,
                                   reply_markup=admin.service_admin_keyboard(sid))
         return
+    if data.startswith("adm_offmove_to:"):
+        _, offer_id_text, service_id_text = data.split(":", 2)
+        result = db.move_offer(int(offer_id_text), int(service_id_text))
+        destination = db.get_service(result["service_id"]) or {}
+        await q.edit_message_text(
+            f"✅ Offre déplacée vers « {destination.get('name') or result['service_id']} ».",
+            reply_markup=admin.offer_admin_keyboard(result["offer_id"]),
+        )
+        return
+    if data.startswith("adm_offmove:"):
+        oid = int(data.split(":", 1)[1])
+        offer = db.get_offer(oid)
+        if not offer:
+            await q.answer("Offre introuvable.", show_alert=True)
+            return
+        await q.edit_message_text(
+            f"📂 Déplacer « {offer['name']} »\n\nChoisissez le service de destination :",
+            reply_markup=admin.move_offer_keyboard(oid),
+        )
+        return
     if data.startswith("adm_off:") or data.startswith("adm_off_back:"):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
@@ -3964,9 +4103,10 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if stock <= 0 and not off.get("unlimited_stock"):
             await q.answer("Aucun stock disponible à annoncer.", show_alert=True)
             return
-        sent = await send_new_stock_broadcast(context, oid, None, stock)
+        queued = queue_broadcast("stock", offer_id=oid, added=None, stock=stock)
         await q.message.reply_text(
-            f"✅ Annonce envoyée à {sent} utilisateur(s).\n"
+            f"✅ Annonce mise en file pour {queued['recipient_count']} utilisateur(s).\n"
+            "L’envoi continue en arrière-plan.\n"
             f"💵 Prix actuel : {float(off.get('price') or 0):.2f} {CURRENCY}\n"
             f"📦 Stock annoncé : {'∞' if off.get('unlimited_stock') else stock}"
         )
@@ -4139,6 +4279,7 @@ def build_app():
     if issues:
         raise RuntimeError(f"Configuration incomplète : {', '.join(issues)}")
     db.init_db()
+    resume_pending_broadcasts()
     from telegram.request import HTTPXRequest
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     app = Application.builder().token(BOT_TOKEN).request(request).build()

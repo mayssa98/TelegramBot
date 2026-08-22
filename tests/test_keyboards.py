@@ -444,6 +444,7 @@ def test_admin_offer_panel_can_broadcast_current_price_and_stock(monkeypatch):
 
     assert "adm_broadcast_offer:4" in callbacks
     assert "adm_inventory:4" in callbacks
+    assert "adm_offmove:4" in callbacks
 
 
 def test_admin_offer_panel_can_start_and_stop_flash_sale(monkeypatch):
