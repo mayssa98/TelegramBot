@@ -16,6 +16,7 @@ import database as db
 from config import (
     CANBOSO_API_BASE,
     CANBOSO_API_KEY,
+    GPT_CHEAP_API_KEY,
     KAKAO_API_BASE,
     KAKAO_API_KEY,
     MAILREADER_API_BASE,
@@ -33,6 +34,7 @@ SHAMEKH_PROVIDER = "shamekh"
 KAKAO_PROVIDER = "kakao"
 VEX_PROVIDER = "vex"
 CANBOSO_PROVIDER = "canboso"
+GPT_CHEAP_PROVIDER = "gpt_cheap"
 VENTEBOT_PROVIDER = "ventebot"
 SUPPORTED_PROVIDERS = {
     PROVIDER,
@@ -40,8 +42,10 @@ SUPPORTED_PROVIDERS = {
     KAKAO_PROVIDER,
     VEX_PROVIDER,
     CANBOSO_PROVIDER,
+    GPT_CHEAP_PROVIDER,
     VENTEBOT_PROVIDER,
 }
+CANBOSO_PROVIDERS = {CANBOSO_PROVIDER, GPT_CHEAP_PROVIDER}
 
 
 class ResellerApiError(RuntimeError):
@@ -243,19 +247,27 @@ def _canboso_request_json(
     method: str = "GET",
     body: dict[str, Any] | None = None,
     idempotency_key: str = "",
+    provider: str = CANBOSO_PROVIDER,
 ) -> dict[str, Any]:
     """Call the buyer-key API without ever placing its key in logs or errors."""
-    if not CANBOSO_API_KEY:
+    if provider == GPT_CHEAP_PROVIDER:
+        api_key = GPT_CHEAP_API_KEY
+        provider_name = "GPT Cheap"
+    else:
+        api_key = CANBOSO_API_KEY
+        provider_name = "Piggy AI"
+    api_key = str(api_key).strip()
+    if not api_key:
         raise ResellerApiError(
-            "Canboso n’est pas configuré. Ajoutez HP_CANBOSO_API_KEY "
+            f"{provider_name} n’est pas configuré. Ajoutez sa clé API "
             "dans les variables d’environnement."
         )
     request_body = None
     url = f"{CANBOSO_API_BASE}{path}"
     if method == "GET":
-        url = f"{url}?{urlencode({'key': CANBOSO_API_KEY})}"
+        url = f"{url}?{urlencode({'key': api_key})}"
     else:
-        request_body = {"key": CANBOSO_API_KEY, **(body or {})}
+        request_body = {"key": api_key, **(body or {})}
     payload_bytes = (
         json.dumps(request_body).encode("utf-8")
         if request_body is not None
@@ -277,22 +289,22 @@ def _canboso_request_json(
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         messages = {
-            400: "Requête Canboso refusée ou solde fournisseur insuffisant.",
-            401: "Clé API Canboso refusée. Remplacez-la par une clé active.",
-            404: "Produit Canboso introuvable.",
-            409: "Stock Canboso insuffisant ou commande déjà en cours.",
-            429: "Limite Canboso atteinte. Respectez le délai Retry-After avant de réessayer.",
-            503: "Protection des achats Canboso temporairement indisponible.",
+            400: f"Requête {provider_name} refusée ou solde fournisseur insuffisant.",
+            401: f"Clé API {provider_name} refusée. Remplacez-la par une clé active.",
+            404: f"Produit {provider_name} introuvable.",
+            409: f"Stock {provider_name} insuffisant ou commande déjà en cours.",
+            429: f"Limite {provider_name} atteinte. Respectez le délai Retry-After avant de réessayer.",
+            503: f"Protection des achats {provider_name} temporairement indisponible.",
         }
         raise ResellerApiError(
-            messages.get(exc.code, f"Canboso a répondu avec l’erreur HTTP {exc.code}.")
+            messages.get(exc.code, f"{provider_name} a répondu avec l’erreur HTTP {exc.code}.")
         ) from exc
     except (URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise ResellerApiError("Canboso est temporairement indisponible.") from exc
+        raise ResellerApiError(f"{provider_name} est temporairement indisponible.") from exc
     if not isinstance(payload, dict):
-        raise ResellerApiError("Réponse Canboso invalide.")
+        raise ResellerApiError(f"Réponse {provider_name} invalide.")
     if payload.get("success") is False:
-        raise ResellerApiError(str(payload.get("message") or "Requête Canboso refusée.")[:300])
+        raise ResellerApiError(str(payload.get("message") or f"Requête {provider_name} refusée.")[:300])
     return payload
 
 
@@ -379,8 +391,14 @@ def provider_summaries() -> list[dict[str, Any]]:
         },
         {
             "id": CANBOSO_PROVIDER,
-            "name": "Canboso",
+            "name": "Piggy AI",
             "configured": bool(CANBOSO_API_KEY),
+            "documentation_url": "https://canboso.com/api/swagger",
+        },
+        {
+            "id": GPT_CHEAP_PROVIDER,
+            "name": "GPT Cheap",
+            "configured": bool(GPT_CHEAP_API_KEY),
             "documentation_url": "https://canboso.com/api/swagger",
         },
         {
@@ -422,9 +440,14 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         )
         reseller = {"balance": balance_data.get("balance", 0)}
         supplier_name = "VEX Reseller"
-    elif provider == CANBOSO_PROVIDER:
-        payload = _canboso_request_json("/products")
-        balance_payload = _canboso_request_json("/balance")
+    elif provider in CANBOSO_PROVIDERS:
+        provider_name = "Piggy AI" if provider == CANBOSO_PROVIDER else "GPT Cheap"
+        payload = _canboso_request_json(
+            "/products", **({"provider": provider} if provider == GPT_CHEAP_PROVIDER else {}),
+        )
+        balance_payload = _canboso_request_json(
+            "/balance", **({"provider": provider} if provider == GPT_CHEAP_PROVIDER else {}),
+        )
         wallet_currency = str(balance_payload.get("walletCurrency") or "VND").upper()
         balance = (
             balance_payload.get("usdtBalance", balance_payload.get("balance", 0))
@@ -432,7 +455,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             else balance_payload.get("balance", 0)
         )
         reseller = {"balance": balance}
-        supplier_name = "Canboso"
+        supplier_name = provider_name
     elif provider == VENTEBOT_PROVIDER:
         payload = _ventebot_request_json("/api/reseller/products?lang=en")
         account = _ventebot_request_json("/api/reseller/me")
@@ -465,7 +488,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             continue
         raw_product_id = (
             raw.get("_id") or raw.get("productId") or raw.get("id")
-            if provider == CANBOSO_PROVIDER
+            if provider in CANBOSO_PROVIDERS
             else raw.get("id")
         )
         if not raw_product_id:
@@ -477,7 +500,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 canboso_price = canboso_price.get("amount", 0)
             wholesale = float(Decimal(str(
                 raw.get("usdPricing", canboso_price or 0)
-                if provider == CANBOSO_PROVIDER
+                if provider in CANBOSO_PROVIDERS
                 else (
                     raw.get("price")
                     if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER}
@@ -496,7 +519,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         )
         stock = max(0, int(
             (stats.get("available") or availability.get("available") or 0)
-            if provider == CANBOSO_PROVIDER
+            if provider in CANBOSO_PROVIDERS
             else (
                 (raw.get("stock_count") or 0)
                 if provider == SHAMEKH_PROVIDER
@@ -543,14 +566,14 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                     ).upper() in {"USD", "USDT"}
                     else (raw.get("price") or {}).get("currency", "USDT")
                 )
-                if provider == CANBOSO_PROVIDER
+                if provider in CANBOSO_PROVIDERS
                 else raw.get("currency") or "USDT"
             )[:12],
             "stock": stock,
             "manual_delivery": bool(
                 raw.get("manual_delivery", False)
                 or (
-                    provider == CANBOSO_PROVIDER
+                    provider in CANBOSO_PROVIDERS
                     and (
                         raw.get("requiresCustomerEmail")
                         or raw.get("productType") == "slot"
@@ -601,7 +624,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         "balance": float(Decimal(str(reseller.get("balance", "0")))),
         "currency": (
             ("USDT" if wallet_currency == "USD" else wallet_currency)
-            if provider == CANBOSO_PROVIDER
+            if provider in CANBOSO_PROVIDERS
             else "USDT"
         ),
         "providers": provider_summaries(),
@@ -618,6 +641,7 @@ def detect_restock_events() -> dict[str, Any]:
         KAKAO_PROVIDER: bool(KAKAO_API_KEY),
         VEX_PROVIDER: bool(VEX_API_KEY),
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
+        GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
     }
     events: list[dict[str, Any]] = []
@@ -668,6 +692,7 @@ def detect_supplier_price_changes() -> dict[str, Any]:
         KAKAO_PROVIDER: bool(KAKAO_API_KEY),
         VEX_PROVIDER: bool(VEX_API_KEY),
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
+        GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
     }
     changes: list[dict[str, Any]] = []
@@ -768,7 +793,8 @@ def save_catalog_product(
         SHAMEKH_PROVIDER: "Produit API Shamekh’s bot",
         KAKAO_PROVIDER: "Produit API Kakao Shop",
         VEX_PROVIDER: "Produit API VEX Reseller",
-        CANBOSO_PROVIDER: "Produit API Canboso",
+        CANBOSO_PROVIDER: "Produit API Piggy AI",
+        GPT_CHEAP_PROVIDER: "Produit API GPT Cheap",
         VENTEBOT_PROVIDER: "Produit API VenteBot",
     }.get(provider, "Produit API MailReader")
     warranty = str(warranty or default_warranty).strip()[:250]
@@ -1038,7 +1064,7 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                     "external_order_id": external_order_id,
                 },
             )
-        elif provider == CANBOSO_PROVIDER:
+        elif provider in CANBOSO_PROVIDERS:
             response = _canboso_request_json(
                 "/purchase",
                 method="POST",
@@ -1047,6 +1073,7 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                     "quantity": int(order.get("qty") or 1),
                 },
                 idempotency_key=external_order_id,
+                **({"provider": provider} if provider == GPT_CHEAP_PROVIDER else {}),
             )
         elif provider == VENTEBOT_PROVIDER:
             raw_product_id = str(offer["supplier_product_id"])

@@ -129,6 +129,7 @@ def test_canboso_key_and_idempotency_are_sent_in_documented_fields(monkeypatch):
         return FakeResponse({"success": True})
 
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "test-buyer-key")
+    monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "test-gpt-cheap-key")
     monkeypatch.setattr(
         reseller_service,
         "CANBOSO_API_BASE",
@@ -142,6 +143,10 @@ def test_canboso_key_and_idempotency_are_sent_in_documented_fields(monkeypatch):
         method="POST",
         body={"product_id": "sku-1", "quantity": 2},
         idempotency_key="BM-123",
+    )
+    reseller_service._canboso_request_json(
+        "/products",
+        provider=reseller_service.GPT_CHEAP_PROVIDER,
     )
 
     get_request, get_timeout = requests[0]
@@ -157,6 +162,12 @@ def test_canboso_key_and_idempotency_are_sent_in_documented_fields(monkeypatch):
         "key": "test-buyer-key",
         "product_id": "sku-1",
         "quantity": 2,
+    }
+
+    gpt_cheap_request, gpt_cheap_timeout = requests[2]
+    assert gpt_cheap_timeout == 20
+    assert parse_qs(urlsplit(gpt_cheap_request.full_url).query) == {
+        "key": ["test-gpt-cheap-key"]
     }
 
 
@@ -597,7 +608,7 @@ def test_canboso_catalog_maps_wallet_products_and_slot_delivery(monkeypatch, moc
     result = reseller_service.catalog("canboso")
 
     assert result["provider"] == "canboso"
-    assert result["supplier_name"] == "Canboso"
+    assert result["supplier_name"] == "Piggy AI"
     assert result["balance"] == 250000
     assert result["currency"] == "VND"
     assert result["products"][0]["id"] == "canboso-1"
@@ -648,6 +659,41 @@ def test_canboso_catalog_maps_current_live_product_schema(monkeypatch, mock_mong
     assert result["products"][0]["stock"] == 41
     assert result["products"][0]["manual_delivery"] is False
     assert result["products"][1]["manual_delivery"] is True
+
+
+def test_piggy_ai_and_gpt_cheap_use_separate_wallet_keys(monkeypatch, mock_mongodb):
+    calls = []
+
+    def fake_request(path, **kwargs):
+        calls.append((path, kwargs.get("provider", "canboso")))
+        if path == "/balance":
+            return {"success": True, "walletCurrency": "USD", "balance": 12.5}
+        return {
+            "success": True,
+            "products": [{
+                "productId": "account-1",
+                "name": "Premium account",
+                "productType": "account",
+                "price": {"amount": 1.0, "currency": "USD"},
+                "availability": {"available": 5},
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "piggy-key")
+    monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "gpt-cheap-key")
+    monkeypatch.setattr(reseller_service, "_canboso_request_json", fake_request)
+
+    piggy = reseller_service.catalog("canboso")
+    cheap = reseller_service.catalog("gpt_cheap")
+
+    assert piggy["supplier_name"] == "Piggy AI"
+    assert cheap["supplier_name"] == "GPT Cheap"
+    assert calls == [
+        ("/products", "canboso"),
+        ("/balance", "canboso"),
+        ("/products", "gpt_cheap"),
+        ("/balance", "gpt_cheap"),
+    ]
 
 
 def test_canboso_purchase_uses_stable_idempotency_key(monkeypatch, mock_mongodb):
@@ -839,6 +885,7 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
     monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "catalog", fake_catalog)
 
@@ -882,6 +929,7 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(
         reseller_service,

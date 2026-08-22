@@ -433,7 +433,10 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "selectApiProvider('kakao')" in page
     assert "VEX Reseller" in page
     assert "selectApiProvider('vex')" in page
+    assert "Piggy AI" in page
     assert "selectApiProvider('canboso')" in page
+    assert "GPT Cheap" in page
+    assert "selectApiProvider('gpt_cheap')" in page
     assert "Clés Buyer API" in page
     assert "/api/swagger" in page
     assert "createBuyerApiKey" in page

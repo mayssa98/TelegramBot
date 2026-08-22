@@ -2651,9 +2651,15 @@ def render_dashboard(
                     </div>
                     <div class="api-action-card">
                         <span class="badge badge-paid">API active</span>
-                        <h3>Canboso</h3>
+                        <h3>Piggy AI</h3>
                         <p>Catalogue, solde wallet et achats protégés contre les doublons.</p>
                         <button class="btn btn-primary" onclick="selectApiProvider('canboso')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
+                        <span class="badge badge-paid">API active</span>
+                        <h3>GPT Cheap</h3>
+                        <p>Deuxième wallet Canboso indépendant avec sa propre clé et son propre solde.</p>
+                        <button class="btn btn-primary" onclick="selectApiProvider('gpt_cheap')">Voir ses produits</button>
                     </div>
                     <div class="api-action-card">
                         <span>↻</span>

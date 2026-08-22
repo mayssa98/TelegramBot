@@ -65,7 +65,8 @@ const PROVIDERS = [
   ["shamekh", "Shamekh’s bot"],
   ["kakao", "Kakao Shop"],
   ["vex", "VEX Reseller"],
-  ["canboso", "Canboso"],
+  ["canboso", "Piggy AI"],
+  ["gpt_cheap", "GPT Cheap"],
   ["ventebot", "VenteBot"],
 ];
 
