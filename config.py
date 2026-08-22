@@ -128,7 +128,7 @@ CANBOSO_API_BASE: str = os.environ.get(
 GPT_CHEAP_API_KEY: str = env_value("HP_GPT_CHEAP_API_KEY")
 
 # ---------------------------------------------------------------------------
-# Comparateur IA des catalogues fournisseurs (API externe configurable)
+# Fonctions IA de l’administration (API externe configurable)
 # ---------------------------------------------------------------------------
 AI_COMPARISON_API_URL: str = env_value(
     "HP_AI_API_URL", "https://agentrouter.org/v1/chat/completions"

@@ -3538,16 +3538,144 @@ function SettingsPage({ data, onAction, onHealthCheck }) {
   );
 }
 
+const AI_QUICK_PROMPTS = [
+  ["Résumé du bot", "Donne-moi un résumé opérationnel du bot et les 3 priorités du moment."],
+  ["Commandes à surveiller", "Analyse les commandes récentes et indique celles qui demandent une intervention."],
+  ["Stock critique", "Analyse le stock et propose les actions les plus urgentes, sans les exécuter."],
+  ["Optimiser les ventes", "Analyse les ventes, les prix et le catalogue puis propose des optimisations concrètes."],
+  ["Support urgent", "Résume les tickets et alertes support qui nécessitent une réponse rapide."],
+];
+
+function AiManagerPage({ data, onAction, setToast }) {
+  const [config, setConfig] = useState({ configured: false, models: [] });
+  const [model, setModel] = useState(window.localStorage.getItem("ai-manager-model") || "");
+  const [messages, setMessages] = useState([{
+    role: "assistant",
+    content: "Bonjour. Je peux analyser les commandes, le stock, les ventes, les clients, le support et proposer des actions administratives à confirmer.",
+  }]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/admin/api/ai-manager/config", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Configuration IA indisponible.");
+        if (!active) return;
+        setConfig(payload);
+        const selected = payload.models?.includes(model) ? model : payload.models?.[0] || "";
+        setModel(selected);
+      })
+      .catch((error) => active && setToast({ type: "error", title: "AI Bot Manager", message: error.message }));
+    return () => { active = false; };
+  }, []);
+
+  const selectModel = (value) => {
+    setModel(value);
+    window.localStorage.setItem("ai-manager-model", value);
+  };
+
+  const send = async (preset) => {
+    const content = String(preset || input).trim();
+    if (!content || sending || !model) return;
+    const userMessage = { role: "user", content };
+    const history = [...messages, userMessage];
+    setMessages(history);
+    setInput("");
+    setSending(true);
+    try {
+      const response = await fetch("/admin/api/ai-manager/chat", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Dashboard-Write-Token": data?.dashboard_write_token || "",
+        },
+        body: JSON.stringify({
+          model,
+          messages: history.map(({ role, content: messageContent }) => ({ role, content: messageContent })),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || "Réponse IA indisponible.");
+      setMessages((current) => [...current, {
+        role: "assistant",
+        content: payload.reply,
+        actions: payload.suggested_actions || [],
+        model: payload.model,
+      }]);
+    } catch (error) {
+      setMessages((current) => [...current, { role: "assistant", error: true, content: error.message }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const executeAction = async () => {
+    if (!pendingAction) return;
+    const completed = await onAction(pendingAction.parameters);
+    if (completed) {
+      setMessages((current) => [...current, {
+        role: "assistant",
+        content: `Action « ${pendingAction.label} » exécutée et données du bot actualisées.`,
+      }]);
+    }
+    setPendingAction(null);
+  };
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Copilote administrateur"
+        title="AI Bot Manager"
+        description="Analysez et gérez le bot par conversation. Toute modification exige votre confirmation."
+        actions={(
+          <div className={`ai-manager-status ${config.configured ? "ready" : ""}`}>
+            <span />{config.configured ? "IA configurée" : "Configuration requise"}
+          </div>
+        )}
+      />
+      <section className="ai-manager-layout">
+        <aside className="ai-manager-sidebar">
+          <div className="ai-manager-brand"><Sparkles size={21} /><div><strong>Assistant complet</strong><span>Contexte actualisé à chaque message</span></div></div>
+          <label className="ai-model-select"><span>Modèle actif</span><select value={model} onChange={(event) => selectModel(event.target.value)}>{config.models?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <div className="ai-quick-list"><span>Questions rapides</span>{AI_QUICK_PROMPTS.map(([label, prompt]) => <button key={label} disabled={sending || !config.configured} onClick={() => send(prompt)}><Sparkles size={13} />{label}</button>)}</div>
+          <div className="ai-safety-note"><ShieldCheck size={17} /><div><strong>Contrôle humain</strong><span>L’IA propose. Vous confirmez chaque action avant exécution.</span></div></div>
+        </aside>
+        <div className="ai-chat-panel">
+          <div className="ai-chat-messages">
+            {messages.map((message, index) => (
+              <article className={`ai-message ${message.role} ${message.error ? "error" : ""}`} key={`${message.role}-${index}`}>
+                <div className="ai-message-avatar">{message.role === "assistant" ? <Sparkles size={15} /> : "A"}</div>
+                <div className="ai-message-body"><div className="ai-message-meta"><strong>{message.role === "assistant" ? "AI Bot Manager" : "Vous"}</strong>{message.model && <span>{message.model}</span>}</div><p>{message.content}</p>
+                  {!!message.actions?.length && <div className="ai-proposals">{message.actions.map((action, actionIndex) => <div className={`ai-proposal risk-${action.risk}`} key={`${action.action}-${actionIndex}`}><div><span>{action.risk === "high" ? "Risque élevé" : action.risk === "medium" ? "Confirmation" : "Action sûre"}</span><strong>{action.label}</strong><p>{action.description}</p></div><button onClick={() => setPendingAction(action)}>Vérifier et exécuter</button></div>)}</div>}
+                </div>
+              </article>
+            ))}
+            {sending && <article className="ai-message assistant"><div className="ai-message-avatar"><RefreshCw className="spin" size={15} /></div><div className="ai-message-body"><p>Analyse des données actuelles du bot…</p></div></article>}
+          </div>
+          <form className="ai-chat-composer" onSubmit={(event) => { event.preventDefault(); send(); }}><textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }} placeholder={config.configured ? "Demandez une analyse ou une action…" : "Configurez d’abord l’API IA dans Railway"} disabled={!config.configured || sending} rows={2} /><button type="submit" disabled={!input.trim() || sending || !config.configured}><Send size={17} /></button></form>
+        </div>
+      </section>
+      {pendingAction && <Modal title="Confirmer l’action IA" onClose={() => setPendingAction(null)}><div className="ai-confirm"><ShieldCheck size={30} /><strong>{pendingAction.label}</strong><p>{pendingAction.confirmation}</p><pre>{JSON.stringify(pendingAction.parameters, null, 2)}</pre><div><ActionButton secondary onClick={() => setPendingAction(null)}>Annuler</ActionButton><ActionButton danger={pendingAction.risk === "high"} icon={Check} onClick={executeAction}>Confirmer et exécuter</ActionButton></div></div></Modal>}
+    </>
+  );
+}
+
 export default function AdminPage({
   page,
   data,
   onAction,
   onHealthCheck,
+  onNavigate,
   setToast,
   workspace,
 }) {
-  const props = { data, onAction, onHealthCheck, setToast, workspace };
+  const props = { data, onAction, onHealthCheck, onNavigate, setToast, workspace };
   if (page === "site-overview") return <SiteOverviewPage {...props} />;
+  if (page === "ai-manager") return <AiManagerPage {...props} />;
   if (page === "orders") return <OrdersPage {...props} />;
   if (page === "catalog") return <CatalogPage {...props} />;
   if (page === "api-products") return <ApiProductsPage {...props} />;

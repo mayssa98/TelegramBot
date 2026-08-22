@@ -33,6 +33,7 @@ from api.dashboard import render_dashboard
 from api.public_site import render_public_site
 from app import __version__
 from app.domain import (
+    admin_ai_service,
     buyer_api_service,
     external_api_service,
     inventory_service,
@@ -722,6 +723,13 @@ class handler(BaseHTTPRequestHandler):
                 })
             return
 
+        elif path == "/admin/api/ai-manager/config":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            self._reply(200, admin_ai_service.public_config())
+            return
+
         elif path == "/admin/api/buyer-keys":
             if not self._dashboard_authorized():
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
@@ -926,6 +934,27 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path.rstrip("/")
+        if path == "/admin/api/ai-manager/chat":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                payload = self._read_json_body(max_bytes=80_000)
+                result = admin_ai_service.chat(
+                    payload.get("messages"),
+                    payload.get("model"),
+                    db.dashboard_data(),
+                )
+                self._reply(200, result)
+            except admin_ai_service.AdminAIError as exc:
+                self._reply(503, {"ok": False, "error": str(exc)})
+            except buyer_api_service.BuyerApiError as exc:
+                self._reply(exc.status, {"ok": False, "error": exc.message})
+            except Exception:
+                log.exception("AI Bot Manager request failed")
+                self._reply(500, {"ok": False, "error": "AI Bot Manager est indisponible."})
+            return
+
         if path == "/api/storefront/orders":
             try:
                 payload = self._read_json_body(max_bytes=5_600_000)

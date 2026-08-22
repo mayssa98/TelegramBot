@@ -30,6 +30,7 @@ import {
 
 const BOT_NAV_ITEMS = [
   { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
+  { id: "ai-manager", label: "AI Bot Manager", icon: Bot },
   { id: "orders", label: "Commandes", icon: ClipboardList },
   { id: "catalog", label: "Catalogue", icon: ShoppingBag },
   { id: "api-products", label: "Produits API", icon: Cloud },
@@ -519,7 +520,7 @@ export default function App() {
       <div className="main-shell">
         <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} isRefreshing={refreshing} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} workspace={workspace} />
         <main className="content">
-          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={`${activePage}-${actionVersion}`} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} setToast={setToast} workspace={workspace} />}
+          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={`${activePage}-${actionVersion}`} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} onNavigate={navigate} setToast={setToast} workspace={workspace} />}
         </main>
       </div>
       {searchOpen && data && <SearchDialog data={data} onClose={() => setSearchOpen(false)} onNavigate={navigate} />}
