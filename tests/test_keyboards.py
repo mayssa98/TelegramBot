@@ -258,6 +258,29 @@ def test_stock_label_is_listed_in_catalog_admin_category():
     assert admin.text_category_for_key("stock_label") == "catalog"
 
 
+def test_official_preorder_catalog_uses_its_own_row(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [
+        {
+            "id": 1, "service_id": 2,
+            "service_name": "Officiels subscriptions",
+            "name": "Official", "price": 5, "stock": 0,
+        },
+        {
+            "id": 2, "service_id": 1,
+            "service_name": "Chat GPT",
+            "name": "Plus", "price": 5, "stock": 0,
+        },
+    ])
+
+    keyboard = kb.preorder_services_keyboard("fr")
+
+    assert [button.callback_data for button in keyboard.inline_keyboard[0]] == [
+        "preorder_svc:2"
+    ]
+    assert keyboard.inline_keyboard[0][0].style is None
+    assert keyboard.inline_keyboard[1][0].callback_data == "preorder_svc:1"
+
+
 def test_stock_label_accepts_admin_premium_emoji(monkeypatch):
     monkeypatch.setattr(kb.db, "list_offers", lambda _service_id: [{
         "id": 8, "name": "Premium", "stock": 2, "custom_emoji_id": "offer-icon",
@@ -402,10 +425,13 @@ def test_official_subscriptions_variant_is_first_without_background(monkeypatch)
         {"id": 2, "name": "Officiels subscriptions", "total_stock": 5},
     ], key=db._service_sort_key))
 
-    button = kb.services_keyboard("fr").inline_keyboard[0][0]
+    keyboard = kb.services_keyboard("fr")
+    button = keyboard.inline_keyboard[0][0]
 
     assert button.callback_data == "svc:2"
     assert button.style is None
+    assert len(keyboard.inline_keyboard[0]) == 1
+    assert keyboard.inline_keyboard[1][0].callback_data == "svc:1"
 
 
 def test_official_grouped_catalog_is_first_and_has_no_background(mock_mongodb):
@@ -421,6 +447,8 @@ def test_official_grouped_catalog_is_first_and_has_no_background(mock_mongodb):
 
     assert first_catalog_button.callback_data == f"svc:{official_id}"
     assert first_catalog_button.style is None
+    assert len(keyboard.inline_keyboard[0]) == 1
+    assert keyboard.inline_keyboard[1][0].callback_data == f"svc:{regular_id}"
 
 
 def test_premium_left_icon_keeps_unicode_suffix(monkeypatch):

@@ -316,14 +316,21 @@ def services_keyboard(lang):
             total = svc.get("total_stock", 0)
             label = service_button_label(svc, 34)
             is_official = db.is_official_subscriptions_service(svc)
-            row.append(InlineKeyboardButton(
+            service_button = InlineKeyboardButton(
                 label,
                 callback_data=f"svc:{svc['id']}",
                 style=None if is_official else (
                     "success" if svc.get("unlimited_stock") else stock_button_style(total)
                 ),
                 icon_custom_emoji_id=svc.get("custom_emoji_id") or None,
-            ))
+            )
+            if is_official:
+                if row:
+                    buttons.append(row)
+                    row = []
+                buttons.append([service_button])
+                continue
+            row.append(service_button)
             if len(row) == 2:
                 buttons.append(row)
                 row = []
@@ -413,11 +420,14 @@ def catalog_offers_keyboard(lang):
                     "success" if (has_unlimited or total_stock > 3)
                     else ("primary" if total_stock > 0 else "danger")
                 )
-                grouped_category_buttons.append(InlineKeyboardButton(
-                    label,
-                    callback_data=f"svc:{sid}",
-                    style=cat_style,
-                    icon_custom_emoji_id=service_icon,
+                grouped_category_buttons.append((
+                    InlineKeyboardButton(
+                        label,
+                        callback_data=f"svc:{sid}",
+                        style=cat_style,
+                        icon_custom_emoji_id=service_icon,
+                    ),
+                    db.is_official_subscriptions_service(service_name),
                 ))
         else:
             safe_offer = dict(offer)
@@ -444,7 +454,13 @@ def catalog_offers_keyboard(lang):
 
     # 1. Place grouped category buttons (Adobe, ChatGPT, Telegram, VPNs, Netflix) AT THE TOP in rows of 2
     row = []
-    for btn in grouped_category_buttons:
+    for btn, is_official in grouped_category_buttons:
+        if is_official:
+            if row:
+                buttons.append(row)
+                row = []
+            buttons.append([btn])
+            continue
         row.append(btn)
         if len(row) == 2:
             buttons.append(row)
@@ -557,12 +573,20 @@ def preorder_services_keyboard(lang):
             "custom_emoji_id": service_icon,
             "suffix_emoji": offer.get("service_suffix_emoji"),
         }, 28)
-        row.append(InlineKeyboardButton(
+        is_official = db.is_official_subscriptions_service(service_name)
+        service_button = InlineKeyboardButton(
             label,
             callback_data=f"preorder_svc:{service_id}",
             style=None if db.is_official_subscriptions_service(service_name) else "danger",
             icon_custom_emoji_id=service_icon,
-        ))
+        )
+        if is_official:
+            if row:
+                rows.append(row)
+                row = []
+            rows.append([service_button])
+            continue
+        row.append(service_button)
         if len(row) == 2:
             rows.append(row)
             row = []
