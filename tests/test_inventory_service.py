@@ -39,7 +39,7 @@ def test_legacy_delivery_markers_are_removed():
 def test_bulk_inventory_parser_rejects_content_before_first_marker():
     import pytest
 
-    with pytest.raises(ValueError, match="NOUVEAU_COMPTE"):
+    with pytest.raises(ValueError, match="###"):
         inventory_service.parse_bulk_inventory("Email: one@example.com")
 
 

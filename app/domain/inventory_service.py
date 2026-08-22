@@ -15,7 +15,7 @@ from app.constants import InventoryStatus, OrderStatus
 
 log = logging.getLogger(__name__)
 
-ACCOUNT_DELIMITER = "===NOUVEAU_COMPTE==="
+ACCOUNT_DELIMITER = "###"
 MANUAL_STOCK_KEYWORD = "#"
 
 
