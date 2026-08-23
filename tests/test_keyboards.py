@@ -696,6 +696,26 @@ def test_admin_panel_has_user_activity_option(mock_mongodb):
     ] == ["adm_user_activity", "adm_panel"]
 
 
+def test_admin_panel_can_manage_and_delete_sent_announcements(mock_mongodb):
+    panel_callbacks = {
+        button.callback_data
+        for row in admin.admin_panel_keyboard().inline_keyboard
+        for button in row
+    }
+    assert "adm_broadcast_history" in panel_callbacks
+
+    job, _created = db.create_broadcast_job("flash_sale", {"offer_id": 7})
+    db.record_broadcast_message(job["id"], "flash_sale", 101, 501)
+    db.complete_broadcast_job(job["id"], 1)
+    history = db.list_broadcast_history()
+    keyboard = admin.broadcast_history_keyboard(history)
+
+    assert keyboard.inline_keyboard[0][0].callback_data == f"adm_broadcast_view:{job['id']}"
+    history[0]["active_message_count"] = 1
+    delete_keyboard = admin.broadcast_delete_keyboard(history[0])
+    assert delete_keyboard.inline_keyboard[0][0].callback_data == f"adm_broadcast_confirm:{job['id']}"
+
+
 def test_catalog_never_builds_an_empty_button(monkeypatch):
     monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: [{
         "id": 12,

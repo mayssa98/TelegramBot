@@ -29,6 +29,7 @@ from bot import (
     compact_offer_text,
     custom_emoji_from_message,
     custom_emojis_from_message,
+    delete_broadcast_messages,
     deliver_order,
     handle_buy_confirmed,
     handle_pending_attachment,
@@ -121,6 +122,44 @@ def test_broadcast_jobs_are_persisted_claimed_and_completed(mock_mongodb):
     )
     assert duplicate_created is False
     assert duplicate["id"] == job["id"]
+
+
+def test_sent_campaign_can_be_deleted_for_every_recipient(mock_mongodb):
+    service_id = db.add_service("AI", "✨")
+    offer_id = db.add_offer(service_id, "Premium", 5.0, 3)
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101, "lang": "en"},
+        {"telegram_id": 202, "lang": "en"},
+    ])
+    job, _created = db.create_broadcast_job(
+        "stock", {"offer_id": offer_id, "added": 3, "stock": 3},
+    )
+    send_message = AsyncMock(side_effect=[
+        SimpleNamespace(message_id=501),
+        SimpleNamespace(message_id=502),
+    ])
+    send_context = SimpleNamespace(
+        bot=SimpleNamespace(send_message=send_message),
+        broadcast_job_id=job["id"],
+        broadcast_kind="stock",
+    )
+
+    sent = asyncio.run(announce_channel_restock(send_context, offer_id, 3, 3))
+    db.complete_broadcast_job(job["id"], sent)
+
+    assert len(db.list_broadcast_messages(job["id"])) == 2
+    assert db.list_broadcast_history()[0]["active_message_count"] == 2
+
+    delete_message = AsyncMock(return_value=True)
+    deleted = asyncio.run(delete_broadcast_messages(
+        SimpleNamespace(bot=SimpleNamespace(delete_message=delete_message)),
+        job["id"],
+    ))
+
+    assert deleted == 2
+    assert delete_message.await_count == 2
+    assert db.list_broadcast_messages(job["id"]) == []
+    assert db.get_broadcast_job(job["id"])["deletion_status"] == "deleted"
 
 
 def test_flash_sale_is_broadcast_with_buy_button(mock_mongodb):

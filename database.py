@@ -16,7 +16,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
@@ -213,6 +213,11 @@ def init_db():
     db.offers.create_index([("supplier_provider", ASCENDING), ("supplier_product_id", ASCENDING)])
     db.broadcast_jobs.create_index("id", unique=True)
     db.broadcast_jobs.create_index("dedupe_key", unique=True, sparse=True)
+    db.broadcast_messages.create_index(
+        [("job_id", ASCENDING), ("chat_id", ASCENDING), ("message_id", ASCENDING)],
+        unique=True,
+    )
+    db.broadcast_messages.create_index([("job_id", ASCENDING), ("deleted", ASCENDING)])
     db.orders.create_index("id", unique=True)
     db.orders.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
     db.orders.create_index("status")
@@ -1764,6 +1769,95 @@ def complete_broadcast_job(job_id, sent_count):
         {"id": int(job_id)},
         {"$set": {"status": "completed", "sent_count": int(sent_count), "completed_at": datetime.now(UTC), "updated_at": datetime.now(UTC), "error": ""}},
     )
+
+
+def record_broadcast_message(job_id, kind, chat_id, message_id):
+    """Remember one bot-authored broadcast message so it can be deleted later."""
+    if not job_id or not chat_id or not message_id:
+        return False
+    get_conn().broadcast_messages.update_one(
+        {
+            "job_id": int(job_id),
+            "chat_id": int(chat_id),
+            "message_id": int(message_id),
+        },
+        {"$setOnInsert": {
+            "kind": str(kind or "broadcast")[:60],
+            "deleted": False,
+            "created_at": datetime.now(UTC),
+        }},
+        upsert=True,
+    )
+    return True
+
+
+def list_broadcast_messages(job_id, active_only=True):
+    query = {"job_id": int(job_id)}
+    if active_only:
+        query["deleted"] = {"$ne": True}
+    return [
+        _public(row) for row in get_conn().broadcast_messages.find(query)
+    ]
+
+
+def mark_broadcast_message_deleted(job_id, chat_id, message_id, *, error=""):
+    values = {
+        "delete_error": str(error or "")[:300],
+        "delete_attempted_at": datetime.now(UTC),
+    }
+    if not error:
+        values.update({"deleted": True, "deleted_at": datetime.now(UTC)})
+    get_conn().broadcast_messages.update_one(
+        {
+            "job_id": int(job_id),
+            "chat_id": int(chat_id),
+            "message_id": int(message_id),
+        },
+        {"$set": values},
+    )
+
+
+def get_broadcast_job(job_id):
+    return _public(get_conn().broadcast_jobs.find_one({"id": int(job_id)}))
+
+
+def set_broadcast_deletion_status(job_id, status, *, deleted_count=0, failed_count=0):
+    get_conn().broadcast_jobs.update_one(
+        {"id": int(job_id)},
+        {"$set": {
+            "deletion_status": str(status),
+            "deleted_count": int(deleted_count),
+            "delete_failed_count": int(failed_count),
+            "deletion_updated_at": datetime.now(UTC),
+        }},
+    )
+
+
+def list_broadcast_history(limit=20):
+    """Return recent customer announcements that still have tracked messages."""
+    kinds = [
+        "stock", "restock_digest", "flash_sale", "api_flash_sale",
+        "admin_message", "maintenance", "affiliate_update",
+    ]
+    jobs = get_conn().broadcast_jobs.find({
+        "kind": {"$in": kinds},
+        "status": "completed",
+    }).sort("created_at", DESCENDING).limit(max(1, int(limit) * 3))
+    history = []
+    for raw in jobs:
+        job = _public(raw)
+        total = get_conn().broadcast_messages.count_documents({"job_id": job["id"]})
+        if not total:
+            continue
+        active = get_conn().broadcast_messages.count_documents({
+            "job_id": job["id"], "deleted": {"$ne": True},
+        })
+        job["tracked_count"] = total
+        job["active_message_count"] = active
+        history.append(job)
+        if len(history) >= int(limit):
+            break
+    return history
 
 
 def fail_broadcast_job(job_id, error):

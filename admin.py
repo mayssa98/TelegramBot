@@ -98,10 +98,65 @@ def admin_panel_keyboard():
         [InlineKeyboardButton("✅ Commandes payées", callback_data="adm_list:paid")],
         [InlineKeyboardButton("📦 Catalogue", callback_data="adm_catalog")],
         [InlineKeyboardButton("📢 Créer une annonce", callback_data="adm_broadcast_message")],
+        [InlineKeyboardButton("🧹 Annonces envoyées", callback_data="adm_broadcast_history")],
         [InlineKeyboardButton("🎫 Tickets support", callback_data="adm_tickets")],
         [InlineKeyboardButton("👥 Activité utilisateurs", callback_data="adm_user_activity")],
         [InlineKeyboardButton(maintenance_label, callback_data="adm_maintenance_toggle")],
         [InlineKeyboardButton("🎛 Personnaliser le bot", callback_data="adm_customize")],
+    ])
+
+
+def broadcast_kind_label(kind):
+    return {
+        "stock": "✨ Nouveau stock",
+        "restock_digest": "✨ Drops groupés",
+        "flash_sale": "🔥 Vente flash",
+        "api_flash_sale": "🔥 Baisse automatique",
+        "admin_message": "📢 Annonce libre",
+        "maintenance": "🛠 Maintenance",
+        "affiliate_update": "🎁 Mise à jour affiliation",
+    }.get(str(kind), "📣 Annonce")
+
+
+def broadcast_history_keyboard(history):
+    rows = []
+    for job in history:
+        active = int(job.get("active_message_count") or 0)
+        status = "🗑" if active == 0 else "🟢"
+        rows.append([InlineKeyboardButton(
+            f"{status} {broadcast_kind_label(job.get('kind'))} · {active}/{int(job.get('tracked_count') or 0)}",
+            callback_data=f"adm_broadcast_view:{job['id']}",
+        )])
+    if not rows:
+        rows.append([InlineKeyboardButton("Aucune annonce suivie", callback_data="adm_text_noop")])
+    rows.extend([
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="adm_broadcast_history")],
+        [InlineKeyboardButton("⬅️ Administration", callback_data="adm_panel")],
+    ])
+    return InlineKeyboardMarkup(rows)
+
+
+def broadcast_delete_keyboard(job):
+    job_id = int(job["id"])
+    rows = []
+    if int(job.get("active_message_count") or 0) > 0:
+        rows.append([InlineKeyboardButton(
+            "🗑 Supprimer chez tous les clients",
+            callback_data=f"adm_broadcast_confirm:{job_id}",
+            style="danger",
+        )])
+    rows.append([InlineKeyboardButton("⬅️ Historique", callback_data="adm_broadcast_history")])
+    return InlineKeyboardMarkup(rows)
+
+
+def broadcast_delete_confirmation_keyboard(job_id):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            "✅ Confirmer la suppression partout",
+            callback_data=f"adm_broadcast_delete:{int(job_id)}",
+            style="danger",
+        )],
+        [InlineKeyboardButton("❌ Annuler", callback_data=f"adm_broadcast_view:{int(job_id)}")],
     ])
 
 

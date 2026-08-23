@@ -739,6 +739,25 @@ def _announcement_plain(value):
     return str(value or "").replace("*", "").replace("_", " ").replace("`", "").strip()
 
 
+def _track_broadcast_message(context, sent_message, chat_id):
+    """Persist an outgoing campaign message for later global deletion."""
+    job_id = getattr(context, "broadcast_job_id", None)
+    message_id = getattr(sent_message, "message_id", None)
+    if job_id and message_id:
+        try:
+            db.record_broadcast_message(
+                job_id,
+                getattr(context, "broadcast_kind", "broadcast"),
+                chat_id,
+                message_id,
+            )
+        except Exception as exc:
+            # The message is already delivered: never resend it just because
+            # history tracking had a transient database failure.
+            log.warning("Could not track broadcast message %s/%s: %s", chat_id, message_id, exc)
+    return sent_message
+
+
 async def announce_channel_restock(context, offer_id, added, stock):
     """Broadcast a private new-stock advert to every active bot user."""
     offer = db.get_offer(int(offer_id))
@@ -765,12 +784,13 @@ async def announce_channel_restock(context, offer_id, added, stock):
         }
         if added is not None:
             values["added"] = int(added)
-        await context.bot.send_message(
+        sent_message = await context.bot.send_message(
             chat_id=user_id,
             text=premium_customer_text(lang, message_key, **values),
             parse_mode=ParseMode.HTML,
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
+        _track_broadcast_message(context, sent_message, user_id)
     return await _broadcast_in_batches(send_one, label="New-stock broadcast")
 
 
@@ -795,7 +815,7 @@ async def announce_flash_sale(context, offer_id):
     async def send_one(user):
         user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
-        await context.bot.send_message(
+        sent_message = await context.bot.send_message(
             chat_id=user_id,
             text=premium_customer_text(
                 lang,
@@ -812,6 +832,7 @@ async def announce_flash_sale(context, offer_id):
             parse_mode=ParseMode.HTML,
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
+        _track_broadcast_message(context, sent_message, user_id)
     return await _broadcast_in_batches(send_one, label="Flash-sale broadcast")
 
 
@@ -827,7 +848,7 @@ async def announce_api_flash_sale(context, event):
     async def send_one(user):
         user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
-        await context.bot.send_message(
+        sent_message = await context.bot.send_message(
             chat_id=user_id,
             text=premium_customer_text(
                 lang,
@@ -843,17 +864,19 @@ async def announce_api_flash_sale(context, event):
             parse_mode=ParseMode.HTML,
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
+        _track_broadcast_message(context, sent_message, user_id)
     return await _broadcast_in_batches(send_one, label="Automatic flash-sale broadcast")
 
 
 async def broadcast_admin_message(context, source_chat_id, message_id):
     """Copy an admin-authored Telegram message to every active bot user."""
     async def send_one(user):
-        await context.bot.copy_message(
+        sent_message = await context.bot.copy_message(
             chat_id=int(user["telegram_id"]),
             from_chat_id=source_chat_id,
             message_id=message_id,
         )
+        _track_broadcast_message(context, sent_message, int(user["telegram_id"]))
     return await _broadcast_in_batches(send_one, label="Admin announcement")
 
 
@@ -921,11 +944,65 @@ async def announce_restock_digest(context, events):
             products="\n\n".join(product_lines),
             extra=extra,
         )
-        await context.bot.send_message(
+        sent_message = await context.bot.send_message(
             chat_id=int(user["telegram_id"]), text=text,
             parse_mode=ParseMode.HTML, reply_markup=markup,
         )
+        _track_broadcast_message(context, sent_message, int(user["telegram_id"]))
     return await _broadcast_in_batches(send_one, label="Restock digest")
+
+
+async def delete_broadcast_messages(context, target_job_id):
+    """Delete one tracked campaign from every recipient Telegram still allows."""
+    target_job_id = int(target_job_id)
+    messages = db.list_broadcast_messages(target_job_id)
+    db.set_broadcast_deletion_status(target_job_id, "deleting")
+
+    async def delete_one(row):
+        chat_id = int(row["chat_id"])
+        message_id = int(row["message_id"])
+        for attempt in range(3):
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                db.mark_broadcast_message_deleted(target_job_id, chat_id, message_id)
+                return 1
+            except RetryAfter as exc:
+                if attempt < 2:
+                    delay = exc.retry_after
+                    delay = delay.total_seconds() if hasattr(delay, "total_seconds") else float(delay)
+                    await asyncio.sleep(delay + 0.15)
+                    continue
+                error = str(exc)
+            except (TimedOut, NetworkError) as exc:
+                if attempt < 2:
+                    await asyncio.sleep(0.4 * (attempt + 1))
+                    continue
+                error = str(exc)
+            except Exception as exc:
+                error = str(exc)
+                if "message to delete not found" in error.lower():
+                    db.mark_broadcast_message_deleted(target_job_id, chat_id, message_id)
+                    return 1
+            db.mark_broadcast_message_deleted(
+                target_job_id, chat_id, message_id, error=error,
+            )
+            return 0
+        return 0
+
+    deleted = 0
+    for offset in range(0, len(messages), BROADCAST_BATCH_SIZE):
+        batch = messages[offset:offset + BROADCAST_BATCH_SIZE]
+        deleted += sum(await asyncio.gather(*(delete_one(row) for row in batch)))
+        if offset + BROADCAST_BATCH_SIZE < len(messages):
+            await asyncio.sleep(BROADCAST_BATCH_DELAY)
+    failed = len(db.list_broadcast_messages(target_job_id))
+    db.set_broadcast_deletion_status(
+        target_job_id,
+        "deleted" if failed == 0 else "partial",
+        deleted_count=deleted,
+        failed_count=failed,
+    )
+    return deleted
 
 
 async def _execute_broadcast_job(job):
@@ -935,7 +1012,11 @@ async def _execute_broadcast_job(job):
     bot_client = Bot(token=BOT_TOKEN, request=request)
     await bot_client.initialize()
     try:
-        context = SimpleNamespace(bot=bot_client)
+        context = SimpleNamespace(
+            bot=bot_client,
+            broadcast_job_id=int(job["id"]),
+            broadcast_kind=str(job.get("kind") or "broadcast"),
+        )
         payload = job.get("payload") or {}
         kind = job.get("kind")
         if kind == "stock":
@@ -948,6 +1029,12 @@ async def _execute_broadcast_job(job):
             return await announce_api_flash_sale(context, payload["event"])
         if kind == "admin_message":
             return await broadcast_admin_message(context, payload["source_chat_id"], payload["message_id"])
+        if kind == "delete_broadcast":
+            return await delete_broadcast_messages(context, payload["target_job_id"])
+        if kind == "maintenance":
+            return await broadcast_maintenance_notice(context, payload["message"])
+        if kind == "affiliate_update":
+            return await broadcast_affiliate_program_update(context)
         raise ValueError(f"Unknown broadcast job: {kind}")
     finally:
         await bot_client.shutdown()
@@ -1002,50 +1089,28 @@ def resume_pending_broadcasts():
 
 async def broadcast_maintenance_notice(context, message):
     """Notify every active bot user when maintenance mode is enabled."""
-    sent = 0
-    for user in db.list_broadcast_users():
-        user_id = user.get("telegram_id")
-        if not user_id:
-            continue
-        try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=f"🛠️ Maintenance\n\n{message}",
-            )
-            sent += 1
-        except Exception as exc:
-            error = str(exc).lower()
-            if "blocked" in error or "chat not found" in error or "deactivated" in error:
-                db.mark_broadcast_blocked(user_id)
-            else:
-                log.warning("Maintenance notice failed for user %s: %s", user_id, exc)
-        await asyncio.sleep(0.04)
-    return sent
+    async def send_one(user):
+        user_id = int(user["telegram_id"])
+        sent_message = await context.bot.send_message(
+            chat_id=user_id,
+            text=f"🛠️ Maintenance\n\n{message}",
+        )
+        _track_broadcast_message(context, sent_message, user_id)
+    return await _broadcast_in_batches(send_one, label="Maintenance notice")
 
 
 async def broadcast_affiliate_program_update(context):
     """Notify every active bot user about the affiliate qualification rule."""
-    sent = 0
-    for user in db.list_broadcast_users():
-        user_id = user.get("telegram_id")
-        if not user_id:
-            continue
+    async def send_one(user):
+        user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
-        try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=premium_customer_text(lang, "affiliate_program_update"),
-                parse_mode=ParseMode.HTML,
-            )
-            sent += 1
-        except Exception as exc:
-            error = str(exc).lower()
-            if "blocked" in error or "chat not found" in error or "deactivated" in error:
-                db.mark_broadcast_blocked(user_id)
-            else:
-                log.warning("Affiliate program update failed for user %s: %s", user_id, exc)
-        await asyncio.sleep(0.04)
-    return sent
+        sent_message = await context.bot.send_message(
+            chat_id=user_id,
+            text=premium_customer_text(lang, "affiliate_program_update"),
+            parse_mode=ParseMode.HTML,
+        )
+        _track_broadcast_message(context, sent_message, user_id)
+    return await _broadcast_in_batches(send_one, label="Affiliate program update")
 
 
 async def announce_channel_purchase(context, order_id):
@@ -3606,6 +3671,80 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    if data == "adm_broadcast_history":
+        history = db.list_broadcast_history(limit=20)
+        await q.edit_message_text(
+            "🧹 <b>ANNONCES ENVOYÉES</b>\n\n"
+            "Sélectionnez une campagne pour supprimer son message chez tous les clients. "
+            "Telegram peut refuser les messages trop anciens.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.broadcast_history_keyboard(history),
+        )
+        return
+
+    if data.startswith("adm_broadcast_view:"):
+        job_id = int(data.split(":", 1)[1])
+        job = db.get_broadcast_job(job_id)
+        if not job:
+            await q.edit_message_text(
+                "⚠️ Annonce introuvable.",
+                reply_markup=admin.broadcast_history_keyboard(db.list_broadcast_history()),
+            )
+            return
+        all_messages = db.list_broadcast_messages(job_id, active_only=False)
+        active_messages = db.list_broadcast_messages(job_id)
+        job["tracked_count"] = len(all_messages)
+        job["active_message_count"] = len(active_messages)
+        payload = job.get("payload") or {}
+        offer_id = payload.get("offer_id") or (payload.get("event") or {}).get("offer_id")
+        offer = db.get_offer(int(offer_id)) if offer_id else None
+        product = html.escape(str((offer or {}).get("name") or "Annonce générale"))
+        deletion_status = html.escape(str(job.get("deletion_status") or "active"))
+        await q.edit_message_text(
+            f"{admin.broadcast_kind_label(job.get('kind'))}\n\n"
+            f"Produit : <b>{product}</b>\n"
+            f"Messages encore visibles : <b>{len(active_messages)}</b> / {len(all_messages)}\n"
+            f"Suppression : <b>{deletion_status}</b>\n\n"
+            "La suppression sera appliquée à tous les clients ayant reçu cette campagne.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.broadcast_delete_keyboard(job),
+        )
+        return
+
+    if data.startswith("adm_broadcast_confirm:"):
+        job_id = int(data.split(":", 1)[1])
+        active = len(db.list_broadcast_messages(job_id))
+        await q.edit_message_text(
+            "⚠️ <b>CONFIRMER LA SUPPRESSION</b>\n\n"
+            f"Cette action tentera de supprimer l’annonce chez <b>{active}</b> client(s).\n"
+            "Les messages trop anciens peuvent être refusés par Telegram.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.broadcast_delete_confirmation_keyboard(job_id),
+        )
+        return
+
+    if data.startswith("adm_broadcast_delete:"):
+        job_id = int(data.split(":", 1)[1])
+        job = db.get_broadcast_job(job_id)
+        active = len(db.list_broadcast_messages(job_id))
+        if not job or active == 0:
+            await q.edit_message_text(
+                "✅ Cette annonce n’est plus visible chez les clients.",
+                reply_markup=admin.broadcast_history_keyboard(db.list_broadcast_history()),
+            )
+            return
+        if job.get("deletion_status") not in {"queued", "deleting"}:
+            db.set_broadcast_deletion_status(job_id, "queued")
+            queue_broadcast("delete_broadcast", target_job_id=job_id)
+        await q.edit_message_text(
+            "🧹 <b>Suppression lancée</b>\n\n"
+            f"Le bot supprime cette annonce chez {active} client(s) en arrière-plan. "
+            "Actualisez l’historique dans quelques instants.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.broadcast_history_keyboard(db.list_broadcast_history()),
+        )
+        return
+
     if data.startswith("adm_onchain_approve:"):
         order_id = int(data.split(":", 1)[1])
         result = await asyncio.to_thread(
@@ -3756,12 +3895,12 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = "ACTIVÉE 🔴" if enabled else "DÉSACTIVÉE 🟢"
         if enabled:
             settings = db.shop_settings()
-            sent = await broadcast_maintenance_notice(
-                context, settings["maintenance_message"],
+            queued = queue_broadcast(
+                "maintenance", message=settings["maintenance_message"],
             )
             detail = (
                 "Tous les clients sont maintenant bloqués. Seul l'admin peut utiliser le bot.\n"
-                f"📢 Notification envoyée à {sent} utilisateur(s)."
+                f"📢 Notification mise en file pour {queued['recipient_count']} utilisateur(s)."
             )
         else:
             detail = "Le bot est de nouveau accessible à tous les clients."
