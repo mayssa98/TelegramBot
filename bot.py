@@ -3223,13 +3223,16 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
                 else:
                     await context.bot.send_message(
                         ADMIN_ID,
-                        "⏳ <b>Livraison fournisseur en attente</b>\n\n"
+                        "⚠️ <b>Problème de livraison automatique</b>\n\n"
                         f"Commande locale : <b>#{order_id}</b>\n"
                         f"Référence fournisseur : <code>BM-{order_id}</code>\n\n"
-                        "La commande API peut déjà avoir été débitée. La livraison "
-                        "manuelle n’a pas été activée afin d’éviter un doublon.\n\n"
+                        "La commande API peut déjà avoir été débitée. Vérifiez d’abord "
+                        "le fournisseur pour éviter une double livraison, puis choisissez :\n"
+                        "• <b>Envoyer un message</b> pour informer le client ;\n"
+                        "• <b>Envoyer la commande</b> pour effectuer la livraison manuelle.\n\n"
                         f"Détail : {html.escape(str(result.get('error_message') or 'contenu non retourné'))}",
                         parse_mode=ParseMode.HTML,
+                        reply_markup=admin.manual_delivery_request_keyboard(order_id),
                     )
             else:
                 await admin.notify_new_order(context, paid_order)
@@ -3983,6 +3986,16 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("adm_deliver:"):
         oid = int(data.split(":")[1])
+        order = db.get_order(oid)
+        if not order:
+            await q.message.reply_text("⚠️ Commande introuvable.")
+            return
+        if order.get("status") not in {"paid", "payment_confirmed"}:
+            await q.message.reply_text(
+                f"⚠️ La commande #{oid} n’est plus en attente de livraison "
+                f"(statut : {order.get('status') or 'inconnu'})."
+            )
+            return
         PENDING[uid] = ("adm_deliver", oid)
         await q.message.reply_text(
             f"🎁 Envoyez le contenu à livrer pour la commande #{oid} "
@@ -4379,6 +4392,12 @@ async def deliver_order(
     o = db.get_order(order_id)
     if not o:
         await update.message.reply_text("Commande introuvable.")
+        return False
+    if o.get("status") not in {"paid", "payment_confirmed"}:
+        await update.message.reply_text(
+            f"⚠️ La commande #{order_id} n’est plus en attente de livraison "
+            f"(statut : {o.get('status') or 'inconnu'}). Aucun contenu n’a été envoyé."
+        )
         return False
     if is_otp_order(o):
         await update.message.reply_text(

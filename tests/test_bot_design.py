@@ -1684,7 +1684,7 @@ def test_manual_delivery_sends_admin_an_in_bot_reply_request(
     assert customer_keyboard.inline_keyboard[0][0].callback_data == "catalog"
 
 
-def test_created_supplier_order_never_triggers_manual_double_delivery(
+def test_created_supplier_order_offers_admin_message_or_manual_fallback(
     monkeypatch, mock_mongodb,
 ):
     monkeypatch.setattr("bot.ADMIN_ID", 999)
@@ -1721,7 +1721,33 @@ def test_created_supplier_order_never_triggers_manual_double_delivery(
     admin_alert = bot_client.send_message.await_args
     assert admin_alert.args[0] == 999
     assert "BM-504" in admin_alert.args[1]
-    assert "éviter un doublon" in admin_alert.args[1]
+    assert "éviter une double livraison" in admin_alert.args[1]
+    keyboard = admin_alert.kwargs["reply_markup"]
+    assert keyboard.inline_keyboard[0][0].callback_data == "adm_client_message:504"
+    assert keyboard.inline_keyboard[0][1].callback_data == "adm_deliver:504"
+
+
+def test_manual_fallback_does_not_send_if_api_already_delivered(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 507,
+        "user_id": 42,
+        "service_name": "Coursera",
+        "offer_name": "Coursera account",
+        "status": "delivered",
+    })
+    message = SimpleNamespace(reply_text=AsyncMock())
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    delivered = asyncio.run(deliver_order(
+        SimpleNamespace(message=message),
+        SimpleNamespace(bot=bot_client),
+        507,
+        "manual duplicate",
+    ))
+
+    assert delivered is False
+    bot_client.send_message.assert_not_awaited()
+    assert "Aucun contenu n’a été envoyé" in message.reply_text.await_args.args[0]
 
 
 def test_paid_codex_order_is_sent_to_admin_for_number(mock_mongodb):
