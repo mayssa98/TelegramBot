@@ -37,6 +37,7 @@ from app.domain import (
     affiliate_service,
     buyer_api_service,
     inventory_service,
+    lovable_service,
     loyalty_service,
     order_service,
     payment_service,
@@ -166,6 +167,9 @@ def _interaction_button_name(query):
     action, _, value = callback_data.partition(":")
     names = {
         "home": "Main menu", "catalog": "Catalog", "catalog_request": "Request a product",
+        "lovable": "Lovable Unlimited Credit", "lovable_howto": "Lovable instructions",
+        "lovable_buy": "Lovable plans", "lovable_trial": "Lovable free trial",
+        "lovable_download": "Download Lovable extension",
         "orders": "My orders", "account": "My account", "affiliate": "Affiliate program",
         "affiliate_copy": "Copy referral link", "support": "Support", "language": "Language",
         "topup": "Top up balance",
@@ -1454,6 +1458,8 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "adm_deliver",
         "adm_codex_number",
         "adm_codex_otp",
+        "adm_lovable_zip",
+        "adm_lovable_trial",
     }
 
     if pending and pending[0] in blocking_states:
@@ -1462,6 +1468,9 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == t(lang, "menu_catalog"):
         clear_support_pending()
         await show_catalog(update, context, lang)
+    elif text == t(lang, "menu_lovable"):
+        clear_support_pending()
+        await show_lovable(update, context, lang)
     elif text == t(lang, "menu_orders"):
         clear_support_pending()
         await show_my_orders(update, context, lang)
@@ -1495,6 +1504,41 @@ async def show_catalog(update, context, lang):
     msg = update.message or update.callback_query.message
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN,
                          reply_markup=kb.catalog_offers_keyboard(lang))
+
+
+async def show_lovable(update, context, lang):
+    """Open the dedicated Lovable Unlimited Credit storefront."""
+    msg = update.message or update.callback_query.message
+    await msg.reply_text(
+        t(lang, "lovable_title"),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.lovable_home_keyboard(
+            lang, is_admin=int(update.effective_user.id) == int(ADMIN_ID),
+        ),
+    )
+
+
+def lovable_expiry_text(timestamp):
+    return datetime.fromtimestamp(int(timestamp), tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
+async def send_lovable_extension(bot, user_id, lang):
+    extension = lovable_service.extension_file()
+    if not extension:
+        await bot.send_message(int(user_id), t(lang, "lovable_download_unavailable"))
+        return False
+    try:
+        await bot.send_document(
+            chat_id=int(user_id),
+            document=extension["file_id"],
+            caption="💗 Lovable Unlimited Credit — Browser Extension\n\n"
+            "Extract this ZIP file, load the folder in Developer mode, then enter your license.",
+        )
+        return True
+    except Exception as exc:
+        log.warning("Lovable extension download failed for user %s: %s", user_id, exc)
+        await bot.send_message(int(user_id), t(lang, "lovable_download_unavailable"))
+        return False
 
 
 async def show_callback_screen(
@@ -1632,6 +1676,63 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             t(lang, "catalog_flat_title", shop=SHOP_NAME),
             reply_markup=kb.catalog_offers_keyboard(lang),
         )
+        return
+    if data == "lovable":
+        await show_callback_screen(
+            q,
+            t(lang, "lovable_title"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.lovable_home_keyboard(lang, is_admin=uid == ADMIN_ID),
+        )
+        return
+    if data == "lovable_howto":
+        await show_callback_screen(
+            q,
+            t(lang, "lovable_how_to"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.lovable_back_keyboard(lang),
+        )
+        return
+    if data == "lovable_buy":
+        await show_callback_screen(
+            q,
+            "💗 <b>CHOOSE YOUR ACCESS PERIOD</b>\n\n"
+            "Every paid plan includes a manually verified license and full warranty.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.lovable_plans_keyboard(lang),
+        )
+        return
+    if data == "lovable_trial":
+        _request, created = await asyncio.to_thread(lovable_service.request_trial, uid)
+        if not created:
+            await q.message.reply_text(
+                t(lang, "lovable_trial_used"),
+                reply_markup=kb.lovable_plans_keyboard(lang),
+            )
+            return
+        await context.bot.send_message(
+            ADMIN_ID,
+            "🎁 <b>Nouvelle demande d’essai Lovable</b>\n\n"
+            f"Client : <code>{uid}</code>\n"
+            "Durée : <b>1 heure</b>\n\n"
+            "Envoyez manuellement la licence d’essai au client.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(
+                    "🔑 Envoyer la licence d’essai",
+                    callback_data=f"adm_lovable_trial:{uid}",
+                    style="success",
+                ),
+            ]]),
+        )
+        await q.message.reply_text(
+            t(lang, "lovable_trial_requested"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.lovable_back_keyboard(lang),
+        )
+        return
+    if data == "lovable_download":
+        await send_lovable_extension(context.bot, uid, lang)
         return
     if data == "reseller_api":
         await show_reseller_api(update, context)
@@ -2268,6 +2369,38 @@ async def handle_pending_input(update, context, lang):
     uid = update.effective_user.id
     kind, ref = PENDING.get(uid)
     text = update.message.text.strip()
+
+    if kind == "adm_lovable_trial" and uid == ADMIN_ID:
+        customer_id = int(ref)
+        try:
+            await context.bot.send_message(
+                customer_id,
+                "🎁 <b>LOVABLE FREE TRIAL</b>\n\n"
+                "Your one-hour trial license is ready.\n\n"
+                f"🔑 <b>License</b>\n<code>{html.escape(text)}</code>\n\n"
+                "Open the extension and enter this license.",
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.lovable_back_keyboard(lang_of(customer_id)),
+            )
+            license_row = await asyncio.to_thread(
+                lovable_service.complete_trial, customer_id, text,
+            )
+        except Exception as exc:
+            await update.message.reply_text(f"⚠️ Échec d’envoi de la licence : {exc}")
+            return
+        PENDING.pop(uid, None)
+        await send_lovable_extension(context.bot, customer_id, lang_of(customer_id))
+        await update.message.reply_text(
+            f"✅ Licence d’essai envoyée manuellement au client {customer_id}.\n"
+            f"Expiration : {lovable_expiry_text(license_row['expires_at'])}"
+        )
+        return
+
+    if kind == "adm_lovable_zip" and uid == ADMIN_ID:
+        await update.message.reply_text(
+            "📎 Envoyez le fichier de l’extension comme document ZIP, pas comme texte."
+        )
+        return
 
     if kind == "await_quantity":
         ref_id = ref
@@ -3416,7 +3549,29 @@ async def handle_pending_attachment(update, context):
     uid = update.effective_user.id
     pending = PENDING.get(uid)
     message = update.effective_message
+    if uid == ADMIN_ID and pending and pending[0] == "adm_lovable_zip":
+        document = getattr(message, "document", None)
+        file_name = str(getattr(document, "file_name", "") or "")
+        if not document or not file_name.lower().endswith(".zip"):
+            await message.reply_text(
+                "⚠️ Fichier refusé. Envoyez l’extension comme document avec l’extension .zip."
+            )
+            return
+        lovable_service.set_extension_file(document.file_id, file_name)
+        PENDING.pop(uid, None)
+        await message.reply_text(
+            f"✅ Extension enregistrée : <code>{html.escape(file_name)}</code>\n\n"
+            "Le bouton Download est maintenant actif pour les clients.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.admin_panel_keyboard(),
+        )
+        return
     if uid == ADMIN_ID and pending and pending[0] == "adm_deliver":
+        if lovable_service.is_lovable_order(db.get_order(int(pending[1]))):
+            await message.reply_text(
+                "⚠️ Pour Lovable, envoyez la licence uniquement comme message texte."
+            )
+            return
         document = getattr(message, "document", None)
         if document and str(getattr(document, "mime_type", "")).startswith("image/"):
             caption = str(getattr(message, "caption", None) or "").strip()
@@ -3485,6 +3640,11 @@ async def handle_pending_photo(update, context):
     uid = update.effective_user.id
     pending = PENDING.get(uid)
     if uid == ADMIN_ID and pending and pending[0] == "adm_deliver":
+        if lovable_service.is_lovable_order(db.get_order(int(pending[1]))):
+            await update.message.reply_text(
+                "⚠️ Pour Lovable, envoyez la licence uniquement comme message texte."
+            )
+            return
         caption = str(update.message.caption or "").strip()
         if await deliver_order(
             update,
@@ -3622,6 +3782,55 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             q,
             "🛠️ *Panneau Admin*",
             reply_markup=admin.admin_panel_keyboard(),
+        )
+        return
+
+    if data == "adm_lovable":
+        db.ensure_lovable_unlimited_feature()
+        extension = lovable_service.extension_file()
+        status = (
+            f"✅ ZIP configuré : <code>{html.escape(extension['file_name'])}</code>"
+            if extension else "⚠️ Aucun fichier ZIP configuré"
+        )
+        await q.edit_message_text(
+            "💗 <b>LOVABLE EXTENSION</b>\n\n"
+            f"{status}\n\n"
+            "Forfaits actifs : <b>1 jour ($1), 7 jours ($4), 30 jours ($8)</b>\n"
+            "Essai gratuit : <b>1 heure par utilisateur</b>\n"
+            "Livraison : <b>licence saisie et envoyée manuellement par l’admin</b>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "📤 Importer/remplacer le ZIP",
+                    callback_data="adm_lovable_upload",
+                    style="primary",
+                )],
+                [InlineKeyboardButton("⬅️ Administration", callback_data="adm_panel")],
+            ]),
+        )
+        return
+
+    if data == "adm_lovable_upload":
+        PENDING[uid] = ("adm_lovable_zip", 0)
+        await q.message.reply_text(
+            "📤 <b>Envoyez maintenant le fichier ZIP de l’extension.</b>\n\n"
+            "Le nouveau fichier remplacera automatiquement l’ancienne version.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    if data.startswith("adm_lovable_trial:"):
+        customer_id = int(data.split(":", 1)[1])
+        request = db.get_conn().lovable_trial_requests.find_one({
+            "user_id": customer_id,
+        })
+        if not request or request.get("status") != "pending":
+            await q.message.reply_text("⚠️ Cette demande d’essai a déjà été traitée.")
+            return
+        PENDING[uid] = ("adm_lovable_trial", customer_id)
+        await q.message.reply_text(
+            f"🔑 Envoyez la licence manuelle pour le client {customer_id}.\n\n"
+            "Elle sera activée pendant une heure à partir de son envoi."
         )
         return
 
@@ -3951,7 +4160,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("adm_btn_toggle:"):
         action = data.split(":", 1)[1]
-        allowed = {"catalog", "topup", "orders", "account", "affiliate", "support", "language"}
+        allowed = {"catalog", "lovable", "topup", "orders", "account", "affiliate", "support", "language"}
         if action in allowed:
             hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
             hidden.remove(action) if action in hidden else hidden.add(action)
@@ -3997,10 +4206,17 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         PENDING[uid] = ("adm_deliver", oid)
-        await q.message.reply_text(
-            f"🎁 Envoyez le contenu à livrer pour la commande #{oid} "
-            f"(texte, URL, compte, code, instructions ou image). "
-            "Tous les caractères seront transmis sans modification.")
+        prompt = (
+            f"🔑 Envoyez uniquement la licence Lovable pour la commande #{oid}.\n\n"
+            "La licence sera enregistrée avec la durée du forfait puis transmise au client."
+            if lovable_service.is_lovable_order(order)
+            else (
+                f"🎁 Envoyez le contenu à livrer pour la commande #{oid} "
+                f"(texte, URL, compte, code, instructions ou image). "
+                "Tous les caractères seront transmis sans modification."
+            )
+        )
+        await q.message.reply_text(prompt)
         return
 
     if data.startswith("adm_codex_number:"):
@@ -4424,6 +4640,10 @@ async def deliver_order(
             photo_file_id=photo_file_id,
             document_file_id=document_file_id,
         )
+        if lovable_service.is_lovable_order(o):
+            await asyncio.to_thread(
+                lovable_service.register_paid_license, order_id, content,
+            )
         delivered = order_service.manual_deliver_order(order_id, content)
         if not delivered:
             await update.message.reply_text(

@@ -30,7 +30,7 @@ from config import ADMIN_ID, REQUIRED_CHANNEL, REQUIRED_GROUP
 from i18n import t
 
 BUTTON_TEXT_KEYS = {
-    "menu_catalog", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
+    "menu_catalog", "menu_lovable", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
     "menu_support", "menu_lang", "menu_admin", "menu_reseller_api", "btn_main_menu", "support_no_order",
     "catalog_request_button", "catalog_preorder_button",
     "topup_verify_txid", "topup_verify_bybit", "topup_bsc", "topup_polygon",
@@ -223,6 +223,7 @@ def main_menu_keyboard(lang, user_id):
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     candidates = [
         [("catalog", t(lang, "menu_catalog")), ("orders", t(lang, "menu_orders"))],
+        [("lovable", t(lang, "menu_lovable"))],
         [("topup", t(lang, "menu_topup"))],
         [("account", t(lang, "menu_account")), ("affiliate", t(lang, "menu_affiliate"))],
         [("support", t(lang, "menu_support")), ("language", t(lang, "menu_lang"))],
@@ -238,6 +239,7 @@ def home_keyboard(lang, user_id):
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     candidate_rows = [
         [translated_button(lang, "menu_catalog", callback_data="catalog")],
+        [translated_button(lang, "menu_lovable", callback_data="lovable")],
         [translated_button(lang, "menu_topup", callback_data="topup", style="success")],
         [translated_button(lang, "menu_reseller_api", callback_data="reseller_api", style="primary")],
         [
@@ -594,6 +596,48 @@ def preorder_services_keyboard(lang):
         rows.append(row)
     rows.append([translated_button(lang, "btn_back", callback_data="catalog")])
     return InlineKeyboardMarkup(rows)
+
+
+def lovable_home_keyboard(lang, *, is_admin=False):
+    rows = [
+        [InlineKeyboardButton("📘 How to use", callback_data="lovable_howto")],
+        [InlineKeyboardButton("🛒 Buy access", callback_data="lovable_buy", style="success")],
+        [InlineKeyboardButton("⬇️ Download extension", callback_data="lovable_download")],
+    ]
+    if is_admin:
+        rows.append([InlineKeyboardButton(
+            "📤 Upload extension ZIP", callback_data="adm_lovable_upload",
+            style="primary",
+        )])
+    rows.append([translated_button(lang, "btn_main_menu_short", callback_data="home")])
+    return InlineKeyboardMarkup(rows)
+
+
+def lovable_plans_keyboard(lang):
+    db.ensure_lovable_unlimited_feature()
+    offers = list(db.get_conn().offers.find({
+        "feature_key": "lovable_unlimited", "active": 1,
+    }).sort("duration_days", 1))
+    rows = [[InlineKeyboardButton(
+        "🎁 Free trial — 1 hour", callback_data="lovable_trial", style="primary",
+    )]]
+    for offer in offers:
+        days = int(offer.get("duration_days") or 0)
+        day_label = "day" if days == 1 else "days"
+        rows.append([InlineKeyboardButton(
+            f"💗 {days} {day_label} — ${float(offer.get('price') or 0):g}",
+            callback_data=f"buyq:{int(offer['id'])}:1",
+            style="success" if days == 30 else None,
+        )])
+    rows.append([InlineKeyboardButton("⬅️ Lovable", callback_data="lovable")])
+    return InlineKeyboardMarkup(rows)
+
+
+def lovable_back_keyboard(lang):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("⬅️ Lovable", callback_data="lovable"),
+        translated_button(lang, "btn_main_menu_short", callback_data="home"),
+    ]])
 
 
 def reseller_api_keyboard(lang, *, has_key, docs_url):

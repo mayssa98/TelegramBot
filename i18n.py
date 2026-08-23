@@ -63,6 +63,32 @@ TRANSLATIONS = {
         "ar": "🚀 *WELCOME TO {shop}*\n\nYou are officially inside our premium digital marketplace — verified products, competitive prices and fast delivery are now one tap away.\n\n🎁 *TURN YOUR NETWORK INTO CREDIT*\nShare your personal referral link and earn *2 USDT for every 10 qualified referrals*. A referral qualifies only after they buy from the bot for at least *1 USDT*. Your reward is added automatically to your wallet and can be used to buy any catalog product.\n\n🔗 *Your referral link*\n`{link}`\n\n🏆 *UNLOCK BIGGER DISCOUNTS AS YOU SHOP*\n🥉 *Bronze* — spend 25 USDT → *3% OFF*\n🥈 *Silver* — spend 70 USDT → *6% OFF*\n💎 *Platinum* — spend 200 USDT → *9% OFF*\n👑 *Diamond* — spend 500 USDT → *12% OFF*\n\nEach unlocked discount applies to every product for *3 days*.\n\n🔥 Start exploring today — every purchase brings you closer to a bigger reward.",
     },    # ---------------- Menu principal ----------------
     "menu_catalog": {"fr": "🛍️ Catalogue", "en": "🛍️ Catalog", "ar": "🛍️ المتجر"},
+    "menu_lovable": {"fr": "💗 Lovable Unlimited Credit", "en": "💗 Lovable Unlimited Credit", "ar": "💗 Lovable Unlimited Credit"},
+    "lovable_title": {
+        "fr": "💗 <b>LOVABLE UNLIMITED CREDIT</b>\n\nUtilisez Lovable avec des crédits illimités grâce à notre extension de navigateur dédiée. Une licence active est requise.\n\n🛡️ <b>Garantie complète</b> pendant toute la période de fonctionnement de l’extension.",
+        "en": "💗 <b>LOVABLE UNLIMITED CREDIT</b>\n\nUse Lovable with unlimited credits through our dedicated browser extension. An active license is required.\n\n🛡️ <b>Full warranty</b> while the extension is operational.",
+        "ar": "💗 <b>LOVABLE UNLIMITED CREDIT</b>\n\nاستخدم Lovable برصيد غير محدود عبر إضافة المتصفح الخاصة بنا. يلزم ترخيص نشط.\n\n🛡️ <b>ضمان كامل</b> طوال فترة عمل الإضافة.",
+    },
+    "lovable_how_to": {
+        "fr": "📘 <b>COMMENT UTILISER L’EXTENSION</b>\n\n1. Téléchargez l’extension au format ZIP.\n2. Extrayez le fichier ZIP.\n3. Ouvrez la page <b>Extensions</b> de votre navigateur.\n4. Activez le <b>Mode développeur</b>.\n5. Cliquez sur <b>Charger l’extension non empaquetée</b>.\n6. Sélectionnez le dossier extrait.\n7. Épinglez puis ouvrez l’extension.\n8. Ouvrez Lovable, cliquez sur l’extension et saisissez votre licence.",
+        "en": "📘 <b>HOW TO USE THE EXTENSION</b>\n\n1. Download the extension as a ZIP file.\n2. Extract the ZIP archive.\n3. Open your browser’s <b>Extensions</b> page.\n4. Enable <b>Developer mode</b>.\n5. Click <b>Load unpacked</b>.\n6. Select the extracted extension folder.\n7. Pin and open the extension.\n8. Open Lovable, click the extension, and enter your license.",
+        "ar": "📘 <b>طريقة استخدام الإضافة</b>\n\n1. نزّل الإضافة بصيغة ZIP.\n2. فك ضغط الملف.\n3. افتح صفحة <b>الإضافات</b> في المتصفح.\n4. فعّل <b>وضع المطور</b>.\n5. اختر <b>تحميل إضافة غير مضغوطة</b>.\n6. حدّد مجلد الإضافة.\n7. ثبّت الإضافة وافتحها.\n8. افتح Lovable ثم الإضافة وأدخل الترخيص.",
+    },
+    "lovable_trial_used": {
+        "fr": "ℹ️ Une demande d’essai gratuit existe déjà pour ce compte. L’administrateur la traitera manuellement si elle est encore en attente.",
+        "en": "ℹ️ A free-trial request already exists for this account. The administrator will process it manually if it is still pending.",
+        "ar": "ℹ️ يوجد طلب تجربة مجانية لهذا الحساب. سيعالجه المسؤول يدويًا إذا كان لا يزال معلقًا.",
+    },
+    "lovable_trial_requested": {
+        "fr": "✅ <b>DEMANDE D’ESSAI ENVOYÉE</b>\n\nL’administrateur vous enverra manuellement une licence valable une heure.",
+        "en": "✅ <b>FREE-TRIAL REQUEST SENT</b>\n\nThe administrator will manually send you a license valid for one hour.",
+        "ar": "✅ <b>تم إرسال طلب التجربة</b>\n\nسيرسل لك المسؤول يدويًا ترخيصًا صالحًا لمدة ساعة واحدة.",
+    },
+    "lovable_download_unavailable": {
+        "fr": "⏳ Le fichier ZIP sera bientôt disponible. L’administrateur doit encore importer l’extension.",
+        "en": "⏳ The ZIP file will be available soon. The administrator still needs to upload the extension.",
+        "ar": "⏳ ملف ZIP غير متوفر بعد. يجب على المسؤول رفع الإضافة.",
+    },
     "menu_orders": {"fr": "🧾 Mes commandes", "en": "🧾 My orders", "ar": "🧾 طلباتي"},
     "menu_topup": {"fr": "💳 Recharger le solde", "en": "💳 Top Up Balance", "ar": "💳 شحن الرصيد"},
     "menu_lang": {"fr": "🌐 Langue", "en": "🌐 Language", "ar": "🌐 Language"},

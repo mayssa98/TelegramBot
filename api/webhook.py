@@ -37,6 +37,7 @@ from app.domain import (
     buyer_api_service,
     external_api_service,
     inventory_service,
+    lovable_service,
     order_service,
     reseller_comparison_service,
     reseller_service,
@@ -1025,8 +1026,33 @@ class handler(BaseHTTPRequestHandler):
             raise buyer_api_service.BuyerApiError(400, "INVALID_BODY", "JSON body must be an object.")
         return payload
 
+    def do_OPTIONS(self):
+        path = urlsplit(self.path).path.rstrip("/")
+        if path == "/api/lovable/license/validate":
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Max-Age", "86400")
+            self.end_headers()
+            return
+        self._reply(404, {"ok": False, "error": "not_found"})
+
     def do_POST(self):
         path = urlsplit(self.path).path.rstrip("/")
+        if path == "/api/lovable/license/validate":
+            try:
+                payload = self._read_json_body(max_bytes=4_000)
+                result = lovable_service.validate_license(payload.get("license", ""))
+                self._reply(200, result, headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "no-store",
+                })
+            except buyer_api_service.BuyerApiError as exc:
+                self._reply(exc.status, {"ok": False, "valid": False, "error": exc.message}, headers={
+                    "Access-Control-Allow-Origin": "*",
+                })
+            return
         if path == "/admin/api/ai-manager/chat":
             if not self._dashboard_authorized():
                 self._reply(401, {"ok": False, "error": "Unauthorized"})
