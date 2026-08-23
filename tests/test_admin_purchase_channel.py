@@ -62,3 +62,54 @@ def test_preorder_uses_a_dedicated_channel_announcement(mock_mongodb):
     assert "Awaiting Restock" in call["text"]
     assert "NEW ORDER COMPLETED" not in call["text"]
     assert call["reply_markup"].inline_keyboard[0][0].text == "⏳ Pre-order Now"
+
+
+def test_real_order_is_announced_to_channel_only_once(mock_mongodb):
+    service_id = db.add_service("Canva", "🎨")
+    offer_id = db.add_offer(service_id, "Canva Pro", 3.0, 5)
+    mock_mongodb.orders.insert_one({
+        "id": 901,
+        "offer_id": offer_id,
+        "service_id": service_id,
+        "service_name": "Canva",
+        "offer_name": "Canva Pro",
+        "qty": 1,
+        "gross_total": 3.0,
+        "status": "payment_confirmed",
+    })
+    order = db.get_order(901)
+    bot = SimpleNamespace(
+        get_me=AsyncMock(return_value=SimpleNamespace(username="blackmarket_bot")),
+        send_message=AsyncMock(),
+    )
+    context = SimpleNamespace(bot=bot)
+
+    first = asyncio.run(post_purchase_to_channel(context, order))
+    second = asyncio.run(post_purchase_to_channel(context, db.get_order(901)))
+
+    assert first is True
+    assert second is False
+    bot.send_message.assert_awaited_once()
+
+
+def test_failed_channel_announcement_can_be_retried(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 902,
+        "service_name": "Manual service",
+        "offer_name": "Manual product",
+        "qty": 1,
+        "total_price": 2.0,
+        "status": "payment_confirmed",
+    })
+    bot = SimpleNamespace(
+        get_me=AsyncMock(return_value=SimpleNamespace(username="blackmarket_bot")),
+        send_message=AsyncMock(side_effect=[RuntimeError("temporary"), None]),
+    )
+    context = SimpleNamespace(bot=bot)
+
+    first = asyncio.run(post_purchase_to_channel(context, db.get_order(902)))
+    second = asyncio.run(post_purchase_to_channel(context, db.get_order(902)))
+
+    assert first is False
+    assert second is True
+    assert bot.send_message.await_count == 2

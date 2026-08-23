@@ -479,10 +479,18 @@ def _purchase_product_total(order, offer=None):
 
 async def post_purchase_to_channel(context, order):
     """Post the correct paid purchase or pre-order announcement to the channel."""
+    order_id = int(order.get("id") or 0)
+    if str(order.get("verify_method") or "") == "admin_test":
+        return False
+    claimed = bool(order_id and db.claim_order_channel_announcement(order_id))
+    if order_id and not claimed:
+        return False
     try:
         channel_id = os.environ.get("HP_REQUIRED_CHANNEL", "@blackmarketBotChannel").strip()
         if not channel_id:
-            return
+            if claimed:
+                db.release_order_channel_announcement(order_id)
+            return False
 
         bot = context.bot
         bot_info = await bot.get_me()
@@ -546,8 +554,12 @@ async def post_purchase_to_channel(context, order):
             parse_mode=ParseMode.HTML,
             reply_markup=reply_markup,
         )
+        return True
     except Exception as exc:
+        if claimed:
+            db.release_order_channel_announcement(order_id)
         log.warning("Channel order broadcast failed: %s", exc)
+        return False
 
 
 async def notify_new_order(context, order):

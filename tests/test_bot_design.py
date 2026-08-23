@@ -1996,7 +1996,7 @@ def test_customer_can_reply_until_manual_order_is_delivered(
     assert PENDING.get(42) is None
 
 
-def test_manual_order_is_delivered_only_after_content_reaches_customer(mock_mongodb):
+def test_manual_order_is_delivered_and_retried_to_channel(monkeypatch, mock_mongodb):
     mock_mongodb.orders.insert_one({
         "id": 602,
         "user_id": 42,
@@ -2007,6 +2007,8 @@ def test_manual_order_is_delivered_only_after_content_reaches_customer(mock_mong
     })
     update = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()))
     bot_client = SimpleNamespace(send_message=AsyncMock())
+    channel_post = AsyncMock()
+    monkeypatch.setattr("bot.admin.post_purchase_to_channel", channel_post)
 
     asyncio.run(deliver_order(
         update, SimpleNamespace(bot=bot_client), 602, "login:password",
@@ -2019,6 +2021,8 @@ def test_manual_order_is_delivered_only_after_content_reaches_customer(mock_mong
     assert sent.kwargs["parse_mode"] == ParseMode.HTML
     assert "[HTML]" not in sent.kwargs["text"]
     assert "<b>Your order #602 has been delivered!</b>" in sent.kwargs["text"]
+    channel_post.assert_awaited_once()
+    assert channel_post.await_args.args[1]["status"] == "delivered"
 
 
 def test_manual_delivery_preserves_urls_and_special_characters(mock_mongodb):

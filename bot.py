@@ -4651,6 +4651,7 @@ async def deliver_order(
                 "n’était plus en attente de livraison."
             )
             return False
+        await admin.post_purchase_to_channel(context, delivered)
         await update.message.reply_text(f"✅ Commande #{order_id} livrée au client.")
         return True
     except Exception as e:
