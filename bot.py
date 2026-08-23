@@ -724,6 +724,21 @@ async def _broadcast_in_batches(send_one, *, label):
     return sent
 
 
+def _announcement_service_emoji(service, fallback="📦"):
+    """Render a service's Unicode or Premium emoji inside announcement text."""
+    service = service or {}
+    emoji = str(service.get("emoji") or fallback).strip() or fallback
+    emoji_id = str(service.get("custom_emoji_id") or "").strip()
+    if emoji_id and emoji_id.isascii():
+        return f"[[TGEMOJI:{emoji_id}:{emoji.encode('utf-8').hex()}]]"
+    return emoji
+
+
+def _announcement_plain(value):
+    """Keep dynamic names from breaking the customizable Markdown template."""
+    return str(value or "").replace("*", "").replace("_", " ").replace("`", "").strip()
+
+
 async def announce_channel_restock(context, offer_id, added, stock):
     """Broadcast a private new-stock advert to every active bot user."""
     offer = db.get_offer(int(offer_id))
@@ -741,9 +756,9 @@ async def announce_channel_restock(context, offer_id, added, stock):
         lang = user.get("lang") or DEFAULT_LANG
         message_key = "channel_stock_announcement" if added is not None else "offer_stock_announcement"
         values = {
-            "emoji": service.get("emoji") or "📦",
-            "service": service.get("name") or SHOP_NAME,
-            "offer": offer.get("name") or f"Offer #{offer_id}",
+            "emoji": _announcement_service_emoji(service),
+            "service": _announcement_plain(service.get("name") or SHOP_NAME),
+            "offer": _announcement_plain(offer.get("name") or f"Offer #{offer_id}"),
             "price": price,
             "cur": CURRENCY,
             "stock": "∞" if unlimited else int(stock),
@@ -774,6 +789,9 @@ async def announce_flash_sale(context, offer_id):
     hours, remainder = divmod(remaining_seconds, 3600)
     minutes = max(1, remainder // 60)
     remaining = f"{hours}h {minutes}m" if hours else f"{minutes}m"
+    old_price = float(offer["flash_sale_original_price"])
+    new_price = float(offer["price"])
+    discount_percent = round(((old_price - new_price) / old_price) * 100) if old_price else 0
     async def send_one(user):
         user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
@@ -782,11 +800,13 @@ async def announce_flash_sale(context, offer_id):
             text=premium_customer_text(
                 lang,
                 "flash_sale_announcement",
-                emoji=service.get("emoji") or "🎁",
-                offer=offer.get("name") or f"Offer #{offer_id}",
-                old_price=f"{float(offer['flash_sale_original_price']):.2f}",
-                price=f"{float(offer['price']):.2f}",
+                emoji=_announcement_service_emoji(service, "🎁"),
+                service=_announcement_plain(service.get("name") or SHOP_NAME),
+                offer=_announcement_plain(offer.get("name") or f"Offer #{offer_id}"),
+                old_price=f"{old_price:.2f}",
+                price=f"{new_price:.2f}",
                 cur=CURRENCY,
+                discount=discount_percent,
                 remaining=remaining,
             ),
             parse_mode=ParseMode.HTML,
@@ -812,9 +832,9 @@ async def announce_api_flash_sale(context, event):
             text=premium_customer_text(
                 lang,
                 "api_flash_sale_announcement",
-                emoji=service.get("emoji") or "🔥",
-                service=service.get("name") or SHOP_NAME,
-                offer=offer.get("name") or f"Offer #{offer['id']}",
+                emoji=_announcement_service_emoji(service, "🔥"),
+                service=_announcement_plain(service.get("name") or SHOP_NAME),
+                offer=_announcement_plain(offer.get("name") or f"Offer #{offer['id']}"),
                 old_price=f"{old_price:.2f}",
                 price=f"{new_price:.2f}",
                 cur=CURRENCY,
@@ -823,7 +843,7 @@ async def announce_api_flash_sale(context, event):
             parse_mode=ParseMode.HTML,
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
-    return await _broadcast_in_batches(send_one, label="API flash-sale broadcast")
+    return await _broadcast_in_batches(send_one, label="Automatic flash-sale broadcast")
 
 
 async def broadcast_admin_message(context, source_chat_id, message_id):
@@ -859,34 +879,53 @@ async def announce_restock_digest(context, events):
             context, item["offer"]["id"], item["added"], item["stock"],
         )
 
-    lines = ["🚨 <b>NEW API STOCKS JUST DROPPED</b>", ""]
     buttons = []
     for item in products[:8]:
         offer = item["offer"]
         service = item["service"]
-        price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f} {html.escape(CURRENCY)}"
-        offer_name = offer.get("name") or f"Offer #{offer['id']}"
-        lines.append(
-            f"{html.escape(str(service.get('emoji') or '📦'))} "
-            f"<b>{html.escape(str(offer_name))}</b>\n"
-            f"   +{item['added']} · stock {item['stock']} · {price}"
-        )
+        button_icon = str(
+            offer.get("custom_emoji_id") or service.get("custom_emoji_id") or ""
+        ).strip()
         buttons.append([InlineKeyboardButton(
             f"🛒 {str(offer.get('name') or offer['id'])[:40]}",
             callback_data=f"buy:{offer['id']}",
+            icon_custom_emoji_id=button_icon if button_icon.isascii() else None,
         )])
-    if len(products) > 8:
-        lines.append(f"\n➕ {len(products) - 8} autre(s) produit(s) réapprovisionné(s).")
-    lines.append("\n⚡ Secure yours before the stock runs out!")
-    text = "\n".join(lines)
     markup = InlineKeyboardMarkup(buttons)
 
     async def send_one(user):
+        lang = user.get("lang") or DEFAULT_LANG
+        labels = {
+            "fr": ("stock", "ajouté", "autre(s) produit(s) réapprovisionné(s)"),
+            "ar": ("المخزون", "تمت الإضافة", "منتجات إضافية متوفرة"),
+        }
+        stock_label, added_label, extra_label = labels.get(
+            lang, ("stock", "added", "more product(s) restocked"),
+        )
+        product_lines = []
+        for item in products[:8]:
+            offer = item["offer"]
+            service = item["service"]
+            price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f} {CURRENCY}"
+            offer_name = _announcement_plain(offer.get("name") or f"Offer #{offer['id']}")
+            product_lines.append(
+                f"{_announcement_service_emoji(service)} *{offer_name}*\n"
+                f"   ↳ {added_label} +{item['added']} · {stock_label} {item['stock']} · {price}"
+            )
+        extra = ""
+        if len(products) > 8:
+            extra = f"\n\n➕ {len(products) - 8} {extra_label}."
+        text = premium_customer_text(
+            lang,
+            "restock_digest_announcement",
+            products="\n\n".join(product_lines),
+            extra=extra,
+        )
         await context.bot.send_message(
             chat_id=int(user["telegram_id"]), text=text,
             parse_mode=ParseMode.HTML, reply_markup=markup,
         )
-    return await _broadcast_in_batches(send_one, label="API restock digest")
+    return await _broadcast_in_batches(send_one, label="Restock digest")
 
 
 async def _execute_broadcast_job(job):
@@ -3882,6 +3921,15 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(
             f"📱 Send the Codex number for order #{oid}.\n\n"
             "The customer will receive an I agree button."
+        )
+        return
+    if data == "adm_alert_design":
+        await q.edit_message_text(
+            "✨ *Design des alertes*\n\n"
+            "Modifiez les annonces de nouveaux stocks et de ventes flash. "
+            "La mise en forme et les emojis Premium Telegram sont conservés.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin.alert_design_keyboard(),
         )
         return
     if data == "adm_ticket_style":

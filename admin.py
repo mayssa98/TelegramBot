@@ -24,6 +24,7 @@ TEXT_CATEGORIES = [
     ("menus", "🏠 Menus et boutons"),
     ("payments", "💳 Paiements et Binance Pay"),
     ("catalog", "🛍 Catalogue et offres"),
+    ("alerts", "✨ Alertes stocks et ventes flash"),
     ("channel", "📣 Telegram Channel"),
     ("orders", "📦 Commandes et livraison"),
     ("support", "🎫 Support et avis"),
@@ -35,6 +36,12 @@ TEXT_CATEGORIES = [
 
 
 def text_category_for_key(key):
+    if key in {
+        "channel_stock_announcement", "offer_stock_announcement",
+        "restock_digest_announcement", "flash_sale_announcement",
+        "api_flash_sale_announcement",
+    }:
+        return "alerts"
     rules = [
         ("admin", ("admin_",)),
         ("channel", ("channel_", "btn_channel_", "btn_join_channel", "btn_verify_join")),
@@ -107,10 +114,22 @@ def user_activity_keyboard():
 
 def customize_keyboard():
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✨ Alertes stocks & flash", callback_data="adm_alert_design")],
         [InlineKeyboardButton("✏️ Textes du bot", callback_data="adm_texts")],
         [InlineKeyboardButton("🔘 Boutons du bot", callback_data="adm_buttons")],
         [InlineKeyboardButton("🎨 Design des tickets", callback_data="adm_ticket_style")],
         [InlineKeyboardButton("⬅️ Retour", callback_data="adm_panel")],
+    ])
+
+
+def alert_design_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✨ Nouveau stock (un produit)", callback_data="adm_text_key:channel_stock_announcement")],
+        [InlineKeyboardButton("✨ Offre remise en avant", callback_data="adm_text_key:offer_stock_announcement")],
+        [InlineKeyboardButton("✨ Nouveau stock (plusieurs produits)", callback_data="adm_text_key:restock_digest_announcement")],
+        [InlineKeyboardButton("🔥 Vente flash manuelle", callback_data="adm_text_key:flash_sale_announcement")],
+        [InlineKeyboardButton("🔥 Baisse de prix automatique", callback_data="adm_text_key:api_flash_sale_announcement")],
+        [InlineKeyboardButton("⬅️ Personnalisation", callback_data="adm_customize")],
     ])
 
 

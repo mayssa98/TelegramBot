@@ -258,6 +258,27 @@ def test_stock_label_is_listed_in_catalog_admin_category():
     assert admin.text_category_for_key("stock_label") == "catalog"
 
 
+def test_stock_and_flash_templates_have_a_dedicated_editable_admin_section():
+    expected_keys = {
+        "channel_stock_announcement", "offer_stock_announcement",
+        "restock_digest_announcement", "flash_sale_announcement",
+        "api_flash_sale_announcement",
+    }
+    assert all(admin.text_category_for_key(key) == "alerts" for key in expected_keys)
+
+    callbacks = {
+        button.callback_data
+        for row in admin.alert_design_keyboard().inline_keyboard
+        for button in row
+    }
+    assert {f"adm_text_key:{key}" for key in expected_keys} <= callbacks
+    assert any(
+        button.callback_data == "adm_alert_design"
+        for row in admin.customize_keyboard().inline_keyboard
+        for button in row
+    )
+
+
 def test_official_preorder_catalog_uses_its_own_row(monkeypatch):
     monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [
         {

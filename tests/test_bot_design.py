@@ -16,6 +16,7 @@ from bot import (
     PENDING,
     announce_channel_purchase,
     announce_channel_restock,
+    announce_api_flash_sale,
     announce_flash_sale,
     announce_restock_digest,
     block_maintenance_users,
@@ -67,7 +68,8 @@ def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb)
     calls = bot_client.send_message.await_args_list
     assert {call.kwargs["chat_id"] for call in calls} == {101, 202}
     assert all(call.kwargs["chat_id"] != "@blackmarketBotChannel" for call in calls)
-    assert all("NEW STOCK JUST DROPPED" in call.kwargs["text"] for call in calls)
+    assert all("NEW DROP AVAILABLE" in call.kwargs["text"] for call in calls)
+    assert all("API" not in call.kwargs["text"] for call in calls)
     assert all(
         call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
         for call in calls
@@ -95,6 +97,8 @@ def test_api_restocks_are_grouped_into_one_message_per_user(mock_mongodb):
     for call in bot_client.send_message.await_args_list:
         assert "ChatGPT Plus" in call.kwargs["text"]
         assert "Coursera Plus" in call.kwargs["text"]
+        assert "API" not in call.kwargs["text"]
+        assert "NEW DROP" in call.kwargs["text"] or "NOUVEAUX DROPS" in call.kwargs["text"]
         assert len(call.kwargs["reply_markup"].inline_keyboard) == 2
 
 
@@ -136,6 +140,25 @@ def test_flash_sale_is_broadcast_with_buy_button(mock_mongodb):
     assert call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
 
 
+def test_automatic_flash_sale_uses_common_design_without_api_mention(mock_mongodb):
+    service_id = db.add_service("AI", "🔥")
+    offer_id = db.add_offer(service_id, "Claude Pro", 6.0, 4)
+    mock_mongodb.users.insert_one({"telegram_id": 101, "lang": "en"})
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(announce_api_flash_sale(SimpleNamespace(bot=bot_client), {
+        "offer_id": offer_id,
+        "previous_price": 10.0,
+        "price": 6.0,
+    }))
+
+    assert sent == 1
+    text = bot_client.send_message.await_args.kwargs["text"]
+    assert "FLASH SALE — LIMITED DROP" in text
+    assert "API" not in text
+    assert "40%" in text
+
+
 def test_admin_can_reannounce_current_offer_without_adding_stock(mock_mongodb):
     service_id = db.add_service("Chat GPT", "🤖")
     offer_id = db.add_offer(service_id, "Premium 30 days", 7.5, 4)
@@ -148,9 +171,9 @@ def test_admin_can_reannounce_current_offer_without_adding_stock(mock_mongodb):
 
     assert sent == 1
     text = bot_client.send_message.await_args.kwargs["text"]
-    assert "AVAILABLE OFFER" in text
+    assert "NEW DROP AVAILABLE" in text
     assert "7.50 USDT" in text
-    assert "4 account" in text
+    assert "Stock: <b>4</b>" in text
 
 
 def test_admin_custom_announcement_is_copied_to_all_active_users(mock_mongodb):
@@ -954,7 +977,9 @@ def test_order_payment_values_are_individually_copyable():
     "loyalty_activated", "affiliate_rewarded",
     "topup_message", "topup_ask_txid",
     "topup_success", "topup_already_confirmed", "topup_failed",
-    "flash_sale_announcement",
+    "channel_stock_announcement", "offer_stock_announcement",
+    "restock_digest_announcement", "flash_sale_announcement",
+    "api_flash_sale_announcement",
     "affiliate_referral_success", "affiliate_ten_success", "channel_affiliate_reward",
 ])
 def test_all_payment_flow_texts_support_exact_premium_emoji(key):
