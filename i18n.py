@@ -238,29 +238,19 @@ TRANSLATIONS = {
         "ar": "🎉 *AFFILIATE REWARD UNLOCKED!*\n\n🏆 A community member reached *{count} valid referrals*\n💰 *{reward} USDT* was added instantly to their wallet\n\n🔥 Share your referral link, grow the community and unlock your own rewards!",
     },
     "channel_stock_announcement": {
-        "fr": "✨ *NOUVEAU DROP DISPONIBLE*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n💎 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n🆕 Ajouté : *+{added}*\n\n━━━━━━━━━━━━━━━━\n⚡ Commandez avant la rupture de stock !",
-        "en": "✨ *NEW DROP AVAILABLE*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n🆕 Added: *+{added}*\n\n━━━━━━━━━━━━━━━━\n⚡ Tap below before it sells out!",
-        "ar": "✨ *دفعة جديدة متاحة*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n💎 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n🆕 تمت الإضافة: *+{added}*\n\n━━━━━━━━━━━━━━━━\n⚡ اطلب الآن قبل نفاد المخزون!",
-    },
-    "restock_digest_announcement": {
-        "fr": "✨ *NOUVEAUX DROPS DISPONIBLES*\n━━━━━━━━━━━━━━━━\n\n{products}{extra}\n\n━━━━━━━━━━━━━━━━\n⚡ Choisissez votre offre avant la rupture de stock !",
-        "en": "✨ *NEW DROPS AVAILABLE*\n━━━━━━━━━━━━━━━━\n\n{products}{extra}\n\n━━━━━━━━━━━━━━━━\n⚡ Choose your offer below before it sells out!",
-        "ar": "✨ *دفعات جديدة متاحة*\n━━━━━━━━━━━━━━━━\n\n{products}{extra}\n\n━━━━━━━━━━━━━━━━\n⚡ اختر عرضك قبل نفاد المخزون!",
+        "fr": "💫 *NOUVEAU DROP DISPONIBLE*\n\n{emoji} *{service}*\n🎁 *{offer}*\n\n💎 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n🆕 Ajout : *+{added}*\n\n⚡ Quantités limitées — commandez maintenant !",
+        "en": "💫 *NEW DROP AVAILABLE*\n\n{emoji} *{service}*\n🎁 *{offer}*\n\n💎 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n🆕 Added: *+{added}*\n\n⚡ Limited quantities — claim yours now!",
+        "ar": "💫 *دفعة جديدة متاحة*\n\n{emoji} *{service}*\n🎁 *{offer}*\n\n💎 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n🆕 تمت الإضافة: *+{added}*\n\n⚡ الكمية محدودة — اطلب الآن!",
     },
     "flash_sale_announcement": {
-        "fr": "🔥 *VENTE FLASH — DROP LIMITÉ*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n🏷 Ancien prix : *{old_price} {cur}*\n⚡ Prix flash : *{price} {cur}*\n🎯 Économie : *{discount}%*\n⌛ Fin dans : *{remaining}*\n\n━━━━━━━━━━━━━━━━\n🛒 Appuyez ci-dessous pour profiter de l’offre !",
-        "en": "🔥 *FLASH SALE — LIMITED DROP*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n🏷 Old price: *{old_price} {cur}*\n⚡ Flash price: *{price} {cur}*\n🎯 Save: *{discount}%*\n⌛ Ends in: *{remaining}*\n\n━━━━━━━━━━━━━━━━\n🛒 Tap below to claim the deal!",
-        "ar": "🔥 *تخفيض سريع — عرض محدود*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n🏷 السعر السابق: *{old_price} {cur}*\n⚡ سعر العرض: *{price} {cur}*\n🎯 الخصم: *{discount}%*\n⌛ ينتهي خلال: *{remaining}*\n\n━━━━━━━━━━━━━━━━\n🛒 اضغط أدناه للاستفادة من العرض!",
-    },
-    "api_flash_sale_announcement": {
-        "fr": "🔥 *VENTE FLASH — DROP LIMITÉ*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n🏷 Ancien prix : *{old_price} {cur}*\n⚡ Nouveau prix : *{price} {cur}*\n🎯 Économie : *{discount}%*\n\n━━━━━━━━━━━━━━━━\n🛒 Appuyez ci-dessous avant la fin de l’offre !",
-        "en": "🔥 *FLASH SALE — LIMITED DROP*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n🏷 Old price: *{old_price} {cur}*\n⚡ New price: *{price} {cur}*\n🎯 Save: *{discount}%*\n\n━━━━━━━━━━━━━━━━\n🛒 Tap below before the deal ends!",
-        "ar": "🔥 *تخفيض سريع — عرض محدود*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n🏷 السعر السابق: *{old_price} {cur}*\n⚡ السعر الجديد: *{price} {cur}*\n🎯 الخصم: *{discount}%*\n\n━━━━━━━━━━━━━━━━\n🛒 اضغط أدناه قبل انتهاء العرض!",
+        "fr": "🔥 *VENTE FLASH — DROP LIMITÉ*\n\n{emoji} *{service} — {offer}*\n\n🏷 Ancien prix : *{old_price} {cur}*\n⚡ Prix flash : *{price} {cur}*\n🎯 Économie : *{discount}%*\n⌛ Fin dans : *{remaining}*\n\n🛒 Appuyez ci-dessous pour profiter de l’offre !",
+        "en": "🔥 *FLASH SALE — LIMITED DROP*\n\n{emoji} *{service} — {offer}*\n\n🏷 Old price: *{old_price} {cur}*\n⚡ Flash price: *{price} {cur}*\n🎯 Save: *{discount}%*\n⌛ Ends in: *{remaining}*\n\n🛒 Tap below to claim the deal!",
+        "ar": "🔥 *تخفيض سريع — عرض محدود*\n\n{emoji} *{service} — {offer}*\n\n🏷 السعر السابق: *{old_price} {cur}*\n⚡ سعر العرض: *{price} {cur}*\n🎯 الخصم: *{discount}%*\n⌛ ينتهي خلال: *{remaining}*\n\n🛒 اضغط أدناه للاستفادة من العرض!",
     },
     "offer_stock_announcement": {
-        "fr": "✨ *NOUVEAU DROP DISPONIBLE*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n💎 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n\n━━━━━━━━━━━━━━━━\n⚡ Commandez avant la rupture de stock !",
-        "en": "✨ *NEW DROP AVAILABLE*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n💎 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n\n━━━━━━━━━━━━━━━━\n⚡ Tap below before it sells out!",
-        "ar": "✨ *دفعة جديدة متاحة*\n━━━━━━━━━━━━━━━━\n\n{emoji} *{service} — {offer}*\n💎 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n\n━━━━━━━━━━━━━━━━\n⚡ اطلب الآن قبل نفاد المخزون!",
+        "fr": "💫 *NOUVEAU DROP DISPONIBLE*\n\n{emoji} *{service}*\n🎁 *{offer}*\n\n💎 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n\n⚡ Quantités limitées — commandez maintenant !",
+        "en": "💫 *NEW DROP AVAILABLE*\n\n{emoji} *{service}*\n🎁 *{offer}*\n\n💎 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n\n⚡ Limited quantities — claim yours now!",
+        "ar": "💫 *دفعة جديدة متاحة*\n\n{emoji} *{service}*\n🎁 *{offer}*\n\n💎 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n\n⚡ الكمية محدودة — اطلب الآن!",
     },
     "channel_purchase_success": {
         "fr": "🎉 *ANOTHER SUCCESSFUL PURCHASE*\n\n✅ A customer just secured:\n🛍 *{service} — {offer}*\n📦 Quantity: *{qty}*\n💎 Order value: *{total} {cur}*\n🔥 Remaining stock: *{stock} account(s)*\n\nTrusted delivery. Real products. Join the next drop before it sells out!",

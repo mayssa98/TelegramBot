@@ -261,8 +261,7 @@ def test_stock_label_is_listed_in_catalog_admin_category():
 def test_stock_and_flash_templates_have_a_dedicated_editable_admin_section():
     expected_keys = {
         "channel_stock_announcement", "offer_stock_announcement",
-        "restock_digest_announcement", "flash_sale_announcement",
-        "api_flash_sale_announcement",
+        "flash_sale_announcement",
     }
     assert all(admin.text_category_for_key(key) == "alerts" for key in expected_keys)
 

@@ -434,10 +434,11 @@ def compact_offer_text(offer: dict, lang: str) -> str:
 
 def admin_text_preview(key: str) -> str:
     current = db.get_text_override(key, "en") or TRANSLATIONS.get(key, {}).get("en") or "—"
+    rendered = render_stored_rich_text(current)
     return (
         f"✏️ <b>{html.escape(key)}</b>\n\n"
-        f"🇬🇧 <b>English</b>\n<pre>{html.escape(current[:2700])}</pre>\n"
-        "Choose the text to edit or use the arrows:"
+        f"🇬🇧 <b>Aperçu Telegram</b>\n\n{rendered}\n\n"
+        "Choisissez la langue pour modifier ce texte :"
     )
 
 
@@ -848,11 +849,15 @@ async def announce_api_flash_sale(context, event):
     async def send_one(user):
         user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
+        remaining = {
+            "fr": "Disponibilité limitée",
+            "ar": "متاح لفترة محدودة",
+        }.get(lang, "Limited availability")
         sent_message = await context.bot.send_message(
             chat_id=user_id,
             text=premium_customer_text(
                 lang,
-                "api_flash_sale_announcement",
+                "flash_sale_announcement",
                 emoji=_announcement_service_emoji(service, "🔥"),
                 service=_announcement_plain(service.get("name") or SHOP_NAME),
                 offer=_announcement_plain(offer.get("name") or f"Offer #{offer['id']}"),
@@ -860,6 +865,7 @@ async def announce_api_flash_sale(context, event):
                 price=f"{new_price:.2f}",
                 cur=CURRENCY,
                 discount=discount_percent,
+                remaining=remaining,
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=kb.offer_detail_keyboard(lang, offer),
@@ -881,75 +887,16 @@ async def broadcast_admin_message(context, source_chat_id, message_id):
 
 
 async def announce_restock_digest(context, events):
-    """Combine multiple supplier restocks into one customer alert."""
-    products = []
+    """Legacy compatibility: announce every restock as its own message."""
+    sent = 0
     for event in list(events or [])[:12]:
-        offer = db.get_offer(int(event.get("offer_id") or 0))
-        if not offer or not offer.get("active", 1) or not db.offer_has_stock(offer):
-            continue
-        service = db.get_service(offer.get("service_id")) or {}
-        products.append({
-            "offer": offer,
-            "service": service,
-            "added": max(0, int(event.get("added") or 0)),
-            "stock": max(0, int(event.get("stock") or 0)),
-        })
-    if not products:
-        return 0
-    if len(products) == 1:
-        item = products[0]
-        return await announce_channel_restock(
-            context, item["offer"]["id"], item["added"], item["stock"],
+        sent += await announce_channel_restock(
+            context,
+            int(event.get("offer_id") or 0),
+            max(0, int(event.get("added") or 0)),
+            max(0, int(event.get("stock") or 0)),
         )
-
-    buttons = []
-    for item in products[:8]:
-        offer = item["offer"]
-        service = item["service"]
-        button_icon = str(
-            offer.get("custom_emoji_id") or service.get("custom_emoji_id") or ""
-        ).strip()
-        buttons.append([InlineKeyboardButton(
-            f"🛒 {str(offer.get('name') or offer['id'])[:40]}",
-            callback_data=f"buy:{offer['id']}",
-            icon_custom_emoji_id=button_icon if button_icon.isascii() else None,
-        )])
-    markup = InlineKeyboardMarkup(buttons)
-
-    async def send_one(user):
-        lang = user.get("lang") or DEFAULT_LANG
-        labels = {
-            "fr": ("stock", "ajouté", "autre(s) produit(s) réapprovisionné(s)"),
-            "ar": ("المخزون", "تمت الإضافة", "منتجات إضافية متوفرة"),
-        }
-        stock_label, added_label, extra_label = labels.get(
-            lang, ("stock", "added", "more product(s) restocked"),
-        )
-        product_lines = []
-        for item in products[:8]:
-            offer = item["offer"]
-            service = item["service"]
-            price = "—" if offer.get("price") is None else f"{float(offer['price']):.2f} {CURRENCY}"
-            offer_name = _announcement_plain(offer.get("name") or f"Offer #{offer['id']}")
-            product_lines.append(
-                f"{_announcement_service_emoji(service)} *{offer_name}*\n"
-                f"   ↳ {added_label} +{item['added']} · {stock_label} {item['stock']} · {price}"
-            )
-        extra = ""
-        if len(products) > 8:
-            extra = f"\n\n➕ {len(products) - 8} {extra_label}."
-        text = premium_customer_text(
-            lang,
-            "restock_digest_announcement",
-            products="\n\n".join(product_lines),
-            extra=extra,
-        )
-        sent_message = await context.bot.send_message(
-            chat_id=int(user["telegram_id"]), text=text,
-            parse_mode=ParseMode.HTML, reply_markup=markup,
-        )
-        _track_broadcast_message(context, sent_message, int(user["telegram_id"]))
-    return await _broadcast_in_batches(send_one, label="Restock digest")
+    return sent
 
 
 async def delete_broadcast_messages(context, target_job_id):
@@ -3972,12 +3919,16 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if current is None:
             current = TRANSLATIONS.get(key, {}).get(selected_lang, "—")
         PENDING[uid] = ("adm_text_override", f"{key}|{selected_lang}")
-        prompt = t(
-            lang_of(uid), "admin_send_new_text",
-            text_key=key, selected_lang=selected_lang, current=current,
+        rendered_current = render_stored_rich_text(current)
+        prompt = (
+            f"✏️ <b>Modifier {html.escape(key)}</b> "
+            f"(<code>{html.escape(selected_lang)}</code>)\n\n"
+            f"<b>Aperçu actuel :</b>\n\n{rendered_current}\n\n"
+            "Envoyez maintenant le nouveau texte. La mise en forme et les emojis Telegram seront conservés."
         )
         await q.message.reply_text(
             prompt[:4000],
+            parse_mode=ParseMode.HTML,
             reply_markup=ForceReply(
                 selective=True,
                 input_field_placeholder="Envoyez le nouveau texte…",

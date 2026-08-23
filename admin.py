@@ -38,8 +38,7 @@ TEXT_CATEGORIES = [
 def text_category_for_key(key):
     if key in {
         "channel_stock_announcement", "offer_stock_announcement",
-        "restock_digest_announcement", "flash_sale_announcement",
-        "api_flash_sale_announcement",
+        "flash_sale_announcement",
     }:
         return "alerts"
     rules = [
@@ -109,9 +108,9 @@ def admin_panel_keyboard():
 def broadcast_kind_label(kind):
     return {
         "stock": "✨ Nouveau stock",
-        "restock_digest": "✨ Drops groupés",
+        "restock_digest": "✨ Stocks individuels (ancien)",
         "flash_sale": "🔥 Vente flash",
-        "api_flash_sale": "🔥 Baisse automatique",
+        "api_flash_sale": "🔥 Vente flash",
         "admin_message": "📢 Annonce libre",
         "maintenance": "🛠 Maintenance",
         "affiliate_update": "🎁 Mise à jour affiliation",
@@ -181,9 +180,7 @@ def alert_design_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✨ Nouveau stock (un produit)", callback_data="adm_text_key:channel_stock_announcement")],
         [InlineKeyboardButton("✨ Offre remise en avant", callback_data="adm_text_key:offer_stock_announcement")],
-        [InlineKeyboardButton("✨ Nouveau stock (plusieurs produits)", callback_data="adm_text_key:restock_digest_announcement")],
-        [InlineKeyboardButton("🔥 Vente flash manuelle", callback_data="adm_text_key:flash_sale_announcement")],
-        [InlineKeyboardButton("🔥 Baisse de prix automatique", callback_data="adm_text_key:api_flash_sale_announcement")],
+        [InlineKeyboardButton("🔥 Vente flash", callback_data="adm_text_key:flash_sale_announcement")],
         [InlineKeyboardButton("⬅️ Personnalisation", callback_data="adm_customize")],
     ])
 

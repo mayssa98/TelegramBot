@@ -19,6 +19,7 @@ from bot import (
     announce_api_flash_sale,
     announce_flash_sale,
     announce_restock_digest,
+    admin_text_preview,
     block_maintenance_users,
     block_non_channel_members,
     broadcast_admin_message,
@@ -71,13 +72,14 @@ def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb)
     assert all(call.kwargs["chat_id"] != "@blackmarketBotChannel" for call in calls)
     assert all("NEW DROP AVAILABLE" in call.kwargs["text"] for call in calls)
     assert all("API" not in call.kwargs["text"] for call in calls)
+    assert all("━━━━━━━━" not in call.kwargs["text"] for call in calls)
     assert all(
         call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
         for call in calls
     )
 
 
-def test_api_restocks_are_grouped_into_one_message_per_user(mock_mongodb):
+def test_supplier_restocks_are_sent_as_individual_product_messages(mock_mongodb):
     first_service = db.add_service("AI", "🤖")
     second_service = db.add_service("Learning", "🎓")
     first_offer = db.add_offer(first_service, "ChatGPT Plus", 5.0, 8)
@@ -93,13 +95,15 @@ def test_api_restocks_are_grouped_into_one_message_per_user(mock_mongodb):
         {"offer_id": second_offer, "added": 2, "stock": 4},
     ]))
 
-    assert sent == 2
-    assert bot_client.send_message.await_count == 2
+    assert sent == 4
+    assert bot_client.send_message.await_count == 4
+    texts = [call.kwargs["text"] for call in bot_client.send_message.await_args_list]
+    assert sum("ChatGPT Plus" in text for text in texts) == 2
+    assert sum("Coursera Plus" in text for text in texts) == 2
     for call in bot_client.send_message.await_args_list:
-        assert "ChatGPT Plus" in call.kwargs["text"]
-        assert "Coursera Plus" in call.kwargs["text"]
         assert "API" not in call.kwargs["text"]
-        assert "NEW DROP" in call.kwargs["text"] or "NOUVEAUX DROPS" in call.kwargs["text"]
+        assert "NEW DROP" in call.kwargs["text"] or "NOUVEAU DROP" in call.kwargs["text"]
+        assert "━━━━━━━━" not in call.kwargs["text"]
         assert len(call.kwargs["reply_markup"].inline_keyboard) == 2
 
 
@@ -847,6 +851,23 @@ def test_channel_message_accepts_exact_premium_emojis_and_rich_text(mock_mongodb
     assert "<b>New sale</b>" in rendered
 
 
+def test_admin_text_editor_shows_rendered_telegram_preview_not_html_source(mock_mongodb):
+    db.set_text_override(
+        "channel_stock_announcement",
+        "en",
+        '[[HTML]]<tg-emoji emoji-id="premium-drop">💫</tg-emoji> <b>New drop</b>',
+        "premium-drop",
+    )
+
+    preview = admin_text_preview("channel_stock_announcement")
+
+    assert "[[HTML]]" not in preview
+    assert "<pre>" not in preview
+    assert "&lt;tg-emoji" not in preview
+    assert '<tg-emoji emoji-id="premium-drop">💫</tg-emoji>' in preview
+    assert "<b>New drop</b>" in preview
+
+
 def test_delivery_template_accepts_legacy_single_html_marker(mock_mongodb):
     db.set_text_override(
         "delivery_received",
@@ -1017,8 +1038,7 @@ def test_order_payment_values_are_individually_copyable():
     "topup_message", "topup_ask_txid",
     "topup_success", "topup_already_confirmed", "topup_failed",
     "channel_stock_announcement", "offer_stock_announcement",
-    "restock_digest_announcement", "flash_sale_announcement",
-    "api_flash_sale_announcement",
+    "flash_sale_announcement",
     "affiliate_referral_success", "affiliate_ten_success", "channel_affiliate_reward",
 ])
 def test_all_payment_flow_texts_support_exact_premium_emoji(key):

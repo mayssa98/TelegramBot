@@ -490,15 +490,23 @@ class handler(BaseHTTPRequestHandler):
                 return
             try:
                 result = reseller_service.detect_restock_events()
-                queued = None
-                if result["events"]:
-                    digest_source = {"window": int(time.time() // 300), "events": result["events"]}
-                    digest_key = "restock:" + hashlib.sha256(json.dumps(digest_source, sort_keys=True).encode()).hexdigest()[:32]
-                    queued = queue_broadcast(
-                        "restock_digest", events=result["events"], dedupe_key=digest_key,
-                    )
-                result["queued_broadcasts"] = 1 if queued and queued["queued"] else 0
-                result["queued_recipients"] = (queued or {}).get("recipient_count", 0)
+                queued_jobs = []
+                for event in result["events"]:
+                    event_source = {"window": int(time.time() // 300), "event": event}
+                    event_key = "restock:" + hashlib.sha256(
+                        json.dumps(event_source, sort_keys=True).encode()
+                    ).hexdigest()[:32]
+                    queued_jobs.append(queue_broadcast(
+                        "stock",
+                        offer_id=int(event["offer_id"]),
+                        added=max(0, int(event.get("added") or 0)),
+                        stock=max(0, int(event.get("stock") or 0)),
+                        dedupe_key=event_key,
+                    ))
+                result["queued_broadcasts"] = sum(1 for job in queued_jobs if job["queued"])
+                result["queued_recipients"] = sum(
+                    job.get("recipient_count", 0) for job in queued_jobs if job["queued"]
+                )
                 result["announced_messages"] = 0
                 db.set_setting("stock_cron_last_run_at", int(time.time()))
                 db.set_setting("stock_cron_last_status", "ok" if result["ok"] else "partial")
