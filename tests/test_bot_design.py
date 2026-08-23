@@ -73,10 +73,63 @@ def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb)
     assert all("NEW DROP AVAILABLE" in call.kwargs["text"] for call in calls)
     assert all("API" not in call.kwargs["text"] for call in calls)
     assert all("━━━━━━━━" not in call.kwargs["text"] for call in calls)
+    assert all("🤖" in call.kwargs["text"] for call in calls)
     assert all(
         call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
         for call in calls
     )
+
+
+def test_service_premium_emoji_is_included_in_customized_announcement(mock_mongodb):
+    service_id = db.add_service(
+        "Capcut", emoji="📦", custom_emoji_id="5978895591894161700",
+    )
+    offer_id = db.add_offer(service_id, "Capcut Pro", 5.0, 2)
+    mock_mongodb.users.insert_one({"telegram_id": 101, "lang": "en"})
+    db.set_text_override(
+        "channel_stock_announcement",
+        "en",
+        "[[HTML]]{emoji} <b>{service}</b> — {offer}",
+    )
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(announce_channel_restock(
+        SimpleNamespace(bot=bot_client), offer_id, 2, 2,
+    ))
+
+    assert sent == 1
+    text = bot_client.send_message.await_args.kwargs["text"]
+    assert "[[TGEMOJI:" not in text
+    assert '<tg-emoji emoji-id="5978895591894161700">📦</tg-emoji>' in text
+    assert "<b>Capcut</b> — Capcut Pro" in text
+
+
+def test_schema_migration_removes_only_obsolete_announcement_designs(mock_mongodb):
+    mock_mongodb.text_overrides.insert_many([
+        {
+            "key": "channel_stock_announcement", "lang": "en",
+            "text": "❗ NEW STOCK JUST DROPPED ❗\n{emoji} {service}",
+        },
+        {
+            "key": "flash_sale_announcement", "lang": "fr",
+            "text": "🔥 Vente flash personnalisée {service}",
+        },
+        {
+            "key": "welcome", "lang": "en",
+            "text": "NEW STOCK JUST DROPPED is harmless here",
+        },
+    ])
+
+    removed = db._remove_legacy_announcement_overrides(mock_mongodb)
+
+    assert removed == 1
+    assert mock_mongodb.text_overrides.find_one({
+        "key": "channel_stock_announcement", "lang": "en",
+    }) is None
+    assert mock_mongodb.text_overrides.find_one({
+        "key": "flash_sale_announcement", "lang": "fr",
+    })["text"].startswith("🔥")
+    assert mock_mongodb.text_overrides.find_one({"key": "welcome"}) is not None
 
 
 def test_supplier_restocks_are_sent_as_individual_product_messages(mock_mongodb):

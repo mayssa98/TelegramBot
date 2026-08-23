@@ -519,6 +519,21 @@ def rich_text_from_message(message):
 def render_stored_rich_text(value, *, parse_legacy_markdown=True):
     """Render trusted admin HTML or legacy Markdown/token text as Telegram HTML."""
     raw_value = str(value or "")
+
+    def render_custom_emoji(match):
+        emoji_id, fallback_hex = match.groups()
+        with contextlib.suppress(ValueError, UnicodeDecodeError):
+            fallback = bytes.fromhex(fallback_hex).decode("utf-8")
+            return f'<tg-emoji emoji-id="{emoji_id}">{html.escape(fallback)}</tg-emoji>'
+        return ""
+
+    def render_custom_emoji_tokens(rendered):
+        return re.sub(
+            r"\[\[TGEMOJI:([0-9A-Za-z_-]+):([0-9a-fA-F]+)\]\]",
+            render_custom_emoji,
+            rendered,
+        )
+
     html_prefix = next(
         (prefix for prefix in ("[[HTML]]", "[HTML]") if raw_value.startswith(prefix)),
         None,
@@ -529,25 +544,14 @@ def render_stored_rich_text(value, *, parse_legacy_markdown=True):
             rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
             rendered = re.sub(r"\*([^*]+)\*", r"<b>\1</b>", rendered)
             rendered = re.sub(r"_([^_]+)_", r"<i>\1</i>", rendered)
-        return rendered
+        return render_custom_emoji_tokens(rendered)
     rendered = html.escape(raw_value)
     if parse_legacy_markdown:
         rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
         rendered = re.sub(r"\*([^*]+)\*", r"<b>\1</b>", rendered)
         rendered = re.sub(r"_([^_]+)_", r"<i>\1</i>", rendered)
 
-    def render_custom_emoji(match):
-        emoji_id, fallback_hex = match.groups()
-        with contextlib.suppress(ValueError, UnicodeDecodeError):
-            fallback = bytes.fromhex(fallback_hex).decode("utf-8")
-            return f'<tg-emoji emoji-id="{emoji_id}">{html.escape(fallback)}</tg-emoji>'
-        return ""
-
-    return re.sub(
-        r"\[\[TGEMOJI:([0-9A-Za-z_-]+):([0-9a-fA-F]+)\]\]",
-        render_custom_emoji,
-        rendered,
-    )
+    return render_custom_emoji_tokens(rendered)
 
 
 # ---------------- /start ----------------

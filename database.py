@@ -16,7 +16,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
@@ -293,6 +293,8 @@ def init_db():
     db.support_tickets.create_index("user_id")
     db.ticket_messages.create_index([("ticket_id", ASCENDING), ("created_at", ASCENDING)])
     db.support_tickets.create_index("channel_message_ids")
+    if not schema or int(schema.get("version") or 0) < 15:
+        _remove_legacy_announcement_overrides(db)
     if os.environ.get("HP_SEED_DEFAULT_CATALOG", "").strip().lower() in {"1", "true", "yes"}:
         _seed_catalog()
     db.schema_meta.update_one(
@@ -301,6 +303,24 @@ def init_db():
         upsert=True,
     )
     _schema_initialized = True
+
+
+def _remove_legacy_announcement_overrides(conn):
+    """Let obsolete stock templates fall back to the current announcement design."""
+    legacy_heading = (
+        r"NEW\s+(?:API\s+)?STOCKS?\s+JUST\s+DROPPED"
+        r"|API\s+PRICE\s+DROP"
+        r"|BAISSE\s+DE\s+PRIX\s+API"
+    )
+    result = conn.text_overrides.delete_many({
+        "key": {"$in": [
+            "channel_stock_announcement",
+            "offer_stock_announcement",
+            "flash_sale_announcement",
+        ]},
+        "text": {"$regex": legacy_heading, "$options": "i"},
+    })
+    return int(result.deleted_count)
 
 
 def _backfill_inventory_ids(conn):
