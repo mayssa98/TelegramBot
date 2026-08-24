@@ -272,7 +272,15 @@ function useRemoteList(endpoint, filters) {
         if (!response.ok) throw new Error(`Erreur ${response.status}`);
         return response.json();
       })
-      .then((payload) => active && setResult(payload))
+      .then((payload) => {
+        if (!active) return;
+        setResult({
+          items: Array.isArray(payload?.items) ? payload.items : [],
+          page: Number(payload?.page) || 1,
+          pages: Math.max(1, Number(payload?.pages) || 1),
+          total: Math.max(0, Number(payload?.total) || 0),
+        });
+      })
       .catch(() => undefined)
       .finally(() => active && setLoading(false));
     return () => {

@@ -607,16 +607,24 @@ export default function App() {
     return () => window.removeEventListener("keydown", openSearch);
   }, []);
   useEffect(() => {
-    const handlePopState = () => {
+    const synchronizeRoute = () => {
       const page = routePage();
       const nextPage = ALL_NAV_ITEMS.some((item) => item.id === page) ? page : "overview";
       setActivePage(nextPage);
       if (["site-overview", "tn-storefront"].includes(nextPage)) setWorkspace("site");
       if (nextPage === "overview") setWorkspace("bot");
     };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+    const restorePage = (event) => {
+      synchronizeRoute();
+      if (event.persisted) loadData(true, true);
+    };
+    window.addEventListener("popstate", synchronizeRoute);
+    window.addEventListener("pageshow", restorePage);
+    return () => {
+      window.removeEventListener("popstate", synchronizeRoute);
+      window.removeEventListener("pageshow", restorePage);
+    };
+  }, [loadData]);
 
   const navigate = (page) => {
     setActivePage(page);
@@ -711,7 +719,7 @@ export default function App() {
       <div className="main-shell">
         <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} density={density} isRefreshing={refreshing || pendingActionCount > 0} onLogout={logout} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} onToggleDensity={() => setDensity((current) => { const next = current === "compact" ? "comfortable" : "compact"; window.localStorage.setItem("admin-density", next); return next; })} onToggleTheme={() => setTheme((current) => { const next = current === "dark" ? "light" : "dark"; window.localStorage.setItem("admin-theme", next); return next; })} theme={theme} workspace={workspace} />
         <main className="content">
-          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} onNavigate={navigate} setToast={setToast} workspace={workspace} />}
+          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : !data ? <ErrorState message="La session administrateur n’a pas pu être restaurée." onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={activePage} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} onNavigate={navigate} setToast={setToast} workspace={workspace} />}
         </main>
       </div>
       {searchOpen && data && <SearchDialog data={data} onClose={() => setSearchOpen(false)} onNavigate={navigate} />}
