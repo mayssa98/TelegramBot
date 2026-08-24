@@ -2,7 +2,9 @@
 import html
 import re
 
-from telegram import InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import InlineKeyboardButton as _InlineKeyboardButton
+from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup
+
 
 def InlineKeyboardButton(*args, style=None, **kwargs):
     # Telegram expects ``icon_custom_emoji_id`` to be an ASCII identifier,
@@ -112,13 +114,8 @@ def stock_badge(stock, unlimited=False):
 
 
 def stock_button_style(stock):
-    """Map stock to Telegram's supported native button background styles."""
-    stock = int(stock or 0)
-    if stock > 3:
-        return "success"
-    if stock > 0:
-        return "primary"
-    return "danger"
+    """Render available products green and unavailable products red."""
+    return "success" if int(stock or 0) > 0 else "danger"
 
 
 def clean_button_name(value):
@@ -315,15 +312,12 @@ def services_keyboard(lang):
     for _cat, svcs in categories.items():
         row = []
         for _i, svc in enumerate(svcs):
-            total = svc.get("total_stock", 0)
             label = service_button_label(svc, 34)
             is_official = db.is_official_subscriptions_service(svc)
             service_button = InlineKeyboardButton(
                 label,
                 callback_data=f"svc:{svc['id']}",
-                style=None if is_official else (
-                    "success" if svc.get("unlimited_stock") else stock_button_style(total)
-                ),
+                style="primary",
                 icon_custom_emoji_id=svc.get("custom_emoji_id") or None,
             )
             if is_official:
@@ -396,8 +390,6 @@ def catalog_offers_keyboard(lang):
         if should_group:
             if sid not in added_services:
                 added_services.add(sid)
-                total_stock = sum(int(o.get("stock") or 0) for o in offers_in_service)
-                has_unlimited = any(o.get("unlimited_stock") for o in offers_in_service)
                 service_emoji = get_service_emoji(
                     offer.get("service_name"),
                     offer.get("service_emoji"),
@@ -418,15 +410,11 @@ def catalog_offers_keyboard(lang):
                     "suffix_emoji": offer.get("service_suffix_emoji"),
                     "custom_emoji_id": service_icon,
                 }, 46)
-                cat_style = None if db.is_official_subscriptions_service(service_name) else (
-                    "success" if (has_unlimited or total_stock > 3)
-                    else ("primary" if total_stock > 0 else "danger")
-                )
                 grouped_category_buttons.append((
                     InlineKeyboardButton(
                         label,
                         callback_data=f"svc:{sid}",
-                        style=cat_style,
+                        style="primary",
                         icon_custom_emoji_id=service_icon,
                     ),
                     db.is_official_subscriptions_service(service_name),
@@ -579,7 +567,7 @@ def preorder_services_keyboard(lang):
         service_button = InlineKeyboardButton(
             label,
             callback_data=f"preorder_svc:{service_id}",
-            style=None if db.is_official_subscriptions_service(service_name) else "danger",
+            style="primary",
             icon_custom_emoji_id=service_icon,
         )
         if is_official:

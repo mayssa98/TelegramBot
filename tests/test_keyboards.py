@@ -216,6 +216,32 @@ def test_normal_catalog_does_not_launch_legacy_direct_preorder(monkeypatch):
     assert callbacks.count("preorder_catalog") == 1
 
 
+def test_catalog_product_backgrounds_match_stock_availability(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [
+        {
+            "id": 11, "service_id": 1, "service_name": "Available",
+            "name": "In stock", "price": 10.0, "currency": "USDT",
+            "stock": 1, "unlimited_stock": False,
+        },
+        {
+            "id": 12, "service_id": 2, "service_name": "Unavailable",
+            "name": "Out of stock", "price": 10.0, "currency": "USDT",
+            "stock": 0, "unlimited_stock": False,
+        },
+    ])
+
+    keyboard = kb.catalog_offers_keyboard("en")
+    products = {
+        button.callback_data: button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data in {"off:11", "off:12"}
+    }
+
+    assert products["off:11"].style == "success"
+    assert products["off:12"].style == "danger"
+
+
 def test_preorder_catalog_lists_only_empty_services_and_adjusted_offers(monkeypatch):
     offers = [
         {
@@ -242,7 +268,7 @@ def test_preorder_catalog_lists_only_empty_services_and_adjusted_offers(monkeypa
         if button.callback_data and button.callback_data.startswith("preorder_svc:")
     ]
     assert [button.callback_data for button in service_buttons] == ["preorder_svc:1"]
-    assert service_buttons[0].style == "danger"
+    assert service_buttons[0].style == "primary"
 
     products = kb.preorder_offers_keyboard("en", 1)
     product_buttons = [
@@ -297,7 +323,7 @@ def test_official_preorder_catalog_uses_its_own_row(monkeypatch):
     assert [button.callback_data for button in keyboard.inline_keyboard[0]] == [
         "preorder_svc:2"
     ]
-    assert keyboard.inline_keyboard[0][0].style is None
+    assert keyboard.inline_keyboard[0][0].style == "primary"
     assert keyboard.inline_keyboard[1][0].callback_data == "preorder_svc:1"
 
 
@@ -316,20 +342,20 @@ def test_stock_label_accepts_admin_premium_emoji(monkeypatch):
     assert button.icon_custom_emoji_id == "premium-stock-icon"
 
 
-def test_stock_badge_uses_the_same_thresholds_for_services_and_offers():
+def test_stock_badge_and_product_button_styles_show_availability():
     assert stock_badge(4) in {"🟢", "🟩"}
     assert stock_badge(3) in {"🔵", "🟦"}
     assert stock_badge(2) in {"🔵", "🟦"}
     assert stock_badge(1) in {"🔵", "🟦"}
     assert stock_badge(0) in {"🔴", "🟥"}
     assert stock_button_style(4) == "success"
-    assert stock_button_style(3) == "primary"
-    assert stock_button_style(2) == "primary"
-    assert stock_button_style(1) == "primary"
+    assert stock_button_style(3) == "success"
+    assert stock_button_style(2) == "success"
+    assert stock_button_style(1) == "success"
     assert stock_button_style(0) == "danger"
 
 
-def test_services_keyboard_uses_total_stock_color(monkeypatch):
+def test_services_keyboard_is_always_sky_blue(monkeypatch):
     services = [
         {"id": 1, "name": "Large", "emoji": "📦"},
         {"id": 2, "name": "Low", "emoji": "📦"},
@@ -348,9 +374,9 @@ def test_services_keyboard_uses_total_stock_color(monkeypatch):
     ]
 
     assert labels == ["📦 Large", "📦 Low", "📦 Empty"]
-    assert keyboard.inline_keyboard[0][0].style == "success"
+    assert keyboard.inline_keyboard[0][0].style == "primary"
     assert keyboard.inline_keyboard[0][1].style == "primary"
-    assert keyboard.inline_keyboard[1][0].style == "danger"
+    assert keyboard.inline_keyboard[1][0].style == "primary"
 
 
 def test_offer_buttons_use_native_telegram_styles(monkeypatch):
@@ -363,7 +389,7 @@ def test_offer_buttons_use_native_telegram_styles(monkeypatch):
     keyboard = kb.offers_keyboard("en", 1)
 
     assert keyboard.inline_keyboard[0][0].style == "success"
-    assert keyboard.inline_keyboard[1][0].style == "primary"
+    assert keyboard.inline_keyboard[1][0].style == "success"
     assert keyboard.inline_keyboard[2][0].style == "danger"
 
 
@@ -436,10 +462,10 @@ def test_official_catalog_button_supports_left_and_right_emojis(monkeypatch):
 
     assert button.text == "⭐ officiels subscribes ✅"
     assert button.icon_custom_emoji_id is None
-    assert button.style is None
+    assert button.style == "primary"
 
 
-def test_official_subscriptions_variant_is_first_without_background(monkeypatch):
+def test_official_subscriptions_variant_is_first_and_sky_blue(monkeypatch):
     monkeypatch.setattr(kb.db, "list_services_with_stock", lambda: sorted([
         {"id": 1, "name": "Chat GPT", "total_stock": 5},
         {"id": 2, "name": "Officiels subscriptions", "total_stock": 5},
@@ -449,12 +475,12 @@ def test_official_subscriptions_variant_is_first_without_background(monkeypatch)
     button = keyboard.inline_keyboard[0][0]
 
     assert button.callback_data == "svc:2"
-    assert button.style is None
+    assert button.style == "primary"
     assert len(keyboard.inline_keyboard[0]) == 1
     assert keyboard.inline_keyboard[1][0].callback_data == "svc:1"
 
 
-def test_official_grouped_catalog_is_first_and_has_no_background(mock_mongodb):
+def test_official_grouped_catalog_is_first_and_sky_blue(mock_mongodb):
     regular_id = db.add_service("Streaming", "🎬")
     official_id = db.add_service("officiels subscribes", "⭐")
     db.add_offer(regular_id, "Netflix", 5.0, 4)
@@ -466,7 +492,7 @@ def test_official_grouped_catalog_is_first_and_has_no_background(mock_mongodb):
     first_catalog_button = keyboard.inline_keyboard[0][0]
 
     assert first_catalog_button.callback_data == f"svc:{official_id}"
-    assert first_catalog_button.style is None
+    assert first_catalog_button.style == "primary"
     assert len(keyboard.inline_keyboard[0]) == 1
     assert keyboard.inline_keyboard[1][0].callback_data == f"svc:{regular_id}"
 
