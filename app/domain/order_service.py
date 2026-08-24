@@ -13,7 +13,7 @@ from typing import Any
 import database as db
 from app.constants import PAID_STATUSES, TERMINAL_STATUSES, InventoryStatus, OrderStatus
 from app.domain import loyalty_service, wallet_service
-from config import CURRENCY, ORDER_EXPIRY_SECONDS
+from config import CURRENCY, ORDER_EXPIRY_SECONDS, PENDING_PAYMENT_TIMEOUT_SECONDS
 
 log = logging.getLogger(__name__)
 PREORDER_SURCHARGE_RATE = 0.10
@@ -140,6 +140,7 @@ def create_order(
         "inventory_item_ids": [],
         "admin_note": "",
         "created_at": now,
+        "payment_deadline_at": now + PENDING_PAYMENT_TIMEOUT_SECONDS,
         "expires_at": now + ORDER_EXPIRY_SECONDS,
         "paid_at": None,
         "delivered_at": None,
@@ -252,6 +253,33 @@ def expire_stale_orders() -> list[int]:
         if expire_order(doc["id"]):
             expired_ids.append(doc["id"])
     return expired_ids
+
+
+def cancel_stale_pending_orders(now: int | None = None) -> list[int]:
+    """Cancel orders that stayed unpaid beyond the ten-minute payment window."""
+    now = int(time.time()) if now is None else int(now)
+    legacy_cutoff = now - PENDING_PAYMENT_TIMEOUT_SECONDS
+    stale = list(db.get_conn().orders.find(
+        {
+            "status": OrderStatus.PENDING_PAYMENT,
+            "$or": [
+                {"payment_deadline_at": {"$lte": now, "$gt": 0}},
+                {
+                    "payment_deadline_at": {"$in": [None, 0]},
+                    "created_at": {"$lte": legacy_cutoff},
+                },
+            ],
+        },
+        {"id": 1},
+    ))
+    cancelled_ids = []
+    for order in stale:
+        if cancel_order(
+            int(order["id"]),
+            reason="Payment window expired after 10 minutes",
+        ):
+            cancelled_ids.append(int(order["id"]))
+    return cancelled_ids
 
 
 # ---------------------------------------------------------------------------

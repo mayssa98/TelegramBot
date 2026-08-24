@@ -137,6 +137,12 @@ def scheduler_loop(stop_event: threading.Event, port: int) -> None:
         "/api/cron/prices": max(
             60, int(os.environ.get("HP_PRICE_INTERVAL_SECONDS", "600"))
         ),
+        "/api/cron/pending-payments": max(
+            10,
+            int(os.environ.get(
+                "HP_PENDING_PAYMENT_MONITOR_INTERVAL_SECONDS", "30"
+            )),
+        ),
         "/api/cron/codex-deadlines": max(
             10, int(os.environ.get("HP_CODEX_MONITOR_INTERVAL_SECONDS", "15"))
         ),

@@ -25,6 +25,7 @@ def test_create_order_success(mock_mongodb):
     assert order["unit_price"] == 9.99
     assert order["total_price"] == 9.99
     assert order["status"] == OrderStatus.PENDING_PAYMENT
+    assert order["payment_deadline_at"] - order["created_at"] == 600
     assert order["expires_at"] > order["created_at"]
 
 
@@ -250,6 +251,48 @@ def test_expire_order_releases_reserved_inventory(mock_mongodb):
     item = mock_mongodb.inventory.find_one({"offer_id": offer_id})
     assert item["status"] == "available"
     assert item["reserved_order_id"] is None
+
+
+def test_stale_pending_payment_is_cancelled_after_ten_minutes(mock_mongodb):
+    db.add_service("Discord", "🎮")
+    offer_id = db.add_offer(service_id=1, name="Nitro", price=9.99, stock=5)
+    order = order_service.create_order(12345, db.get_offer(offer_id))
+    mock_mongodb.orders.update_one(
+        {"id": order["id"]},
+        {"$set": {"payment_deadline_at": 700}},
+    )
+
+    assert order_service.cancel_stale_pending_orders(now=699) == []
+    assert order_service.cancel_stale_pending_orders(now=700) == [order["id"]]
+    cancelled = db.get_order(order["id"])
+    assert cancelled["status"] == OrderStatus.CANCELLED
+    assert cancelled["admin_note"] == "Payment window expired after 10 minutes"
+
+
+def test_payment_submitted_before_deadline_is_not_auto_cancelled(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 91,
+        "status": OrderStatus.AWAITING_VERIFICATION,
+        "created_at": 100,
+        "payment_deadline_at": 700,
+    })
+
+    assert order_service.cancel_stale_pending_orders(now=900) == []
+    assert db.get_order(91)["status"] == OrderStatus.AWAITING_VERIFICATION
+
+
+def test_legacy_pending_payment_uses_creation_time_for_timeout(mock_mongodb):
+    mock_mongodb.orders.insert_one({
+        "id": 92,
+        "user_id": 12345,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "created_at": 100,
+        "wallet_amount": 0,
+    })
+
+    assert order_service.cancel_stale_pending_orders(now=699) == []
+    assert order_service.cancel_stale_pending_orders(now=700) == [92]
+    assert db.get_order(92)["status"] == OrderStatus.CANCELLED
 
 
 def test_transition_order(mock_mongodb):

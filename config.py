@@ -239,6 +239,9 @@ AFFILIATE_MIN_PURCHASE_CENTS: int = int(os.environ.get("HP_AFFILIATE_MIN_PURCHAS
 # Commandes
 # ---------------------------------------------------------------------------
 ORDER_EXPIRY_SECONDS: int = int(os.environ.get("HP_ORDER_EXPIRY_SECONDS", "1800"))
+PENDING_PAYMENT_TIMEOUT_SECONDS: int = max(
+    60, int(os.environ.get("HP_PENDING_PAYMENT_TIMEOUT_SECONDS", "600"))
+)
 LOW_STOCK_THRESHOLD: int = int(os.environ.get("HP_LOW_STOCK_THRESHOLD", "5"))
 
 # Délai (secondes) max d'attente d'une vérification automatique avant repli manuel.

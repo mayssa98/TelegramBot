@@ -16,9 +16,9 @@ import os
 import threading
 import time
 import traceback
-from http.cookies import SimpleCookie
 from datetime import UTC, datetime
 from enum import Enum
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -182,7 +182,7 @@ def admin_session_token(expires_at: int) -> str:
         return ""
     signature = hmac.new(
         DASHBOARD_PASSWORD.encode("utf-8"),
-        f"telegram-bot-admin-session-v1:{int(expires_at)}".encode("utf-8"),
+        f"telegram-bot-admin-session-v1:{int(expires_at)}".encode(),
         hashlib.sha256,
     ).hexdigest()
     return f"{int(expires_at)}.{signature}"
@@ -570,6 +570,24 @@ class handler(BaseHTTPRequestHandler):
                 log.exception("Automatic reseller price check failed")
                 db.set_setting("price_cron_last_run_at", int(time.time()))
                 db.set_setting("price_cron_last_status", "failed")
+                self._reply(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/cron/pending-payments":
+            expected = env_value("CRON_SECRET")
+            supplied = self.headers.get("Authorization", "")
+            if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                cancelled_ids = order_service.cancel_stale_pending_orders()
+                self._reply(200, {
+                    "ok": True,
+                    "cancelled": len(cancelled_ids),
+                    "order_ids": cancelled_ids,
+                })
+            except Exception as exc:
+                log.exception("Pending-payment cancellation monitor failed")
                 self._reply(500, {"ok": False, "error": str(exc)})
             return
 

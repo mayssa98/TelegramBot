@@ -106,6 +106,29 @@ def test_reseller_provider_health_metadata_is_authenticated_and_safe(monkeypatch
     }
 
 
+def test_pending_payment_monitor_requires_cron_secret_and_returns_cancellations(
+    monkeypatch,
+):
+    monkeypatch.setenv("CRON_SECRET", "cron-secret")
+    monkeypatch.setattr(
+        webhook_module.order_service,
+        "cancel_stale_pending_orders",
+        lambda: [41, 42],
+    )
+    request = Request(
+        "http://placeholder/api/cron/pending-payments",
+        headers={"Authorization": "Bearer cron-secret"},
+    )
+
+    with running_server() as base_url:
+        request.full_url = f"{base_url}/api/cron/pending-payments"
+        with urlopen(request, timeout=5) as response:
+            payload = json.load(response)
+
+    assert response.status == 200
+    assert payload == {"ok": True, "cancelled": 2, "order_ids": [41, 42]}
+
+
 def test_bulk_price_update_is_audited_and_reversible(monkeypatch, mock_mongodb):
     monkeypatch.setattr(webhook_module, "DASHBOARD_PASSWORD", "secret")
     mock_mongodb.services.insert_one({"id": 1, "name": "Service", "active": 1})
