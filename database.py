@@ -241,6 +241,27 @@ def _public(document):
     return result
 
 
+def order_charge_total(order):
+    """Return the amount charged for an order, including wallet credit."""
+    if not order:
+        return 0.0
+    return round(
+        float(order.get("total_price") or 0)
+        + float(order.get("wallet_amount") or 0),
+        2,
+    )
+
+
+def order_charge_total_expression():
+    """Mongo expression matching :func:`order_charge_total`."""
+    return {
+        "$add": [
+            {"$ifNull": ["$total_price", 0]},
+            {"$ifNull": ["$wallet_amount", 0]},
+        ]
+    }
+
+
 def _next_id(sequence):
     row = get_conn().counters.find_one_and_update(
         {"_id": sequence}, {"$inc": {"value": 1}}, upsert=True,
@@ -1620,7 +1641,7 @@ def dashboard_data():
     def _revenue(match_filter):
         result = list(db.orders.aggregate([
             {"$match": match_filter},
-            {"$group": {"_id": None, "total": {"$sum": "$total_price"}}},
+            {"$group": {"_id": None, "total": {"$sum": order_charge_total_expression()}}},
         ]))
         return round(result[0]["total"], 2) if result else 0.0
 

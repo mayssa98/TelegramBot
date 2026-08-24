@@ -13,6 +13,14 @@ from pymongo import DESCENDING
 import database as db
 
 
+def _admin_order(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Expose the full charged amount without changing payment-balance fields."""
+    result = db._public(row)
+    if result is not None:
+        result["charged_total"] = db.order_charge_total(result)
+    return result
+
+
 def _bounded_int(value: str | int | None, default: int, minimum: int, maximum: int) -> int:
     try:
         parsed = int(value) if value is not None else default
@@ -67,12 +75,21 @@ def list_orders(params: dict[str, list[str]]) -> dict[str, Any]:
     total = collection.count_documents(query)
     sort_field = "total_price" if _first(params, "sort") == "amount" else "created_at"
     sort_direction = 1 if _first(params, "direction") == "asc" else DESCENDING
-    rows = collection.find(query).sort(sort_field, sort_direction).skip((page - 1) * per_page).limit(per_page)
+    if sort_field == "total_price":
+        rows = collection.aggregate([
+            {"$match": query},
+            {"$addFields": {"charged_total": db.order_charge_total_expression()}},
+            {"$sort": {"charged_total": sort_direction, "id": sort_direction}},
+            {"$skip": (page - 1) * per_page},
+            {"$limit": per_page},
+        ])
+    else:
+        rows = collection.find(query).sort(sort_field, sort_direction).skip((page - 1) * per_page).limit(per_page)
     analytics_query = dict(query)
     analytics_query.pop("status", None)
     analytics = _order_analytics(collection, analytics_query)
     return {
-        "items": [db._public(row) for row in rows],
+        "items": [_admin_order(row) for row in rows],
         "page": page,
         "per_page": per_page,
         "total": total,
@@ -88,7 +105,7 @@ def order_detail(order_id: int) -> dict[str, Any] | None:
     if not order:
         return None
 
-    result = db._public(order)
+    result = _admin_order(order)
     user = conn.users.find_one(
         {"telegram_id": order.get("user_id")},
         {"_id": 0, "telegram_id": 1, "username": 1, "first_name": 1, "full_name": 1},
@@ -144,10 +161,10 @@ def _order_analytics(collection: Any, query: dict[str, Any]) -> dict[str, Any]:
     pending_statuses = {"pending_payment", "awaiting_verification", "manual_review", "preparing_delivery"}
     delivered = pending = 0
 
-    for row in collection.find(query, {"status": 1, "total_price": 1, "created_at": 1}):
+    for row in collection.find(query, {"status": 1, "total_price": 1, "wallet_amount": 1, "created_at": 1}):
         status = str(row.get("status") or "unknown")
         statuses[status] = statuses.get(status, 0) + 1
-        amount = float(row.get("total_price") or 0)
+        amount = db.order_charge_total(row)
         if status in paid_statuses:
             revenue += amount
         if status == "delivered":
@@ -364,7 +381,7 @@ def customer_detail(user_id: int) -> dict[str, Any] | None:
     if not user:
         return None
     result = _customer_summary(user)
-    result["orders"] = [db._public(row) for row in conn.orders.find({"user_id": user_id}).sort("created_at", DESCENDING)]
+    result["orders"] = [_admin_order(row) for row in conn.orders.find({"user_id": user_id}).sort("created_at", DESCENDING)]
     result["tickets"] = [db._public(row) for row in conn.support_tickets.find({"user_id": user_id}).sort("updated_at", DESCENDING).limit(25)]
     result["referrals"] = conn.referrals.count_documents({"referrer_id": user_id})
     return result
@@ -533,7 +550,7 @@ def _customer_summary(user: dict[str, Any]) -> dict[str, Any]:
     paid_filter = {"user_id": user_id, "status": {"$in": ["paid", "payment_confirmed", "delivered"]}}
     revenue = list(conn.orders.aggregate([
         {"$match": paid_filter},
-        {"$group": {"_id": None, "total": {"$sum": "$total_price"}, "count": {"$sum": 1}}},
+        {"$group": {"_id": None, "total": {"$sum": db.order_charge_total_expression()}, "count": {"$sum": 1}}},
     ]))
     metrics = revenue[0] if revenue else {"total": 0, "count": 0}
     result = db._public(user)

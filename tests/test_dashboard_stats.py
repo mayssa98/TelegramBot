@@ -31,6 +31,19 @@ def test_dashboard_comparisons_and_alerts(mock_mongodb):
     assert {"paid_not_delivered", "payment_review", "recent_errors"} <= alert_types
 
 
+def test_dashboard_revenue_includes_wallet_payments(mock_mongodb):
+    now = int(time.time())
+    mock_mongodb.orders.insert_one({
+        "id": 10,
+        "status": "delivered",
+        "total_price": 0.0,
+        "wallet_amount": 14.5,
+        "created_at": now,
+    })
+
+    assert db.dashboard_data()["summary"]["revenue_today"] == 14.5
+
+
 def test_dashboard_services_include_offers(mock_mongodb):
     service_id = db.add_service("Streaming", "🎬")
     db.add_offer(service_id, "Monthly", 5.0, 2, "Instant")

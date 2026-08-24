@@ -91,6 +91,10 @@ function money(value, currency = "USDT") {
   return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(Number(value || 0))} ${currency}`;
 }
 
+function orderAmount(order = {}) {
+  return order.charged_total ?? Number(order.total_price || 0) + Number(order.wallet_amount || 0);
+}
+
 function date(value) {
   if (!value) return "—";
   const parsed =
@@ -320,7 +324,7 @@ function OrderEditor({ order, onAction, onClose, currency }) {
         </div>
         <div>
           <span>Montant</span>
-          <strong>{money(order.total_price, currency)}</strong>
+          <strong>{money(orderAmount(order), currency)}</strong>
         </div>
         <div>
           <span>Créée</span>
@@ -666,7 +670,7 @@ function OrdersPage({ data, onAction }) {
                   </td>}
                   {visibleColumns.includes("product") && <td>{order.offer_name || order.service_name || "—"}</td>}
                   {visibleColumns.includes("amount") && <td>
-                    <strong>{money(order.total_price, data.currency)}</strong>
+                    <strong>{money(orderAmount(order), data.currency)}</strong>
                   </td>}
                   {visibleColumns.includes("status") && <td>
                     <span className={`status ${order.status}`}>
@@ -683,7 +687,7 @@ function OrdersPage({ data, onAction }) {
               ))}
             </tbody>
           </table>
-        </div> : <div className="orders-kanban">{kanbanColumns.map((column) => <section className={`kanban-column ${column.id}`} key={column.id}><header><div><span>{column.label}</span><small>{column.items.length} sur cette page</small></div><strong>{column.total}</strong></header><div className="kanban-cards">{column.items.map((order) => <button className="kanban-order" onClick={() => openOrder(order)} key={order.id}><div><strong>#{order.id}</strong><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></div><h4>{order.offer_name || order.service_name || "Produit"}</h4><p>{order.username ? `@${order.username}` : `Client ${order.user_id}`}</p><footer><b>{money(order.total_price, data.currency)}</b><small>{date(order.created_at)}</small></footer></button>)}{!column.items.length && <div className="kanban-empty">Aucune commande sur cette page</div>}</div></section>)}</div>}
+        </div> : <div className="orders-kanban">{kanbanColumns.map((column) => <section className={`kanban-column ${column.id}`} key={column.id}><header><div><span>{column.label}</span><small>{column.items.length} sur cette page</small></div><strong>{column.total}</strong></header><div className="kanban-cards">{column.items.map((order) => <button className="kanban-order" onClick={() => openOrder(order)} key={order.id}><div><strong>#{order.id}</strong><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></div><h4>{order.offer_name || order.service_name || "Produit"}</h4><p>{order.username ? `@${order.username}` : `Client ${order.user_id}`}</p><footer><b>{money(orderAmount(order), data.currency)}</b><small>{date(order.created_at)}</small></footer></button>)}{!column.items.length && <div className="kanban-empty">Aucune commande sur cette page</div>}</div></section>)}</div>}
         {loading ? (
           <div className="table-loading">Chargement…</div>
         ) : (
@@ -2461,7 +2465,7 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
                   <tr key={order.id} onClick={() => openOrder(order)}>
                     <td><strong>#{order.id}</strong></td>
                     <td>{order.offer_name || order.service_name || "—"}</td>
-                    <td>{money(order.total_price, currency)}</td>
+                    <td>{money(orderAmount(order), currency)}</td>
                     <td><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></td>
                     <td>{date(order.created_at)}</td>
                     <td><button className="row-action" type="button" aria-label={`Voir la commande ${order.id}`}><Eye size={15} /></button></td>

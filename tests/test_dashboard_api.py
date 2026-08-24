@@ -133,6 +133,19 @@ def test_order_date_service_and_amount_sort(mock_mongodb):
     assert [item["id"] for item in result["items"]] == [2, 1]
 
 
+def test_wallet_orders_show_and_sort_by_full_charged_amount(mock_mongodb):
+    mock_mongodb.orders.insert_many([
+        {"id": 1, "total_price": 5.0, "wallet_amount": 0.0, "status": "delivered", "created_at": 1},
+        {"id": 2, "total_price": 0.0, "wallet_amount": 12.0, "status": "delivered", "created_at": 2},
+    ])
+
+    result = dashboard_api.list_orders({"sort": ["amount"]})
+
+    assert [item["id"] for item in result["items"]] == [2, 1]
+    assert result["items"][0]["charged_total"] == 12.0
+    assert result["analytics"]["revenue"] == 17.0
+
+
 def test_ticket_filters(mock_mongodb):
     now = datetime.now(UTC)
     mock_mongodb.support_tickets.insert_many([

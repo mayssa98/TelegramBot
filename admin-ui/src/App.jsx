@@ -74,6 +74,10 @@ function formatMoney(value, currency = "USDT") {
   return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(Number(value || 0))} ${currency}`;
 }
 
+function orderAmount(order = {}) {
+  return order.charged_total ?? Number(order.total_price || 0) + Number(order.wallet_amount || 0);
+}
+
 function formatDate(value) {
   if (!value) return "—";
   const date = typeof value === "number" ? new Date(value * 1000) : new Date(value);
@@ -270,7 +274,7 @@ function RecentOrders({ orders = [], currency, onOpenLegacy, onSelectOrder }) {
               <tr key={order.id} onClick={() => onSelectOrder(order)} tabIndex="0" onKeyDown={(event) => event.key === "Enter" && onSelectOrder(order)}>
                 <td><strong>#{order.id}</strong><span>{order.offer_name || order.service_name || "Commande"}</span></td>
                 <td>{order.username ? `@${order.username}` : order.user_id || "—"}</td>
-                <td><strong>{formatMoney(order.total_price, currency)}</strong></td>
+                <td><strong>{formatMoney(orderAmount(order), currency)}</strong></td>
                 <td><span className={`status ${order.status || "pending"}`}>{STATUS_LABELS[order.status] || order.status || "—"}</span></td>
                 <td>{formatDate(order.created_at)}</td>
               </tr>
