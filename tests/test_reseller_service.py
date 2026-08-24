@@ -132,6 +132,7 @@ def test_canboso_key_and_idempotency_are_sent_in_documented_fields(monkeypatch):
 
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "test-buyer-key")
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "test-gpt-cheap-key")
+    monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "test-shop-cron-key")
     monkeypatch.setattr(
         reseller_service,
         "CANBOSO_API_BASE",
@@ -149,6 +150,10 @@ def test_canboso_key_and_idempotency_are_sent_in_documented_fields(monkeypatch):
     reseller_service._canboso_request_json(
         "/products",
         provider=reseller_service.GPT_CHEAP_PROVIDER,
+    )
+    reseller_service._canboso_request_json(
+        "/products",
+        provider=reseller_service.SHOP_CRON_PROVIDER,
     )
 
     get_request, get_timeout = requests[0]
@@ -170,6 +175,12 @@ def test_canboso_key_and_idempotency_are_sent_in_documented_fields(monkeypatch):
     assert gpt_cheap_timeout == 20
     assert parse_qs(urlsplit(gpt_cheap_request.full_url).query) == {
         "key": ["test-gpt-cheap-key"]
+    }
+
+    shop_cron_request, shop_cron_timeout = requests[3]
+    assert shop_cron_timeout == 20
+    assert parse_qs(urlsplit(shop_cron_request.full_url).query) == {
+        "key": ["test-shop-cron-key"]
     }
 
 
@@ -663,7 +674,7 @@ def test_canboso_catalog_maps_current_live_product_schema(monkeypatch, mock_mong
     assert result["products"][1]["manual_delivery"] is True
 
 
-def test_piggy_ai_and_gpt_cheap_use_separate_wallet_keys(monkeypatch, mock_mongodb):
+def test_canboso_shops_use_separate_wallet_keys(monkeypatch, mock_mongodb):
     calls = []
 
     def fake_request(path, **kwargs):
@@ -683,18 +694,23 @@ def test_piggy_ai_and_gpt_cheap_use_separate_wallet_keys(monkeypatch, mock_mongo
 
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "piggy-key")
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "gpt-cheap-key")
+    monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "shop-cron-key")
     monkeypatch.setattr(reseller_service, "_canboso_request_json", fake_request)
 
     piggy = reseller_service.catalog("canboso")
     cheap = reseller_service.catalog("gpt_cheap")
+    shop_cron = reseller_service.catalog("shop_cron")
 
     assert piggy["supplier_name"] == "Piggy AI"
     assert cheap["supplier_name"] == "GPT Cheap"
+    assert shop_cron["supplier_name"] == "Shop Cron"
     assert calls == [
         ("/products", "canboso"),
         ("/balance", "canboso"),
         ("/products", "gpt_cheap"),
         ("/balance", "gpt_cheap"),
+        ("/products", "shop_cron"),
+        ("/balance", "shop_cron"),
     ]
 
 
@@ -888,6 +904,7 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "catalog", fake_catalog)
 
@@ -932,6 +949,7 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(
         reseller_service,

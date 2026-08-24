@@ -69,6 +69,7 @@ const PROVIDERS = [
   ["vex", "VEX Reseller"],
   ["canboso", "Piggy AI"],
   ["gpt_cheap", "GPT Cheap"],
+  ["shop_cron", "Shop Cron"],
   ["ventebot", "VenteBot"],
 ];
 

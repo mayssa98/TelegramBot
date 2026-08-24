@@ -2662,6 +2662,12 @@ def render_dashboard(
                         <button class="btn btn-primary" onclick="selectApiProvider('gpt_cheap')">Voir ses produits</button>
                     </div>
                     <div class="api-action-card">
+                        <span class="badge badge-paid">API active</span>
+                        <h3>Shop Cron</h3>
+                        <p>Wallet Canboso indépendant avec catalogue, solde et achats automatiques.</p>
+                        <button class="btn btn-primary" onclick="selectApiProvider('shop_cron')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
                         <span>↻</span>
                         <h3>Synchronisation</h3>
                         <p>Actualisez le solde, les prix grossistes et les stocks.</p>

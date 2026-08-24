@@ -134,6 +134,7 @@ CANBOSO_API_BASE: str = os.environ.get(
     "HP_CANBOSO_API_BASE", "https://canboso.com/api/v2/telegram-buyer"
 ).rstrip("/")
 GPT_CHEAP_API_KEY: str = env_value("HP_GPT_CHEAP_API_KEY")
+SHOP_CRON_API_KEY: str = env_value("HP_SHOP_CRON_API_KEY")
 
 # ---------------------------------------------------------------------------
 # Fonctions IA de l’administration (API externe configurable)

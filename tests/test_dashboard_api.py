@@ -437,6 +437,8 @@ def test_dashboard_has_mailreader_api_products_management():
     assert "selectApiProvider('canboso')" in page
     assert "GPT Cheap" in page
     assert "selectApiProvider('gpt_cheap')" in page
+    assert "Shop Cron" in page
+    assert "selectApiProvider('shop_cron')" in page
     assert "Clés Buyer API" in page
     assert "/api/swagger" in page
     assert "createBuyerApiKey" in page

@@ -23,6 +23,7 @@ from config import (
     MAILREADER_API_KEY,
     SHAMEKH_API_BASE,
     SHAMEKH_API_KEY,
+    SHOP_CRON_API_KEY,
     VENTEBOT_API_BASE,
     VENTEBOT_API_KEY,
     VEX_API_BASE,
@@ -35,6 +36,7 @@ KAKAO_PROVIDER = "kakao"
 VEX_PROVIDER = "vex"
 CANBOSO_PROVIDER = "canboso"
 GPT_CHEAP_PROVIDER = "gpt_cheap"
+SHOP_CRON_PROVIDER = "shop_cron"
 VENTEBOT_PROVIDER = "ventebot"
 SUPPORTED_PROVIDERS = {
     PROVIDER,
@@ -43,9 +45,14 @@ SUPPORTED_PROVIDERS = {
     VEX_PROVIDER,
     CANBOSO_PROVIDER,
     GPT_CHEAP_PROVIDER,
+    SHOP_CRON_PROVIDER,
     VENTEBOT_PROVIDER,
 }
-CANBOSO_PROVIDERS = {CANBOSO_PROVIDER, GPT_CHEAP_PROVIDER}
+CANBOSO_PROVIDERS = {
+    CANBOSO_PROVIDER,
+    GPT_CHEAP_PROVIDER,
+    SHOP_CRON_PROVIDER,
+}
 
 
 class ResellerApiError(RuntimeError):
@@ -250,12 +257,11 @@ def _canboso_request_json(
     provider: str = CANBOSO_PROVIDER,
 ) -> dict[str, Any]:
     """Call the buyer-key API without ever placing its key in logs or errors."""
-    if provider == GPT_CHEAP_PROVIDER:
-        api_key = GPT_CHEAP_API_KEY
-        provider_name = "GPT Cheap"
-    else:
-        api_key = CANBOSO_API_KEY
-        provider_name = "Piggy AI"
+    api_key, provider_name = {
+        CANBOSO_PROVIDER: (CANBOSO_API_KEY, "Piggy AI"),
+        GPT_CHEAP_PROVIDER: (GPT_CHEAP_API_KEY, "GPT Cheap"),
+        SHOP_CRON_PROVIDER: (SHOP_CRON_API_KEY, "Shop Cron"),
+    }.get(provider, ("", "Canboso"))
     api_key = str(api_key).strip()
     if not api_key:
         raise ResellerApiError(
@@ -402,6 +408,12 @@ def provider_summaries() -> list[dict[str, Any]]:
             "documentation_url": "https://canboso.com/api/swagger",
         },
         {
+            "id": SHOP_CRON_PROVIDER,
+            "name": "Shop Cron",
+            "configured": bool(SHOP_CRON_API_KEY),
+            "documentation_url": "https://canboso.com/api/swagger",
+        },
+        {
             "id": VENTEBOT_PROVIDER,
             "name": "VenteBot",
             "configured": bool(VENTEBOT_API_KEY),
@@ -441,13 +453,13 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         reseller = {"balance": balance_data.get("balance", 0)}
         supplier_name = "VEX Reseller"
     elif provider in CANBOSO_PROVIDERS:
-        provider_name = "Piggy AI" if provider == CANBOSO_PROVIDER else "GPT Cheap"
-        payload = _canboso_request_json(
-            "/products", **({"provider": provider} if provider == GPT_CHEAP_PROVIDER else {}),
-        )
-        balance_payload = _canboso_request_json(
-            "/balance", **({"provider": provider} if provider == GPT_CHEAP_PROVIDER else {}),
-        )
+        provider_name = {
+            CANBOSO_PROVIDER: "Piggy AI",
+            GPT_CHEAP_PROVIDER: "GPT Cheap",
+            SHOP_CRON_PROVIDER: "Shop Cron",
+        }[provider]
+        payload = _canboso_request_json("/products", provider=provider)
+        balance_payload = _canboso_request_json("/balance", provider=provider)
         wallet_currency = str(balance_payload.get("walletCurrency") or "VND").upper()
         balance = (
             balance_payload.get("usdtBalance", balance_payload.get("balance", 0))
@@ -647,6 +659,7 @@ def detect_restock_events() -> dict[str, Any]:
         VEX_PROVIDER: bool(VEX_API_KEY),
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
+        SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
         VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
     }
     events: list[dict[str, Any]] = []
@@ -698,6 +711,7 @@ def detect_supplier_price_changes() -> dict[str, Any]:
         VEX_PROVIDER: bool(VEX_API_KEY),
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
+        SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
         VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
     }
     changes: list[dict[str, Any]] = []
@@ -800,6 +814,7 @@ def save_catalog_product(
         VEX_PROVIDER: "Produit API VEX Reseller",
         CANBOSO_PROVIDER: "Produit API Piggy AI",
         GPT_CHEAP_PROVIDER: "Produit API GPT Cheap",
+        SHOP_CRON_PROVIDER: "Produit API Shop Cron",
         VENTEBOT_PROVIDER: "Produit API VenteBot",
     }.get(provider, "Produit API MailReader")
     warranty = str(warranty or default_warranty).strip()[:250]
@@ -1078,7 +1093,7 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                     "quantity": int(order.get("qty") or 1),
                 },
                 idempotency_key=external_order_id,
-                **({"provider": provider} if provider == GPT_CHEAP_PROVIDER else {}),
+                **({"provider": provider} if provider != CANBOSO_PROVIDER else {}),
             )
         elif provider == VENTEBOT_PROVIDER:
             raw_product_id = str(offer["supplier_product_id"])
