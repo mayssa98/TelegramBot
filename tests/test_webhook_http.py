@@ -6,10 +6,11 @@ import base64
 import json
 import threading
 from contextlib import contextmanager
+from http.cookiejar import CookieJar
 from http.server import HTTPServer
 from urllib.error import HTTPError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 import api.webhook as webhook_module
 import database as database_module
@@ -49,28 +50,36 @@ def test_public_homepage_is_site():
     assert "/storefront/assets/" in body
 
 
-def test_admin_requires_authentication(monkeypatch):
+def test_admin_shows_login_app_but_api_requires_authentication(monkeypatch):
     monkeypatch.setattr("api.webhook.DASHBOARD_PASSWORD", "secret")
-    with running_server() as base_url:
+    with running_server() as base_url, urlopen(f"{base_url}/admin", timeout=5) as response:
+        assert response.status == 200
+        assert "text/html" in response.headers["Content-Type"]
         try:
-            urlopen(f"{base_url}/admin", timeout=5)
+            urlopen(f"{base_url}/admin/api/data", timeout=5)
         except HTTPError as exc:
             assert exc.code == 401
-            assert exc.headers["WWW-Authenticate"]
         else:
-            raise AssertionError("Admin dashboard was accessible without authentication")
+            raise AssertionError("Admin API was accessible without authentication")
 
 
-def test_react_admin_requires_authentication(monkeypatch):
+def test_admin_login_creates_session_cookie(monkeypatch):
     monkeypatch.setattr("api.webhook.DASHBOARD_PASSWORD", "secret")
+    opener = build_opener(HTTPCookieProcessor(CookieJar()))
     with running_server() as base_url:
-        try:
-            urlopen(f"{base_url}/admin-v2", timeout=5)
-        except HTTPError as exc:
-            assert exc.code == 401
-            assert exc.headers["WWW-Authenticate"] == 'Basic realm="TelegramBot Admin"'
-        else:
-            raise AssertionError("React admin dashboard was accessible without authentication")
+        request = Request(
+            f"{base_url}/admin/api/login",
+            data=json.dumps({"username": "admin", "password": "secret"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with opener.open(request, timeout=5) as response:
+            assert json.load(response)["ok"] is True
+            assert "HttpOnly" in response.headers["Set-Cookie"]
+            assert "SameSite=Strict" in response.headers["Set-Cookie"]
+
+        with opener.open(f"{base_url}/admin/api/data", timeout=5) as response:
+            assert response.status == 200
 
 
 def test_reseller_provider_health_metadata_is_authenticated_and_safe(monkeypatch):

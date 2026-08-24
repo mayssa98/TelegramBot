@@ -16,6 +16,7 @@ import os
 import threading
 import time
 import traceback
+from http.cookies import SimpleCookie
 from datetime import UTC, datetime
 from enum import Enum
 from http.server import BaseHTTPRequestHandler
@@ -69,6 +70,8 @@ log = logging.getLogger(__name__)
 MAX_WEBHOOK_BODY_BYTES = 1_000_000
 ADMIN_UI_DIST = Path(__file__).resolve().parent.parent / "admin-ui" / "dist"
 STOREFRONT_UI_DIST = Path(__file__).resolve().parent.parent / "storefront-ui" / "dist"
+ADMIN_SESSION_COOKIE = "blackmarket_admin_session"
+ADMIN_SESSION_TTL_SECONDS = 12 * 60 * 60
 
 
 def health_payload() -> dict:
@@ -171,6 +174,18 @@ def dashboard_write_token() -> str:
         b"telegram-bot-dashboard-write-v1",
         hashlib.sha256,
     ).hexdigest()
+
+
+def admin_session_token(expires_at: int) -> str:
+    """Create a short-lived signed session tied to the current admin password."""
+    if not DASHBOARD_PASSWORD:
+        return ""
+    signature = hmac.new(
+        DASHBOARD_PASSWORD.encode("utf-8"),
+        f"telegram-bot-admin-session-v1:{int(expires_at)}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{int(expires_at)}.{signature}"
 
 
 def undo_audit_event(event_id: int) -> dict:
@@ -595,17 +610,11 @@ class handler(BaseHTTPRequestHandler):
 
         admin_tabs = {"overview", "site-overview", "orders", "catalog", "api-products", "inventory", "customers", "site-customers", "tn-storefront", "support", "interactions", "activity", "settings"}
         react_admin_route = (
-            path in {"/admin", "/admin-v2"}
+            path in {"/admin", "/admin-v2", "/admin/login"}
             or path.startswith("/admin-v2/")
             or path.startswith("/admin/") and path.removeprefix("/admin/") in admin_tabs
         )
         if react_admin_route:
-            if not self._dashboard_authorized():
-                self.send_response(401)
-                self.send_header("WWW-Authenticate", 'Basic realm="TelegramBot Admin"')
-                self.end_headers()
-                return
-
             relative_path = path.removeprefix("/admin-v2/") if path.startswith("/admin-v2/") else ""
             requested_file = ADMIN_UI_DIST / relative_path
             if not relative_path or not requested_file.is_file():
@@ -985,6 +994,18 @@ class handler(BaseHTTPRequestHandler):
         write_token = self.headers.get("X-Dashboard-Write-Token", "")
         if write_token and hmac.compare_digest(write_token, dashboard_write_token()):
             return True
+        try:
+            cookies = SimpleCookie(self.headers.get("Cookie", ""))
+            session = cookies.get(ADMIN_SESSION_COOKIE)
+            if session:
+                expires_raw, _ = session.value.split(".", 1)
+                expires_at = int(expires_raw)
+                if expires_at >= int(time.time()) and hmac.compare_digest(
+                    session.value, admin_session_token(expires_at)
+                ):
+                    return True
+        except (KeyError, TypeError, ValueError):
+            pass
         header = self.headers.get("Authorization", "")
         if not header.startswith("Basic "):
             return False
@@ -1040,6 +1061,42 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path.rstrip("/")
+        if path == "/admin/api/login":
+            try:
+                payload = self._read_json_body(max_bytes=4_000)
+                username = str(payload.get("username") or "").strip().lower()
+                password = str(payload.get("password") or "")
+                valid = (
+                    bool(DASHBOARD_PASSWORD)
+                    and username == "admin"
+                    and hmac.compare_digest(password, DASHBOARD_PASSWORD)
+                )
+                if not valid:
+                    self._reply(401, {
+                        "ok": False,
+                        "error": "Identifiant ou mot de passe incorrect.",
+                    })
+                    return
+                expires_at = int(time.time()) + ADMIN_SESSION_TTL_SECONDS
+                cookie = (
+                    f"{ADMIN_SESSION_COOKIE}={admin_session_token(expires_at)}; "
+                    f"Path=/; Max-Age={ADMIN_SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict"
+                )
+                if self.headers.get("X-Forwarded-Proto", "").lower() == "https":
+                    cookie += "; Secure"
+                self._reply(200, {"ok": True}, headers={
+                    "Set-Cookie": cookie,
+                    "Cache-Control": "no-store",
+                })
+            except buyer_api_service.BuyerApiError as exc:
+                self._reply(exc.status, {"ok": False, "error": exc.message})
+            return
+        if path == "/admin/api/logout":
+            self._reply(200, {"ok": True}, headers={
+                "Set-Cookie": f"{ADMIN_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict",
+                "Cache-Control": "no-store",
+            })
+            return
         if path == "/api/lovable/license/validate":
             try:
                 payload = self._read_json_body(max_bytes=4_000)

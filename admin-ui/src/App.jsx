@@ -11,9 +11,12 @@ import {
   ClipboardList,
   Cloud,
   Database,
+  Eye,
+  EyeOff,
   Headphones,
   Globe2,
   KeyRound,
+  LockKeyhole,
   LayoutDashboard,
   Menu,
   MessageSquareText,
@@ -21,6 +24,8 @@ import {
   PackageSearch,
   RefreshCw,
   Search,
+  LogIn,
+  LogOut,
   ShieldCheck,
   Settings,
   ShoppingBag,
@@ -138,7 +143,7 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspac
   );
 }
 
-function Header({ activePage, alertCount, busyAction, density, isRefreshing, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance, onToggleDensity, onToggleTheme, theme, workspace }) {
+function Header({ activePage, alertCount, busyAction, density, isRefreshing, onLogout, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance, onToggleDensity, onToggleTheme, theme, workspace }) {
   const navItems = workspace === "site" ? SITE_NAV_ITEMS : BOT_NAV_ITEMS;
   const current = navItems.find((item) => item.id === activePage) || navItems[0];
   return (
@@ -167,7 +172,7 @@ function Header({ activePage, alertCount, busyAction, density, isRefreshing, onM
         <button className="icon-button notification-button" onClick={onNotifications} aria-label={`${alertCount} alertes`}>
           <Bell size={19} />{alertCount > 0 && <span>{Math.min(alertCount, 9)}</span>}
         </button>
-        <div className="avatar">AD</div>
+        <button className="avatar" onClick={onLogout} aria-label="Se déconnecter" title="Se déconnecter">AD<span><LogOut size={12} /></span></button>
       </div>
     </header>
   );
@@ -441,6 +446,66 @@ function ErrorState({ message, onRetry }) {
   return <div className="loading-state error-state"><AlertTriangle size={32} /><strong>Impossible de charger le dashboard</strong><span>{message}</span><button className="primary-button" onClick={onRetry}>Réessayer</button></div>;
 }
 
+function LoginPage({ onAuthenticated }) {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!username.trim() || !password) {
+      setMessage("Renseignez votre identifiant et votre mot de passe.");
+      return;
+    }
+    setSubmitting(true);
+    setMessage("");
+    try {
+      const response = await fetch("/admin/api/login", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || "Connexion impossible.");
+      await onAuthenticated();
+    } catch (loginError) {
+      setMessage(loginError.message || "Connexion impossible. Réessayez.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <main className="login-page">
+      <section className="login-story" aria-label="BlackMarket Control Center">
+        <div className="login-brand"><div className="login-brand-mark">BM</div><div><strong>BlackMarket</strong><span>Control Center</span></div></div>
+        <div className="login-story-copy">
+          <span className="login-kicker"><i /> Espace administrateur</span>
+          <h1>Votre boutique.<br /><em>Sous contrôle.</em></h1>
+          <p>Pilotez vos commandes, votre catalogue et vos clients depuis un espace unique, conçu pour aller à l’essentiel.</p>
+        </div>
+        <div className="login-security-note"><ShieldCheck size={18} /><div><strong>Accès sécurisé</strong><span>Vos données restent protégées et confidentielles.</span></div></div>
+        <div className="login-orb login-orb-one" /><div className="login-orb login-orb-two" />
+      </section>
+
+      <section className="login-panel">
+        <form className="login-card" onSubmit={submit}>
+          <header><span className="login-lock"><LockKeyhole size={21} /></span><div><h2>Bon retour parmi nous</h2><p>Connectez-vous pour accéder au tableau de bord.</p></div></header>
+          <label className="login-field"><span>Identifiant</span><div><KeyRound size={17} /><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" spellCheck="false" aria-invalid={Boolean(message)} autoFocus /></div></label>
+          <label className="login-field"><span>Mot de passe</span><div><LockKeyhole size={17} /><input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" aria-invalid={Boolean(message)} /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></label>
+          {message && <div className="login-error" role="alert"><AlertTriangle size={15} />{message}</div>}
+          <button className="login-submit" type="submit" disabled={submitting}>{submitting ? <><span className="login-spinner" />Connexion en cours…</> : <>Se connecter <LogIn size={17} /></>}</button>
+          <footer><ShieldCheck size={13} /> Session sécurisée · Accès réservé</footer>
+        </form>
+        <p className="login-help">Un problème d’accès ? Contactez le propriétaire du bot.</p>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const routePage = () => window.location.pathname.replace(/^\/admin(?:-v2)?\/?/, "").split("/")[0] || "overview";
   const initialPage = routePage();
@@ -449,6 +514,7 @@ export default function App() {
   const [workspace, setWorkspace] = useState(routeWorkspace === "site" ? "site" : "bot");
   const [activePage, setActivePage] = useState(ALL_NAV_ITEMS.some((item) => item.id === initialPage) ? initialPage : "overview");
   const [data, setData] = useState(null);
+  const [authenticated, setAuthenticated] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -475,8 +541,14 @@ export default function App() {
       if (!background) setError("");
       try {
         const response = await fetch("/admin/api/data", { credentials: "same-origin", cache: "no-store" });
-        if (!response.ok) throw new Error(response.status === 401 ? "Authentification administrateur requise." : `Erreur serveur (${response.status}).`);
+        if (response.status === 401) {
+          setAuthenticated(false);
+          setLoading(false);
+          return;
+        }
+        if (!response.ok) throw new Error(`Erreur serveur (${response.status}).`);
         setData(await response.json());
+        setAuthenticated(true);
         lastSyncRef.current = Date.now();
         if (background) window.dispatchEvent(new Event("admin:data-synced"));
       } catch (requestError) {
@@ -619,11 +691,25 @@ export default function App() {
 
   const alertCount = useMemo(() => data?.alerts?.length || 0, [data]);
 
+  const logout = async () => {
+    await fetch("/admin/api/logout", { method: "POST", credentials: "same-origin" });
+    setData(null);
+    setAuthenticated(false);
+    window.history.replaceState({}, "", "/admin/login");
+  };
+
+  if (authenticated === false) {
+    return <LoginPage onAuthenticated={async () => {
+      await loadData(false, true);
+      window.history.replaceState({}, "", "/admin");
+    }} />;
+  }
+
   return (
     <div className={`app-shell ${refreshing || pendingActionCount ? "is-synchronizing" : ""}`} aria-busy={refreshing || pendingActionCount > 0}>
       <Sidebar activePage={activePage} data={data} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={navigate} onWorkspaceChange={switchWorkspace} workspace={workspace} />
       <div className="main-shell">
-        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} density={density} isRefreshing={refreshing || pendingActionCount > 0} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} onToggleDensity={() => setDensity((current) => { const next = current === "compact" ? "comfortable" : "compact"; window.localStorage.setItem("admin-density", next); return next; })} onToggleTheme={() => setTheme((current) => { const next = current === "dark" ? "light" : "dark"; window.localStorage.setItem("admin-theme", next); return next; })} theme={theme} workspace={workspace} />
+        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} density={density} isRefreshing={refreshing || pendingActionCount > 0} onLogout={logout} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} onToggleDensity={() => setDensity((current) => { const next = current === "compact" ? "comfortable" : "compact"; window.localStorage.setItem("admin-density", next); return next; })} onToggleTheme={() => setTheme((current) => { const next = current === "dark" ? "light" : "dark"; window.localStorage.setItem("admin-theme", next); return next; })} theme={theme} workspace={workspace} />
         <main className="content">
           {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} onNavigate={navigate} setToast={setToast} workspace={workspace} />}
         </main>
