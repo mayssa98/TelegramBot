@@ -334,11 +334,18 @@ def services_keyboard(lang):
             buttons.append(row)
 
     buttons.append([
-        translated_button(lang, "catalog_request_button", callback_data="catalog_request"),
+        translated_button(
+            lang, "catalog_request_button",
+            callback_data="catalog_request", style="primary",
+        ),
     ])
     buttons.append([
-        translated_button(lang, "btn_refresh_short", callback_data="catalog"),
-        translated_button(lang, "btn_main_menu_short", callback_data="home"),
+        translated_button(
+            lang, "btn_refresh_short", callback_data="catalog", style="success",
+        ),
+        translated_button(
+            lang, "btn_main_menu_short", callback_data="home", style="danger",
+        ),
     ])
     return InlineKeyboardMarkup(buttons)
 
@@ -466,15 +473,22 @@ def catalog_offers_keyboard(lang):
             lang,
             "catalog_preorder_button",
             callback_data="preorder_catalog",
-            style="danger",
+            style="primary",
         ),
     ])
     buttons.append([
-        translated_button(lang, "catalog_request_button", callback_data="catalog_request"),
+        translated_button(
+            lang, "catalog_request_button",
+            callback_data="catalog_request", style="primary",
+        ),
     ])
     buttons.append([
-        translated_button(lang, "btn_refresh_short", callback_data="catalog"),
-        translated_button(lang, "btn_main_menu_short", callback_data="home"),
+        translated_button(
+            lang, "btn_refresh_short", callback_data="catalog", style="success",
+        ),
+        translated_button(
+            lang, "btn_main_menu_short", callback_data="home", style="danger",
+        ),
     ])
     return InlineKeyboardMarkup(buttons)
 

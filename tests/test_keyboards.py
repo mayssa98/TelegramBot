@@ -192,7 +192,24 @@ def test_catalog_has_a_dedicated_preorder_button(monkeypatch):
     )
 
     assert preorder.text == "⏳ Pre-order"
-    assert preorder.style == "danger"
+    assert preorder.style == "primary"
+
+
+def test_catalog_footer_uses_requested_action_colors(monkeypatch):
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: [])
+
+    keyboard = kb.catalog_offers_keyboard("en")
+    actions = {
+        button.callback_data: button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data
+    }
+
+    assert actions["preorder_catalog"].style == "primary"
+    assert actions["catalog_request"].style == "primary"
+    assert actions["catalog"].style == "success"
+    assert actions["home"].style == "danger"
 
 
 def test_normal_catalog_does_not_launch_legacy_direct_preorder(monkeypatch):
