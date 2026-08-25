@@ -1270,6 +1270,23 @@ def test_out_of_stock_offer_click_has_no_legacy_preorder_button(monkeypatch):
     assert callbacks == ["catalog"]
     assert not any(callback.startswith("preorder:") for callback in callbacks)
 
+
+def test_compact_offer_repairs_dashboard_truncated_html(monkeypatch):
+    monkeypatch.setattr("bot.db.offer_sold_count", lambda _offer_id: 0)
+    offer = {
+        "id": 83,
+        "name": "Linkedin Career 3M",
+        "price": 0.7,
+        "stock": 1,
+        "note": "24 hours",
+        "description": "[[HTML]]<blockquote>Activation guide</blockquote>\n<i>Delivery i",
+    }
+
+    rendered = compact_offer_text(offer, "en")
+
+    assert rendered.endswith("<i>Delivery i</i>")
+    assert rendered.count("<blockquote>") == rendered.count("</blockquote>")
+
 def test_single_offer_service_from_photo_opens_offer_without_editing_photo(monkeypatch):
     message = SimpleNamespace(text=None, reply_text=AsyncMock())
     query = SimpleNamespace(

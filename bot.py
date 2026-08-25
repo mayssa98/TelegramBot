@@ -524,6 +524,23 @@ def render_stored_rich_text(value, *, parse_legacy_markdown=True):
     """Render trusted admin HTML or legacy Markdown/token text as Telegram HTML."""
     raw_value = str(value or "")
 
+    def close_unfinished_tags(rendered):
+        """Close formatting tags left open when dashboard fields truncate HTML."""
+        supported = {
+            "b", "strong", "i", "em", "u", "ins", "s", "strike", "del",
+            "span", "tg-spoiler", "a", "code", "pre", "blockquote", "tg-emoji",
+        }
+        opened = []
+        for match in re.finditer(r"<\s*(/?)\s*([a-zA-Z][\w-]*)(?:\s[^<>]*)?>", rendered):
+            closing, tag = match.group(1), match.group(2).lower()
+            if tag not in supported:
+                continue
+            if not closing:
+                opened.append(tag)
+            elif opened and opened[-1] == tag:
+                opened.pop()
+        return rendered + "".join(f"</{tag}>" for tag in reversed(opened))
+
     def render_custom_emoji(match):
         emoji_id, fallback_hex = match.groups()
         with contextlib.suppress(ValueError, UnicodeDecodeError):
@@ -548,7 +565,7 @@ def render_stored_rich_text(value, *, parse_legacy_markdown=True):
             rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
             rendered = re.sub(r"\*([^*]+)\*", r"<b>\1</b>", rendered)
             rendered = re.sub(r"_([^_]+)_", r"<i>\1</i>", rendered)
-        return render_custom_emoji_tokens(rendered)
+        return close_unfinished_tags(render_custom_emoji_tokens(rendered))
     rendered = html.escape(raw_value)
     if parse_legacy_markdown:
         rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
