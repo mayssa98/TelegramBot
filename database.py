@@ -1847,15 +1847,11 @@ def create_broadcast_job(kind, payload, *, dedupe_key=""):
         "payload": dict(payload or {}),
         "status": "queued",
         "attempts": 0,
-        "recipient_count": (
-            1
-            if kind == "supplier_price_update"
-            else get_conn().users.count_documents({
-                "telegram_id": {"$exists": True},
-                "banned": {"$ne": True},
-                "broadcast_blocked": {"$ne": True},
-            })
-        ),
+        "recipient_count": get_conn().users.count_documents({
+            "telegram_id": {"$exists": True},
+            "banned": {"$ne": True},
+            "broadcast_blocked": {"$ne": True},
+        }),
         "sent_count": 0,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),

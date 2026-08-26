@@ -953,6 +953,40 @@ async def announce_api_flash_sale(context, event):
     return await _broadcast_in_batches(send_one, label="Automatic flash-sale broadcast")
 
 
+async def announce_supplier_price_update(context, event):
+    """Broadcast a supplier-driven price increase as a customer new drop."""
+    offer = db.get_offer(int(event["offer_id"]))
+    if not offer or not offer.get("active", 1) or not db.offer_has_stock(offer):
+        return await announce_supplier_change_admin(context, event, "price")
+    service = db.get_service(offer["service_id"]) or {}
+    old_price = float(event["previous_price"])
+    new_price = float(event["price"])
+    stock = "∞" if offer.get("unlimited_stock") else max(0, int(offer.get("stock") or 0))
+
+    async def send_one(user):
+        user_id = int(user["telegram_id"])
+        lang = user.get("lang") or DEFAULT_LANG
+        sent_message = await context.bot.send_message(
+            chat_id=user_id,
+            text=premium_customer_text(
+                lang,
+                "supplier_price_update_announcement",
+                emoji=_announcement_service_emoji(service, "💫"),
+                service=_announcement_plain(service.get("name") or SHOP_NAME),
+                offer=_announcement_plain(offer.get("name") or f"Offer #{offer['id']}"),
+                old_price=f"{old_price:.2f}",
+                price=f"{new_price:.2f}",
+                cur=CURRENCY,
+                stock=stock,
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.offer_detail_keyboard(lang, offer),
+        )
+        _track_broadcast_message(context, sent_message, user_id)
+
+    return await _broadcast_in_batches(send_one, label="Supplier price-update broadcast")
+
+
 async def broadcast_admin_message(context, source_chat_id, message_id):
     """Copy an admin-authored Telegram message to every active bot user."""
     async def send_one(user):
@@ -1060,7 +1094,7 @@ async def _execute_broadcast_job(job):
         if kind == "api_flash_sale":
             return await announce_api_flash_sale(context, payload["event"])
         if kind == "supplier_price_update":
-            return await announce_supplier_change_admin(context, payload["event"], "price")
+            return await announce_supplier_price_update(context, payload["event"])
         if kind == "admin_message":
             return await broadcast_admin_message(context, payload["source_chat_id"], payload["message_id"])
         if kind == "delete_broadcast":

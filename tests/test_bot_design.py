@@ -20,6 +20,7 @@ from bot import (
     announce_flash_sale,
     announce_restock_digest,
     announce_supplier_change_admin,
+    announce_supplier_price_update,
     admin_text_preview,
     block_maintenance_users,
     block_non_channel_members,
@@ -182,7 +183,7 @@ def test_broadcast_jobs_are_persisted_claimed_and_completed(mock_mongodb):
     assert duplicate["id"] == job["id"]
 
 
-def test_supplier_price_update_job_targets_only_the_admin(mock_mongodb):
+def test_supplier_price_update_job_targets_all_customers(mock_mongodb):
     mock_mongodb.users.insert_many([
         {"telegram_id": 101},
         {"telegram_id": 102},
@@ -194,7 +195,7 @@ def test_supplier_price_update_job_targets_only_the_admin(mock_mongodb):
     )
 
     assert created is True
-    assert job["recipient_count"] == 1
+    assert job["recipient_count"] == 2
 
 
 def test_sent_campaign_can_be_deleted_for_every_recipient(mock_mongodb):
@@ -301,14 +302,18 @@ def test_inactive_supplier_restock_falls_back_to_private_admin_alert(
     assert "MailReader" in call["text"]
 
 
-def test_supplier_price_increase_is_sent_privately_to_admin(
+def test_supplier_price_increase_is_broadcast_as_customer_new_drop(
     monkeypatch, mock_mongodb,
 ):
     monkeypatch.setattr("bot.ADMIN_ID", 999)
     offer_id = db.add_offer(db.add_service("AI", "🤖"), "AI Plan", 7.0, 3)
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101, "lang": "en"},
+        {"telegram_id": 102, "lang": "fr"},
+    ])
     bot_client = SimpleNamespace(send_message=AsyncMock())
 
-    sent = asyncio.run(announce_supplier_change_admin(
+    sent = asyncio.run(announce_supplier_price_update(
         SimpleNamespace(bot=bot_client),
         {
             "provider": "mailreader",
@@ -316,14 +321,15 @@ def test_supplier_price_increase_is_sent_privately_to_admin(
             "previous_price": 6.0,
             "price": 7.0,
         },
-        "price",
     ))
 
-    assert sent == 1
-    call = bot_client.send_message.await_args.kwargs
-    assert call["chat_id"] == 999
-    assert "6.00 → 7.00" in call["text"]
-    assert "increased" in call["text"]
+    assert sent == 2
+    calls = bot_client.send_message.await_args_list
+    assert {call.kwargs["chat_id"] for call in calls} == {101, 102}
+    assert "NEW DROP" in calls[0].kwargs["text"]
+    assert "6.00 USDT" in calls[0].kwargs["text"]
+    assert "7.00 USDT" in calls[0].kwargs["text"]
+    assert calls[0].kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
 
 
 def test_admin_can_reannounce_current_offer_without_adding_stock(mock_mongodb):
