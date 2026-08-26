@@ -40,6 +40,28 @@ def test_public_health_endpoint():
     assert payload["timestamp"]
 
 
+def test_dashboard_uses_first_configured_reseller_provider(monkeypatch, mock_mongodb):
+    mock_mongodb.reseller_products.insert_many([
+        {"provider": "cgpt_active", "product_id": "1", "enabled": True},
+        {"provider": "mailreader", "product_id": "2", "enabled": True},
+        {"provider": "cgpt_active", "product_id": "3", "enabled": False},
+    ])
+    monkeypatch.setattr(
+        webhook_module.reseller_service,
+        "provider_summaries",
+        lambda: [
+            {"id": "mailreader", "configured": False},
+            {"id": "cgpt_active", "configured": True},
+        ],
+    )
+
+    assert webhook_module.reseller_dashboard_summary() == {
+        "configured": True,
+        "default_provider": "cgpt_active",
+        "selected_count": 2,
+    }
+
+
 def test_public_homepage_is_site():
     with running_server() as base_url, urlopen(f"{base_url}/", timeout=5) as response:
         body = response.read().decode()

@@ -176,6 +176,24 @@ def dashboard_write_token() -> str:
     ).hexdigest()
 
 
+def reseller_dashboard_summary() -> dict:
+    """Return provider-aware dashboard state without exposing API keys."""
+    providers = reseller_service.provider_summaries()
+    configured = [item for item in providers if item["configured"]]
+    default_provider = (
+        reseller_service.PROVIDER
+        if any(item["id"] == reseller_service.PROVIDER for item in configured)
+        else configured[0]["id"] if configured else reseller_service.PROVIDER
+    )
+    return {
+        "configured": bool(configured),
+        "default_provider": default_provider,
+        "selected_count": db.get_conn().reseller_products.count_documents(
+            {"enabled": True}
+        ),
+    }
+
+
 def admin_session_token(expires_at: int) -> str:
     """Create a short-lived signed session tied to the current admin password."""
     if not DASHBOARD_PASSWORD:
@@ -724,12 +742,7 @@ class handler(BaseHTTPRequestHandler):
                 data["bot_username"] = os.environ.get(
                     "HP_BOT_USERNAME", "blackmarketa_bot"
                 ).strip().lstrip("@")
-                data["reseller"] = {
-                    "configured": bool(reseller_service.MAILREADER_API_KEY),
-                    "selected_count": db.get_conn().reseller_products.count_documents(
-                        {"provider": reseller_service.PROVIDER, "enabled": True}
-                    ),
-                }
+                data["reseller"] = reseller_dashboard_summary()
                 body = render_dashboard(
                     data,
                     active_tab=active_tab,
@@ -758,12 +771,7 @@ class handler(BaseHTTPRequestHandler):
                     "HP_BOT_USERNAME", "blackmarketa_bot"
                 ).strip().lstrip("@")
                 data["dashboard_write_token"] = dashboard_write_token()
-                data["reseller"] = {
-                    "configured": bool(reseller_service.MAILREADER_API_KEY),
-                    "selected_count": db.get_conn().reseller_products.count_documents(
-                        {"provider": reseller_service.PROVIDER, "enabled": True}
-                    ),
-                }
+                data["reseller"] = reseller_dashboard_summary()
                 self._reply(200, data)
             except Exception as exc:
                 self._reply(500, {"ok": False, "error": str(exc)})

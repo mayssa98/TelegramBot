@@ -3136,7 +3136,7 @@ def render_dashboard(
         let resellerCatalogLoading = false;
         let apiWorkspaceStep = "overview";
         let selectedApiProductId = null;
-        let activeApiProvider = "mailreader";
+        let activeApiProvider = dashboardData.reseller?.default_provider || "mailreader";
         let realtimeRequestRunning = false;
         let adminNotifications = loadAdminNotifications();
         let notificationSnapshot = snapshotDashboard(dashboardData);
