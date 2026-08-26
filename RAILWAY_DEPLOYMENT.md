@@ -56,8 +56,10 @@ commit either result.
 
 ## 3. Deploy
 
-`railway.json` starts `python railway_server.py`, checks `/health`, binds to
-Railway's injected `PORT`, and keeps one European replica. On startup, the
+`railway.json` builds the root `Dockerfile`, starts `python railway_server.py`,
+checks `/health`, binds to Railway's injected `PORT`, and keeps one European
+replica. The `.dockerignore` file keeps local caches, secrets, Git history, and
+development-only files out of the image build context. On startup, the
 service registers `${RAILWAY_PUBLIC_DOMAIN}/api/webhook` with Telegram.
 
 After deployment, confirm:

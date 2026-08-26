@@ -11,12 +11,25 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def test_railway_runs_single_webhook_replica_in_europe():
     config = json.loads((PROJECT_ROOT / "railway.json").read_text(encoding="utf-8"))
 
+    assert config["build"] == {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "Dockerfile",
+    }
     deploy = config["deploy"]
     assert deploy["startCommand"] == "python railway_server.py"
     assert deploy["healthcheckPath"] == "/health"
     assert deploy["multiRegionConfig"] == {
         "europe-west4-drams3a": {"numReplicas": 1}
     }
+
+
+def test_railway_docker_image_uses_supported_python_and_non_root_user():
+    dockerfile = (PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+    assert dockerfile.startswith("FROM python:3.12-slim\n")
+    assert "pip install --no-cache-dir --requirement requirements.txt" in dockerfile
+    assert "USER appuser" in dockerfile
+    assert 'CMD ["python", "railway_server.py"]' in dockerfile
 
 
 def test_admin_catalog_declares_delete_confirmation_state():
