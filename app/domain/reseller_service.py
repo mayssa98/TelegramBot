@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
+import uuid
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -16,6 +18,8 @@ import database as db
 from config import (
     CANBOSO_API_BASE,
     CANBOSO_API_KEY,
+    CGPT_ACTIVE_API_BASE,
+    CGPT_ACTIVE_API_KEY,
     GPT_CHEAP_API_KEY,
     KAKAO_API_BASE,
     KAKAO_API_KEY,
@@ -38,6 +42,7 @@ CANBOSO_PROVIDER = "canboso"
 GPT_CHEAP_PROVIDER = "gpt_cheap"
 SHOP_CRON_PROVIDER = "shop_cron"
 VENTEBOT_PROVIDER = "ventebot"
+CGPT_ACTIVE_PROVIDER = "cgpt_active"
 SUPPORTED_PROVIDERS = {
     PROVIDER,
     SHAMEKH_PROVIDER,
@@ -47,12 +52,14 @@ SUPPORTED_PROVIDERS = {
     GPT_CHEAP_PROVIDER,
     SHOP_CRON_PROVIDER,
     VENTEBOT_PROVIDER,
+    CGPT_ACTIVE_PROVIDER,
 }
 CANBOSO_PROVIDERS = {
     CANBOSO_PROVIDER,
     GPT_CHEAP_PROVIDER,
     SHOP_CRON_PROVIDER,
 }
+log = logging.getLogger(__name__)
 
 
 class ResellerApiError(RuntimeError):
@@ -368,6 +375,66 @@ def _ventebot_request_json(
     return payload
 
 
+def _cgpt_active_request_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+    idempotency_key: str = "",
+) -> dict[str, Any]:
+    """Call CGPT Active without exposing its bearer credential."""
+    if not CGPT_ACTIVE_API_KEY:
+        raise ResellerApiError(
+            "CGPT Active n’est pas configuré. Ajoutez HP_CGPT_ACTIVE_API_KEY "
+            "dans les variables d’environnement."
+        )
+    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    request = Request(
+        f"{CGPT_ACTIVE_API_BASE}{path}",
+        headers={
+            "Authorization": f"Bearer {CGPT_ACTIVE_API_KEY}",
+            "Accept": "application/json",
+            **({"Content-Type": "application/json"} if body is not None else {}),
+            **({"Idempotency-Key": idempotency_key} if idempotency_key else {}),
+            "User-Agent": "BlackMarket-Reseller/1.0",
+        },
+        data=payload_bytes,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        error_payload: dict[str, Any] = {}
+        try:
+            decoded = json.loads(exc.read().decode("utf-8"))
+            if isinstance(decoded, dict):
+                error_payload = decoded
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            pass
+        code = str(error_payload.get("code") or "")
+        request_id = str(error_payload.get("request_id") or "")
+        if request_id:
+            log.warning("CGPT Active request failed: status=%s code=%s request_id=%s", exc.code, code, request_id)
+        message = str(error_payload.get("message") or "")[:300]
+        if exc.code in {401, 403} or code == "unauthorized":
+            raise ResellerApiError(
+                "Clé API CGPT Active refusée. Remplacez-la par une clé active."
+            ) from exc
+        if code == "insufficient_balance":
+            raise ResellerOrderNotCreatedError(
+                message or "Solde CGPT Active insuffisant : aucune commande fournisseur n’a été créée."
+            ) from exc
+        raise ResellerApiError(
+            message or f"CGPT Active a répondu avec l’erreur HTTP {exc.code}."
+        ) from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ResellerApiError("CGPT Active est temporairement indisponible.") from exc
+    if not isinstance(payload, dict):
+        raise ResellerApiError("Réponse CGPT Active invalide.")
+    return payload
+
+
 def provider_summaries() -> list[dict[str, Any]]:
     """Return safe provider metadata without exposing credentials."""
     return [
@@ -418,6 +485,12 @@ def provider_summaries() -> list[dict[str, Any]]:
             "name": "VenteBot",
             "configured": bool(VENTEBOT_API_KEY),
             "documentation_url": f"{VENTEBOT_API_BASE}/api/swagger/",
+        },
+        {
+            "id": CGPT_ACTIVE_PROVIDER,
+            "name": "CGPT Active",
+            "configured": bool(CGPT_ACTIVE_API_KEY),
+            "documentation_url": f"{CGPT_ACTIVE_API_BASE}/docs",
         },
     ]
 
@@ -473,6 +546,11 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         account = _ventebot_request_json("/api/reseller/me")
         reseller = {"balance": account.get("wallet_balance", 0)}
         supplier_name = "VenteBot"
+    elif provider == CGPT_ACTIVE_PROVIDER:
+        payload = _cgpt_active_request_json("/v1/products")
+        account = _cgpt_active_request_json("/v1/me")
+        reseller = {"balance": account.get("balance", 0)}
+        supplier_name = "CGPT Active"
     else:
         payload = _request_json("/api/reseller/products")
         reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
@@ -498,6 +576,11 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             raw.get("api_test") is True or raw.get("delivery_type") != "stock"
         ):
             continue
+        # The current Telegram checkout has no supplier-input collection or
+        # asynchronous invite polling yet. Only publish products that return
+        # redeemable codes immediately after a successful purchase.
+        if provider == CGPT_ACTIVE_PROVIDER and raw.get("product_type") != "cdk":
+            continue
         raw_product_id = (
             raw.get("_id") or raw.get("productId") or raw.get("id")
             if provider in CANBOSO_PROVIDERS
@@ -516,6 +599,8 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 else (
                     raw.get("price")
                     if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER}
+                    else raw.get("your_unit_price")
+                    if provider == CGPT_ACTIVE_PROVIDER
                     else raw.get("price_usd")
                     if provider == VENTEBOT_PROVIDER
                     else raw.get("wholesale_price", "0")
@@ -528,6 +613,9 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             raw.get("availability")
             if isinstance(raw.get("availability"), dict)
             else {}
+        )
+        unlimited_stock = (
+            provider == CGPT_ACTIVE_PROVIDER and raw.get("stock") is None
         )
         stock = max(0, int(
             (stats.get("available") or availability.get("available") or 0)
@@ -551,6 +639,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             db.update_offer(
                 int(local_offer_id),
                 stock=stock,
+                unlimited_stock=unlimited_stock,
                 supplier_provider=provider,
                 supplier_product_id=product_id,
             )
@@ -566,7 +655,11 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 raw.get("description")
                 or (f"Source : {raw.get('source')}" if raw.get("source") else "")
             )[:2000],
-            "delivery_instruction": str(raw.get("delivery_instruction") or "")[:2000],
+            "delivery_instruction": str(
+                raw.get("delivery_instruction")
+                or raw.get("delivery_instructions")
+                or ""
+            )[:2000],
             "wholesale_price": wholesale,
             "currency": str(
                 (
@@ -582,6 +675,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 else raw.get("currency") or "USDT"
             )[:12],
             "stock": stock,
+            "unlimited_stock": unlimited_stock,
             "manual_delivery": bool(
                 raw.get("manual_delivery", False)
                 or (
@@ -661,6 +755,7 @@ def detect_restock_events() -> dict[str, Any]:
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
         VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
+        CGPT_ACTIVE_PROVIDER: bool(CGPT_ACTIVE_API_KEY),
     }
     events: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
@@ -713,6 +808,7 @@ def detect_supplier_price_changes() -> dict[str, Any]:
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
         VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
+        CGPT_ACTIVE_PROVIDER: bool(CGPT_ACTIVE_API_KEY),
     }
     changes: list[dict[str, Any]] = []
     flash_sales: list[dict[str, Any]] = []
@@ -816,6 +912,7 @@ def save_catalog_product(
         GPT_CHEAP_PROVIDER: "Produit API GPT Cheap",
         SHOP_CRON_PROVIDER: "Produit API Shop Cron",
         VENTEBOT_PROVIDER: "Produit API VenteBot",
+        CGPT_ACTIVE_PROVIDER: "Produit API CGPT Active",
     }.get(provider, "Produit API MailReader")
     warranty = str(warranty or default_warranty).strip()[:250]
     delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]
@@ -876,7 +973,7 @@ def save_catalog_product(
             # custom_emoji_id field only accepts a Premium emoji identifier.
             # Preserve any separately configured Premium icon on updates.
             custom_emoji_id=None,
-            unlimited_stock=False,
+            unlimited_stock=bool(product.get("unlimited_stock")),
             manual_stock=False,
             supplier_provider=provider,
             supplier_product_id=product["id"],
@@ -900,7 +997,7 @@ def save_catalog_product(
             low_stock_threshold=low_stock_threshold,
             delivery_delay=delivery_delay,
             custom_emoji_id="",
-            unlimited_stock=False,
+            unlimited_stock=bool(product.get("unlimited_stock")),
             manual_stock=False,
             supplier_provider=provider,
             supplier_product_id=product["id"],
@@ -948,6 +1045,7 @@ def _delivery_items(payload: dict[str, Any]) -> list[str]:
         for key in (
             "delivery",
             "delivery_items",
+            "delivered_codes",
             "deliveredAccounts",
             "delivered_accounts",
             "accounts",
@@ -1035,12 +1133,16 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
     if order.get("status") not in {"paid", "payment_confirmed"}:
         return None
 
+    supplier_idempotency_key = (
+        str(uuid.uuid4()) if provider == CGPT_ACTIVE_PROVIDER else external_order_id
+    )
     try:
         conn.reseller_fulfillments.insert_one({
             "provider": provider,
             "external_order_id": external_order_id,
             "order_id": int(order_id),
             "supplier_product_id": str(offer["supplier_product_id"]),
+            "idempotency_key": supplier_idempotency_key,
             "status": "purchasing",
             "created_at": int(time.time()),
             "updated_at": int(time.time()),
@@ -1107,6 +1209,16 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                     "idempotency_key": external_order_id,
                 },
             )
+        elif provider == CGPT_ACTIVE_PROVIDER:
+            response = _cgpt_active_request_json(
+                "/v1/orders",
+                method="POST",
+                body={
+                    "product_id": int(str(offer["supplier_product_id"])),
+                    "quantity": int(order.get("qty") or 1),
+                },
+                idempotency_key=supplier_idempotency_key,
+            )
         else:
             response = _request_json(
                 "/api/reseller?action=order",
@@ -1140,6 +1252,11 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
         or ""
     )
     items = _delivery_items(response)
+    if provider == CGPT_ACTIVE_PROVIDER and items and response.get("delivery_instructions"):
+        items[-1] = (
+            f"{items[-1]}\n\nHow to redeem:\n"
+            f"{str(response['delivery_instructions']).strip()}"
+        )
     if len(items) < int(order.get("qty") or 1):
         conn.reseller_fulfillments.update_one(
             {"provider": provider, "external_order_id": external_order_id},

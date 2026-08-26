@@ -2668,6 +2668,12 @@ def render_dashboard(
                         <button class="btn btn-primary" onclick="selectApiProvider('shop_cron')">Voir ses produits</button>
                     </div>
                     <div class="api-action-card">
+                        <span class="badge badge-paid">API active</span>
+                        <h3>CGPT Active</h3>
+                        <p>Catalogue CDK, solde revendeur et livraison automatique avec idempotence.</p>
+                        <button class="btn btn-primary" onclick="selectApiProvider('cgpt_active')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
                         <span>↻</span>
                         <h3>Synchronisation</h3>
                         <p>Actualisez le solde, les prix grossistes et les stocks.</p>

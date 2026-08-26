@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -51,6 +52,7 @@ def _supplier_payload():
             "canboso@example.com:secret#1:https://canboso.test/recover?a=1&b=#code",
         ]),
         ({"response": {"payload": {"delivered_accounts": ["nested:user:pass"]}}}, ["nested:user:pass"]),
+        ({"delivered_codes": ["CGPT-CODE-1"]}, ["CGPT-CODE-1"]),
         ({"delivery": {"accounts": [{
             "user": "canboso-current@example.com",
             "password": "current-secret",
@@ -108,6 +110,43 @@ def test_api_key_is_required_without_exposing_a_secret(monkeypatch):
 
     with pytest.raises(reseller_service.ResellerApiError, match="HP_MAILREADER_API_KEY"):
         reseller_service._request_json("/api/reseller/products")
+
+
+def test_cgpt_active_client_sends_bearer_auth_and_idempotency(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"order_id": 42, "delivered_codes": ["CODE"]}'
+
+    def fake_urlopen(request, timeout):
+        requests.append((request, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr(reseller_service, "CGPT_ACTIVE_API_KEY", "rsk_test")
+    monkeypatch.setattr(reseller_service, "CGPT_ACTIVE_API_BASE", "https://supplier.example/api")
+    monkeypatch.setattr(reseller_service, "urlopen", fake_urlopen)
+
+    result = reseller_service._cgpt_active_request_json(
+        "/v1/orders",
+        method="POST",
+        body={"product_id": 7, "quantity": 2},
+        idempotency_key="550e8400-e29b-41d4-a716-446655440000",
+    )
+
+    assert result["delivered_codes"] == ["CODE"]
+    request, timeout = requests[0]
+    assert timeout == 20
+    assert request.full_url == "https://supplier.example/api/v1/orders"
+    assert request.get_header("Authorization") == "Bearer rsk_test"
+    assert request.get_header("Idempotency-key") == "550e8400-e29b-41d4-a716-446655440000"
+    assert json.loads(request.data) == {"product_id": 7, "quantity": 2}
 
 
 def test_canboso_key_and_idempotency_are_sent_in_documented_fields(monkeypatch):
@@ -864,6 +903,94 @@ def test_ventebot_purchase_is_idempotent_and_extracts_account_data(
     assert db.get_order(96)["status"] == "delivered"
 
 
+def test_cgpt_active_catalog_maps_cdk_products_and_skips_input_products(
+    monkeypatch, mock_mongodb,
+):
+    def fake_request(path, **_kwargs):
+        if path == "/v1/me":
+            return {"name": "Demo reseller", "balance": "12.500000"}
+        return {
+            "products": [{
+                "id": 1,
+                "name": "Perplexity PRO",
+                "description": "Instant activation code",
+                "product_type": "cdk",
+                "your_unit_price": "19.000000",
+                "stock": None,
+                "inputs": [],
+                "delivery_instructions": "Redeem on the vendor website",
+            }, {
+                "id": 22,
+                "name": "Adobe Team",
+                "product_type": "team_invite",
+                "your_unit_price": "5.000000",
+                "stock": None,
+                "inputs": [{"name": "email", "required": True}],
+            }]
+        }
+
+    monkeypatch.setattr(reseller_service, "_cgpt_active_request_json", fake_request)
+
+    result = reseller_service.catalog("cgpt_active")
+
+    assert result["provider"] == "cgpt_active"
+    assert result["supplier_name"] == "CGPT Active"
+    assert result["balance"] == 12.5
+    assert len(result["products"]) == 1
+    product = result["products"][0]
+    assert product["id"] == "1"
+    assert product["wholesale_price"] == 19.0
+    assert product["stock"] == 0
+    assert product["unlimited_stock"] is True
+    assert product["delivery_instruction"] == "Redeem on the vendor website"
+
+
+def test_cgpt_active_purchase_uses_uuid_and_delivers_instructions(
+    monkeypatch, mock_mongodb,
+):
+    calls = []
+
+    def fake_request(path, **kwargs):
+        calls.append((path, kwargs))
+        return {
+            "order_id": 812,
+            "status": "delivered",
+            "delivered_codes": ["CGPT-CODE"],
+            "delivery_instructions": "Redeem at example.test",
+        }
+
+    monkeypatch.setattr(reseller_service, "_cgpt_active_request_json", fake_request)
+    offer_id = db.add_offer(
+        db.add_service("CGPT Active", "📦"),
+        "Instant code",
+        25.0,
+        1,
+        supplier_provider="cgpt_active",
+        supplier_product_id="1",
+    )
+    mock_mongodb.orders.insert_one({
+        "id": 97,
+        "user_id": 123,
+        "offer_id": offer_id,
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+
+    first = reseller_service.fulfill_paid_order(97)
+    second = reseller_service.fulfill_paid_order(97)
+
+    assert first == second == ["CGPT-CODE\n\nHow to redeem:\nRedeem at example.test"]
+    assert len(calls) == 1
+    path, kwargs = calls[0]
+    assert path == "/v1/orders"
+    assert kwargs["method"] == "POST"
+    assert kwargs["body"] == {"product_id": 1, "quantity": 1}
+    assert uuid.UUID(kwargs["idempotency_key"]).version == 4
+    fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 97})
+    assert fulfillment["supplier_order_id"] == "812"
+    assert fulfillment["idempotency_key"] == kwargs["idempotency_key"]
+
+
 def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mock_mongodb):
     offer_id = db.add_offer(
         service_id=db.add_service("API stock", "📦"),
@@ -906,6 +1033,7 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "CGPT_ACTIVE_API_KEY", "")
     monkeypatch.setattr(reseller_service, "catalog", fake_catalog)
 
     assert reseller_service.detect_restock_events()["events"] == []
@@ -951,6 +1079,7 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "CGPT_ACTIVE_API_KEY", "")
     monkeypatch.setattr(
         reseller_service,
         "catalog",

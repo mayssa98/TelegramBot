@@ -170,6 +170,14 @@ VENTEBOT_API_BASE: str = os.environ.get(
     "HP_VENTEBOT_API_BASE",
     "https://ventetelegrambotrailway-production.up.railway.app",
 ).rstrip("/")
+
+# ---------------------------------------------------------------------------
+# Fournisseur revendeur CGPT Active
+# ---------------------------------------------------------------------------
+CGPT_ACTIVE_API_KEY: str = env_value("HP_CGPT_ACTIVE_API_KEY")
+CGPT_ACTIVE_API_BASE: str = os.environ.get(
+    "HP_CGPT_ACTIVE_API_BASE", "https://cgpt-active.pro/telegram/api"
+).rstrip("/")
 _BINANCE_OFFICIAL_BASES = (
     "https://api.binance.com",
     "https://api-gcp.binance.com",
