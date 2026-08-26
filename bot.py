@@ -784,11 +784,65 @@ def _track_broadcast_message(context, sent_message, chat_id):
     return sent_message
 
 
-async def announce_channel_restock(context, offer_id, added, stock):
+async def announce_supplier_change_admin(context, event, change_type):
+    """Send an operational supplier update when no customer promo is suitable."""
+    if not ADMIN_ID:
+        return 0
+    event = event or {}
+    offer = db.get_offer(int(event.get("offer_id") or 0)) or {}
+    provider_id = _announcement_plain(event.get("provider") or "")
+    provider = {
+        "mailreader": "MailReader",
+        "cgpt_active": "CGPT Active",
+        "gpt_cheap": "GPT Cheap",
+        "shop_cron": "Shop Cron",
+    }.get(provider_id, provider_id.replace("_", " ").title() or "External API")
+    offer_name = _announcement_plain(
+        offer.get("name") or event.get("product_id") or "Supplier product"
+    )
+    if change_type == "stock":
+        text = (
+            "📦 <b>Supplier stock update</b>\n\n"
+            f"Provider: <b>{html.escape(provider)}</b>\n"
+            f"Product: <b>{html.escape(offer_name)}</b>\n"
+            f"New stock: <b>{max(0, int(event.get('stock') or 0))}</b> "
+            f"(+{max(0, int(event.get('added') or 0))})\n\n"
+            "Customer promotion was skipped because the linked offer was not "
+            "eligible at delivery time."
+        )
+    else:
+        old_price = float(event.get("previous_price") or 0)
+        new_price = float(event.get("price") or 0)
+        direction = "decreased" if new_price < old_price else "increased"
+        text = (
+            "💱 <b>Supplier price update</b>\n\n"
+            f"Provider: <b>{html.escape(provider)}</b>\n"
+            f"Product: <b>{html.escape(offer_name)}</b>\n"
+            f"Customer price: <b>{old_price:.2f} → {new_price:.2f} {CURRENCY}</b>\n"
+            f"Direction: <b>{direction}</b>"
+        )
+    sent_message = await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=text,
+        parse_mode=ParseMode.HTML,
+    )
+    _track_broadcast_message(context, sent_message, ADMIN_ID)
+    return 1
+
+
+async def announce_channel_restock(
+    context, offer_id, added, stock, supplier_event=None,
+):
     """Broadcast a private new-stock advert to every active bot user."""
     offer = db.get_offer(int(offer_id))
     if not offer or not offer.get("active", 1):
-        return 0
+        return await announce_supplier_change_admin(
+            context,
+            supplier_event or {
+                "offer_id": offer_id, "added": added, "stock": stock,
+            },
+            "stock",
+        ) if supplier_event else 0
     unlimited = bool(offer.get("unlimited_stock"))
     if not unlimited and int(stock or 0) <= 0:
         return 0
@@ -866,7 +920,7 @@ async def announce_api_flash_sale(context, event):
     """Broadcast a supplier-driven price drop without creating a temporary price."""
     offer = db.get_offer(int(event["offer_id"]))
     if not offer or not offer.get("active", 1) or not db.offer_has_stock(offer):
-        return 0
+        return await announce_supplier_change_admin(context, event, "price")
     service = db.get_service(offer["service_id"]) or {}
     old_price = float(event["previous_price"])
     new_price = float(event["price"])
@@ -992,13 +1046,21 @@ async def _execute_broadcast_job(job):
         payload = job.get("payload") or {}
         kind = job.get("kind")
         if kind == "stock":
-            return await announce_channel_restock(context, payload["offer_id"], payload.get("added"), payload.get("stock"))
+            return await announce_channel_restock(
+                context,
+                payload["offer_id"],
+                payload.get("added"),
+                payload.get("stock"),
+                payload.get("supplier_event"),
+            )
         if kind == "restock_digest":
             return await announce_restock_digest(context, payload.get("events") or [])
         if kind == "flash_sale":
             return await announce_flash_sale(context, payload["offer_id"])
         if kind == "api_flash_sale":
             return await announce_api_flash_sale(context, payload["event"])
+        if kind == "supplier_price_update":
+            return await announce_supplier_change_admin(context, payload["event"], "price")
         if kind == "admin_message":
             return await broadcast_admin_message(context, payload["source_chat_id"], payload["message_id"])
         if kind == "delete_broadcast":

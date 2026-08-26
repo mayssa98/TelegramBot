@@ -535,6 +535,7 @@ class handler(BaseHTTPRequestHandler):
                         offer_id=int(event["offer_id"]),
                         added=max(0, int(event.get("added") or 0)),
                         stock=max(0, int(event.get("stock") or 0)),
+                        supplier_event=event,
                         dedupe_key=event_key,
                     ))
                 result["queued_broadcasts"] = sum(1 for job in queued_jobs if job["queued"])
@@ -571,10 +572,14 @@ class handler(BaseHTTPRequestHandler):
                 db.set_setting("price_cron_last_flash_sales", len(result["flash_sales"]))
                 queued = 0
                 queued_recipients = 0
-                for event in result["flash_sales"]:
+                for event in result["changes"]:
                     dedupe_source = {"window": int(time.time() // 300), "event": event}
                     dedupe_key = "api-price:" + hashlib.sha256(json.dumps(dedupe_source, sort_keys=True).encode()).hexdigest()[:32]
-                    job = queue_broadcast("api_flash_sale", event=event, dedupe_key=dedupe_key)
+                    job = queue_broadcast(
+                        "api_flash_sale" if event.get("decreased") else "supplier_price_update",
+                        event=event,
+                        dedupe_key=dedupe_key,
+                    )
                     queued += int(job["queued"])
                     queued_recipients = max(queued_recipients, job["recipient_count"])
                 result["queued_broadcasts"] = queued

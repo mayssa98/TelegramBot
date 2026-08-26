@@ -1835,6 +1835,7 @@ def list_broadcast_users():
 
 def create_broadcast_job(kind, payload, *, dedupe_key=""):
     """Persist a Telegram broadcast before a background worker starts it."""
+    kind = str(kind or "")[:60]
     dedupe_key = str(dedupe_key or "").strip()[:240]
     if dedupe_key:
         existing = get_conn().broadcast_jobs.find_one({"dedupe_key": dedupe_key})
@@ -1842,15 +1843,19 @@ def create_broadcast_job(kind, payload, *, dedupe_key=""):
             return _public(existing), False
     job = {
         "id": _next_id("broadcast_jobs"),
-        "kind": str(kind or "")[:60],
+        "kind": kind,
         "payload": dict(payload or {}),
         "status": "queued",
         "attempts": 0,
-        "recipient_count": get_conn().users.count_documents({
-            "telegram_id": {"$exists": True},
-            "banned": {"$ne": True},
-            "broadcast_blocked": {"$ne": True},
-        }),
+        "recipient_count": (
+            1
+            if kind == "supplier_price_update"
+            else get_conn().users.count_documents({
+                "telegram_id": {"$exists": True},
+                "banned": {"$ne": True},
+                "broadcast_blocked": {"$ne": True},
+            })
+        ),
         "sent_count": 0,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -1947,7 +1952,8 @@ def list_broadcast_history(limit=20):
     """Return recent customer announcements that still have tracked messages."""
     kinds = [
         "stock", "restock_digest", "flash_sale", "api_flash_sale",
-        "admin_message", "maintenance", "affiliate_update",
+        "supplier_price_update", "admin_message", "maintenance",
+        "affiliate_update",
     ]
     jobs = get_conn().broadcast_jobs.find({
         "kind": {"$in": kinds},

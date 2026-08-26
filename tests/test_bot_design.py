@@ -14,11 +14,12 @@ import keyboards as kb
 from app.domain import affiliate_service, support_service
 from bot import (
     PENDING,
+    announce_api_flash_sale,
     announce_channel_purchase,
     announce_channel_restock,
-    announce_api_flash_sale,
     announce_flash_sale,
     announce_restock_digest,
+    announce_supplier_change_admin,
     admin_text_preview,
     block_maintenance_users,
     block_non_channel_members,
@@ -181,6 +182,21 @@ def test_broadcast_jobs_are_persisted_claimed_and_completed(mock_mongodb):
     assert duplicate["id"] == job["id"]
 
 
+def test_supplier_price_update_job_targets_only_the_admin(mock_mongodb):
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101},
+        {"telegram_id": 102},
+    ])
+
+    job, created = db.create_broadcast_job(
+        "supplier_price_update",
+        {"event": {"offer_id": 7, "previous_price": 5, "price": 6}},
+    )
+
+    assert created is True
+    assert job["recipient_count"] == 1
+
+
 def test_sent_campaign_can_be_deleted_for_every_recipient(mock_mongodb):
     service_id = db.add_service("AI", "✨")
     offer_id = db.add_offer(service_id, "Premium", 5.0, 3)
@@ -253,6 +269,61 @@ def test_automatic_flash_sale_uses_common_design_without_api_mention(mock_mongod
     assert "FLASH SALE — LIMITED DROP" in text
     assert "API" not in text
     assert "40%" in text
+
+
+def test_inactive_supplier_restock_falls_back_to_private_admin_alert(
+    monkeypatch, mock_mongodb,
+):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    service_id = db.add_service("Learning", "📚")
+    offer_id = db.add_offer(service_id, "Coursera", 3.0, 11)
+    db.update_offer(offer_id, active=0)
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(announce_channel_restock(
+        SimpleNamespace(bot=bot_client),
+        offer_id,
+        5,
+        11,
+        {
+            "provider": "mailreader",
+            "product_id": "coursera-premium-12m",
+            "offer_id": offer_id,
+            "added": 5,
+            "stock": 11,
+        },
+    ))
+
+    assert sent == 1
+    call = bot_client.send_message.await_args.kwargs
+    assert call["chat_id"] == 999
+    assert "Supplier stock update" in call["text"]
+    assert "MailReader" in call["text"]
+
+
+def test_supplier_price_increase_is_sent_privately_to_admin(
+    monkeypatch, mock_mongodb,
+):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    offer_id = db.add_offer(db.add_service("AI", "🤖"), "AI Plan", 7.0, 3)
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(announce_supplier_change_admin(
+        SimpleNamespace(bot=bot_client),
+        {
+            "provider": "mailreader",
+            "offer_id": offer_id,
+            "previous_price": 6.0,
+            "price": 7.0,
+        },
+        "price",
+    ))
+
+    assert sent == 1
+    call = bot_client.send_message.await_args.kwargs
+    assert call["chat_id"] == 999
+    assert "6.00 → 7.00" in call["text"]
+    assert "increased" in call["text"]
 
 
 def test_admin_can_reannounce_current_offer_without_adding_stock(mock_mongodb):
