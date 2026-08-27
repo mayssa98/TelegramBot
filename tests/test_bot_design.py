@@ -326,9 +326,9 @@ def test_supplier_price_increase_is_broadcast_as_customer_new_drop(
     assert sent == 2
     calls = bot_client.send_message.await_args_list
     assert {call.kwargs["chat_id"] for call in calls} == {101, 102}
-    assert "NEW DROP" in calls[0].kwargs["text"]
-    assert "6.00 USDT" in calls[0].kwargs["text"]
+    assert "NEW DROP AVAILABLE" in calls[0].kwargs["text"]
     assert "7.00 USDT" in calls[0].kwargs["text"]
+    assert "Previous price" not in calls[0].kwargs["text"]
     assert calls[0].kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
 
 
