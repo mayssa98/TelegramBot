@@ -785,46 +785,57 @@ def _track_broadcast_message(context, sent_message, chat_id):
 
 
 async def announce_supplier_change_admin(context, event, change_type):
-    """Send an operational supplier update when no customer promo is suitable."""
+    """Send the normal bot-product design privately when a promo is unsuitable."""
     if not ADMIN_ID:
         return 0
     event = event or {}
     offer = db.get_offer(int(event.get("offer_id") or 0)) or {}
-    provider_id = _announcement_plain(event.get("provider") or "")
-    provider = {
-        "mailreader": "MailReader",
-        "cgpt_active": "CGPT Active",
-        "gpt_cheap": "GPT Cheap",
-        "shop_cron": "Shop Cron",
-    }.get(provider_id, provider_id.replace("_", " ").title() or "External API")
-    offer_name = _announcement_plain(
-        offer.get("name") or event.get("product_id") or "Supplier product"
-    )
+    if not offer:
+        return 0
+    lang = lang_of(ADMIN_ID)
+    service = db.get_service(offer.get("service_id")) or {}
+    values = {
+        "emoji": _announcement_service_emoji(service),
+        "service": _announcement_plain(service.get("name") or SHOP_NAME),
+        "offer": _announcement_plain(offer.get("name") or f"Offer #{offer['id']}"),
+        "cur": CURRENCY,
+    }
     if change_type == "stock":
-        text = (
-            "📦 <b>Supplier stock update</b>\n\n"
-            f"Provider: <b>{html.escape(provider)}</b>\n"
-            f"Product: <b>{html.escape(offer_name)}</b>\n"
-            f"New stock: <b>{max(0, int(event.get('stock') or 0))}</b> "
-            f"(+{max(0, int(event.get('added') or 0))})\n\n"
-            "Customer promotion was skipped because the linked offer was not "
-            "eligible at delivery time."
-        )
+        key = "channel_stock_announcement"
+        values.update({
+            "price": f"{float(offer.get('price') or 0):.2f}",
+            "stock": max(0, int(event.get("stock") or 0)),
+            "added": max(0, int(event.get("added") or 0)),
+        })
     else:
         old_price = float(event.get("previous_price") or 0)
         new_price = float(event.get("price") or 0)
-        direction = "decreased" if new_price < old_price else "increased"
-        text = (
-            "💱 <b>Supplier price update</b>\n\n"
-            f"Provider: <b>{html.escape(provider)}</b>\n"
-            f"Product: <b>{html.escape(offer_name)}</b>\n"
-            f"Customer price: <b>{old_price:.2f} → {new_price:.2f} {CURRENCY}</b>\n"
-            f"Direction: <b>{direction}</b>"
-        )
+        if new_price < old_price:
+            key = "flash_sale_announcement"
+            values.update({
+                "old_price": f"{old_price:.2f}",
+                "price": f"{new_price:.2f}",
+                "discount": round(((old_price - new_price) / old_price) * 100)
+                if old_price else 0,
+                "remaining": {
+                    "fr": "Disponibilité limitée",
+                    "ar": "متاح لفترة محدودة",
+                }.get(lang, "Limited availability"),
+            })
+        else:
+            key = "offer_stock_announcement"
+            values.update({
+                "price": f"{new_price:.2f}",
+                "stock": (
+                    "∞" if offer.get("unlimited_stock")
+                    else max(0, int(offer.get("stock") or 0))
+                ),
+            })
     sent_message = await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=text,
+        text=premium_customer_text(lang, key, **values),
         parse_mode=ParseMode.HTML,
+        reply_markup=kb.offer_detail_keyboard(lang, offer),
     )
     _track_broadcast_message(context, sent_message, ADMIN_ID)
     return 1

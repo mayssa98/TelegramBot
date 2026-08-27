@@ -298,8 +298,38 @@ def test_inactive_supplier_restock_falls_back_to_private_admin_alert(
     assert sent == 1
     call = bot_client.send_message.await_args.kwargs
     assert call["chat_id"] == 999
-    assert "Supplier stock update" in call["text"]
-    assert "MailReader" in call["text"]
+    assert "NEW DROP AVAILABLE" in call["text"]
+    assert "11" in call["text"]
+    assert "Supplier" not in call["text"]
+    assert call["reply_markup"].inline_keyboard[-1][0].callback_data == "catalog"
+
+
+def test_out_of_stock_supplier_discount_uses_bot_flash_sale_design(
+    monkeypatch, mock_mongodb,
+):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    offer_id = db.add_offer(db.add_service("AI", "🤖"), "Codex", 8.0, 0)
+    mock_mongodb.users.insert_one({"telegram_id": 999, "lang": "en"})
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(announce_api_flash_sale(
+        SimpleNamespace(bot=bot_client),
+        {
+            "provider": "canboso",
+            "offer_id": offer_id,
+            "previous_price": 8.01,
+            "price": 8.0,
+        },
+    ))
+
+    assert sent == 1
+    call = bot_client.send_message.await_args.kwargs
+    assert call["chat_id"] == 999
+    assert "FLASH SALE" in call["text"]
+    assert "8.01 USDT" in call["text"]
+    assert "8.00 USDT" in call["text"]
+    assert "Supplier" not in call["text"]
+    assert call["reply_markup"].inline_keyboard[-1][0].callback_data == "catalog"
 
 
 def test_supplier_price_increase_is_broadcast_as_customer_new_drop(
