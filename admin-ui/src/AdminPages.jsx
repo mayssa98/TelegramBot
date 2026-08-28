@@ -72,7 +72,7 @@ const PROVIDERS = [
   ["shop_cron", "Shop Cron"],
   ["upibot", "UPIBot Shop"],
   ["ventebot", "VenteBot"],
-  ["cgpt_active", "CGPT Active"],
+  ["cgpt_active", "Rich AI Store"],
 ];
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS);

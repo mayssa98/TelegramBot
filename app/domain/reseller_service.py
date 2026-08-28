@@ -46,6 +46,7 @@ SHOP_CRON_PROVIDER = "shop_cron"
 UPIBOT_PROVIDER = "upibot"
 VENTEBOT_PROVIDER = "ventebot"
 CGPT_ACTIVE_PROVIDER = "cgpt_active"
+CGPT_ACTIVE_DISPLAY_NAME = "Rich AI Store"
 SUPPORTED_PROVIDERS = {
     PROVIDER,
     SHAMEKH_PROVIDER,
@@ -444,10 +445,10 @@ def _cgpt_active_request_json(
     body: dict[str, Any] | None = None,
     idempotency_key: str = "",
 ) -> dict[str, Any]:
-    """Call CGPT Active without exposing its bearer credential."""
+    """Call Rich AI Store without exposing its bearer credential."""
     if not CGPT_ACTIVE_API_KEY:
         raise ResellerApiError(
-            "CGPT Active n’est pas configuré. Ajoutez HP_CGPT_ACTIVE_API_KEY "
+            "Rich AI Store n’est pas configuré. Ajoutez HP_CGPT_ACTIVE_API_KEY "
             "dans les variables d’environnement."
         )
     payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
@@ -477,23 +478,23 @@ def _cgpt_active_request_json(
         code = str(error_payload.get("code") or "")
         request_id = str(error_payload.get("request_id") or "")
         if request_id:
-            log.warning("CGPT Active request failed: status=%s code=%s request_id=%s", exc.code, code, request_id)
+            log.warning("Rich AI Store request failed: status=%s code=%s request_id=%s", exc.code, code, request_id)
         message = str(error_payload.get("message") or "")[:300]
         if exc.code in {401, 403} or code == "unauthorized":
             raise ResellerApiError(
-                "Clé API CGPT Active refusée. Remplacez-la par une clé active."
+                "Clé API Rich AI Store refusée. Remplacez-la par une clé active."
             ) from exc
         if code == "insufficient_balance":
             raise ResellerOrderNotCreatedError(
-                message or "Solde CGPT Active insuffisant : aucune commande fournisseur n’a été créée."
+                message or "Solde Rich AI Store insuffisant : aucune commande fournisseur n’a été créée."
             ) from exc
         raise ResellerApiError(
-            message or f"CGPT Active a répondu avec l’erreur HTTP {exc.code}."
+            message or f"Rich AI Store a répondu avec l’erreur HTTP {exc.code}."
         ) from exc
     except (URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise ResellerApiError("CGPT Active est temporairement indisponible.") from exc
+        raise ResellerApiError("Rich AI Store est temporairement indisponible.") from exc
     if not isinstance(payload, dict):
-        raise ResellerApiError("Réponse CGPT Active invalide.")
+        raise ResellerApiError("Réponse Rich AI Store invalide.")
     return payload
 
 
@@ -556,7 +557,7 @@ def provider_summaries() -> list[dict[str, Any]]:
         },
         {
             "id": CGPT_ACTIVE_PROVIDER,
-            "name": "CGPT Active",
+            "name": CGPT_ACTIVE_DISPLAY_NAME,
             "configured": bool(CGPT_ACTIVE_API_KEY),
             "documentation_url": f"{CGPT_ACTIVE_API_BASE}/docs",
         },
@@ -623,7 +624,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         payload = _cgpt_active_request_json("/v1/products")
         account = _cgpt_active_request_json("/v1/me")
         reseller = {"balance": account.get("balance", 0)}
-        supplier_name = "CGPT Active"
+        supplier_name = CGPT_ACTIVE_DISPLAY_NAME
     else:
         payload = _request_json("/api/reseller/products")
         reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
@@ -991,7 +992,7 @@ def save_catalog_product(
         SHOP_CRON_PROVIDER: "Produit API Shop Cron",
         UPIBOT_PROVIDER: "Produit API UPIBot Shop",
         VENTEBOT_PROVIDER: "Produit API VenteBot",
-        CGPT_ACTIVE_PROVIDER: "Produit API CGPT Active",
+        CGPT_ACTIVE_PROVIDER: "Produit API Rich AI Store",
     }.get(provider, "Produit API MailReader")
     warranty = str(warranty or default_warranty).strip()[:250]
     delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]

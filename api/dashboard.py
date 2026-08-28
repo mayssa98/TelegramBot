@@ -2675,7 +2675,7 @@ def render_dashboard(
                     </div>
                     <div class="api-action-card">
                         <span class="badge badge-paid">API active</span>
-                        <h3>CGPT Active</h3>
+                        <h3>Rich AI Store</h3>
                         <p>Catalogue CDK, solde revendeur et livraison automatique avec idempotence.</p>
                         <button class="btn btn-primary" onclick="selectApiProvider('cgpt_active')">Voir ses produits</button>
                     </div>

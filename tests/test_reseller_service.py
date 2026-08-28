@@ -1045,7 +1045,7 @@ def test_cgpt_active_catalog_maps_cdk_products_and_skips_input_products(
     result = reseller_service.catalog("cgpt_active")
 
     assert result["provider"] == "cgpt_active"
-    assert result["supplier_name"] == "CGPT Active"
+    assert result["supplier_name"] == "Rich AI Store"
     assert result["balance"] == 12.5
     assert len(result["products"]) == 1
     product = result["products"][0]
@@ -1072,7 +1072,7 @@ def test_cgpt_active_purchase_uses_uuid_and_delivers_instructions(
 
     monkeypatch.setattr(reseller_service, "_cgpt_active_request_json", fake_request)
     offer_id = db.add_offer(
-        db.add_service("CGPT Active", "📦"),
+        db.add_service("Rich AI Store", "📦"),
         "Instant code",
         25.0,
         1,
