@@ -2669,6 +2669,12 @@ def render_dashboard(
                     </div>
                     <div class="api-action-card">
                         <span class="badge badge-paid">API active</span>
+                        <h3>UPIBot Shop</h3>
+                        <p>Catalogue, solde de dépôt et livraison automatique avec idempotence.</p>
+                        <button class="btn btn-primary" onclick="selectApiProvider('upibot')">Voir ses produits</button>
+                    </div>
+                    <div class="api-action-card">
+                        <span class="badge badge-paid">API active</span>
                         <h3>CGPT Active</h3>
                         <p>Catalogue CDK, solde revendeur et livraison automatique avec idempotence.</p>
                         <button class="btn btn-primary" onclick="selectApiProvider('cgpt_active')">Voir ses produits</button>

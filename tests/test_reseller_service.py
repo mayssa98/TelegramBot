@@ -53,6 +53,7 @@ def _supplier_payload():
         ]),
         ({"response": {"payload": {"delivered_accounts": ["nested:user:pass"]}}}, ["nested:user:pass"]),
         ({"delivered_codes": ["CGPT-CODE-1"]}, ["CGPT-CODE-1"]),
+        ({"delivered_keys": ["UPIBOT-KEY-1"]}, ["UPIBOT-KEY-1"]),
         ({"delivery": {"accounts": [{
             "user": "canboso-current@example.com",
             "password": "current-secret",
@@ -903,6 +904,116 @@ def test_ventebot_purchase_is_idempotent_and_extracts_account_data(
     assert db.get_order(96)["status"] == "delivered"
 
 
+def test_upibot_client_uses_shop_key_header(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"ok":true,"products":[]}'
+
+    def fake_urlopen(request, timeout):
+        requests.append((request, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr(reseller_service, "UPIBOT_API_KEY", "sk_shop_test")
+    monkeypatch.setattr(reseller_service, "UPIBOT_API_BASE", "https://supplier.example/shop-api/v1")
+    monkeypatch.setattr(reseller_service, "urlopen", fake_urlopen)
+
+    reseller_service._upibot_request_json("/products")
+
+    request, timeout = requests[0]
+    assert timeout == 20
+    assert request.full_url == "https://supplier.example/shop-api/v1/products"
+    assert request.get_header("X-shop-api-key") == "sk_shop_test"
+    assert request.get_header("Authorization") is None
+
+
+def test_upibot_catalog_maps_deposit_balance_and_products(monkeypatch, mock_mongodb):
+    def fake_request(path, **_kwargs):
+        if path == "/me":
+            return {"ok": True, "deposit_balance": 12.5}
+        return {
+            "ok": True,
+            "products": [{
+                "id": 18,
+                "product_id": 18,
+                "name": "Email Outlook/Hotmail Account",
+                "sell_price": 0.04,
+                "in_stock": True,
+                "stock_count": 94,
+            }],
+        }
+
+    monkeypatch.setattr(reseller_service, "_upibot_request_json", fake_request)
+
+    result = reseller_service.catalog("upibot")
+
+    assert result["provider"] == "upibot"
+    assert result["supplier_name"] == "UPIBot Shop"
+    assert result["balance"] == 12.5
+    assert result["currency"] == "USDT"
+    assert result["products"][0]["id"] == "18"
+    assert result["products"][0]["wholesale_price"] == 0.04
+    assert result["products"][0]["stock"] == 94
+
+
+def test_upibot_purchase_is_idempotent_and_extracts_delivered_keys(
+    monkeypatch, mock_mongodb,
+):
+    calls = []
+
+    def fake_request(path, **kwargs):
+        calls.append((path, kwargs))
+        return {
+            "ok": True,
+            "order": {"id": 123, "status": "delivered"},
+            "delivered_keys": [
+                "email1@example.com|password|token",
+                "email2@example.com|password|token",
+            ],
+        }
+
+    monkeypatch.setattr(reseller_service, "_upibot_request_json", fake_request)
+    offer_id = db.add_offer(
+        db.add_service("UPIBot", "📦"),
+        "Outlook account",
+        0.08,
+        2,
+        supplier_provider="upibot",
+        supplier_product_id="18",
+    )
+    mock_mongodb.orders.insert_one({
+        "id": 98,
+        "user_id": 456,
+        "offer_id": offer_id,
+        "qty": 2,
+        "status": "payment_confirmed",
+    })
+
+    first = reseller_service.fulfill_paid_order(98)
+    second = reseller_service.fulfill_paid_order(98)
+
+    assert first == second == [
+        "email1@example.com|password|token",
+        "email2@example.com|password|token",
+    ]
+    assert calls == [("/orders", {
+        "method": "POST",
+        "body": {
+            "product_id": 18,
+            "quantity": 2,
+            "customer_name": "telegram_user_456",
+            "idempotency_key": "BM-98",
+        },
+    })]
+
+
 def test_cgpt_active_catalog_maps_cdk_products_and_skips_input_products(
     monkeypatch, mock_mongodb,
 ):
@@ -1032,6 +1143,7 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "UPIBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CGPT_ACTIVE_API_KEY", "")
     monkeypatch.setattr(reseller_service, "catalog", fake_catalog)
@@ -1078,6 +1190,7 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "UPIBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CGPT_ACTIVE_API_KEY", "")
     monkeypatch.setattr(

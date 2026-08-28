@@ -146,6 +146,14 @@ GPT_CHEAP_API_KEY: str = env_value("HP_GPT_CHEAP_API_KEY")
 SHOP_CRON_API_KEY: str = env_value("HP_SHOP_CRON_API_KEY")
 
 # ---------------------------------------------------------------------------
+# Fournisseur revendeur UPIBot Shop
+# ---------------------------------------------------------------------------
+UPIBOT_API_KEY: str = env_value("HP_UPIBOT_API_KEY")
+UPIBOT_API_BASE: str = os.environ.get(
+    "HP_UPIBOT_API_BASE", "https://upibot.00969600.xyz/shop-api/v1"
+).rstrip("/")
+
+# ---------------------------------------------------------------------------
 # Fonctions IA de l’administration (API externe configurable)
 # ---------------------------------------------------------------------------
 AI_COMPARISON_API_URL: str = env_value(

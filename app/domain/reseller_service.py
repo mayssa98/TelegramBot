@@ -28,6 +28,8 @@ from config import (
     SHAMEKH_API_BASE,
     SHAMEKH_API_KEY,
     SHOP_CRON_API_KEY,
+    UPIBOT_API_BASE,
+    UPIBOT_API_KEY,
     VENTEBOT_API_BASE,
     VENTEBOT_API_KEY,
     VEX_API_BASE,
@@ -41,6 +43,7 @@ VEX_PROVIDER = "vex"
 CANBOSO_PROVIDER = "canboso"
 GPT_CHEAP_PROVIDER = "gpt_cheap"
 SHOP_CRON_PROVIDER = "shop_cron"
+UPIBOT_PROVIDER = "upibot"
 VENTEBOT_PROVIDER = "ventebot"
 CGPT_ACTIVE_PROVIDER = "cgpt_active"
 SUPPORTED_PROVIDERS = {
@@ -51,6 +54,7 @@ SUPPORTED_PROVIDERS = {
     CANBOSO_PROVIDER,
     GPT_CHEAP_PROVIDER,
     SHOP_CRON_PROVIDER,
+    UPIBOT_PROVIDER,
     VENTEBOT_PROVIDER,
     CGPT_ACTIVE_PROVIDER,
 }
@@ -321,6 +325,64 @@ def _canboso_request_json(
     return payload
 
 
+def _upibot_request_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Call UPIBot's Shop API without exposing its deposit-spending key."""
+    if not UPIBOT_API_KEY:
+        raise ResellerApiError(
+            "UPIBot n’est pas configuré. Ajoutez HP_UPIBOT_API_KEY "
+            "dans les variables d’environnement."
+        )
+    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    request = Request(
+        f"{UPIBOT_API_BASE}{path}",
+        headers={
+            "X-Shop-API-Key": UPIBOT_API_KEY,
+            "Accept": "application/json",
+            **({"Content-Type": "application/json"} if body is not None else {}),
+            "User-Agent": "BlackMarket-Reseller/1.0",
+        },
+        data=payload_bytes,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        messages = {
+            400: "Commande UPIBot invalide.",
+            401: "Clé API UPIBot refusée. Remplacez-la par une clé active.",
+            402: "Solde UPIBot insuffisant : aucune commande fournisseur n’a été créée.",
+            404: "Produit ou commande UPIBot introuvable.",
+            409: "Produit UPIBot en rupture de stock ou sans prix.",
+            423: "La boutique UPIBot est actuellement désactivée.",
+            502: "Le fournisseur UPIBot a échoué et a remboursé la commande.",
+            503: "UPIBot est temporairement indisponible.",
+        }
+        error_type = (
+            ResellerOrderNotCreatedError
+            if exc.code in {400, 402, 404, 409, 423}
+            else ResellerApiError
+        )
+        raise error_type(
+            messages.get(exc.code, f"UPIBot a répondu avec l’erreur HTTP {exc.code}.")
+        ) from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ResellerApiError("UPIBot est temporairement indisponible.") from exc
+    if not isinstance(payload, dict):
+        raise ResellerApiError("Réponse UPIBot invalide.")
+    if payload.get("ok") is False:
+        message = str(
+            payload.get("message") or payload.get("error") or "Requête UPIBot refusée."
+        )[:300]
+        raise ResellerApiError(message)
+    return payload
+
+
 def _ventebot_request_json(
     path: str,
     *,
@@ -481,6 +543,12 @@ def provider_summaries() -> list[dict[str, Any]]:
             "documentation_url": "https://canboso.com/api/swagger",
         },
         {
+            "id": UPIBOT_PROVIDER,
+            "name": "UPIBot Shop",
+            "configured": bool(UPIBOT_API_KEY),
+            "documentation_url": "https://upibot.00969600.xyz/shop-api/docs",
+        },
+        {
             "id": VENTEBOT_PROVIDER,
             "name": "VenteBot",
             "configured": bool(VENTEBOT_API_KEY),
@@ -546,6 +614,11 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         account = _ventebot_request_json("/api/reseller/me")
         reseller = {"balance": account.get("wallet_balance", 0)}
         supplier_name = "VenteBot"
+    elif provider == UPIBOT_PROVIDER:
+        payload = _upibot_request_json("/products")
+        account = _upibot_request_json("/me")
+        reseller = {"balance": account.get("deposit_balance", 0)}
+        supplier_name = "UPIBot Shop"
     elif provider == CGPT_ACTIVE_PROVIDER:
         payload = _cgpt_active_request_json("/v1/products")
         account = _cgpt_active_request_json("/v1/me")
@@ -599,6 +672,8 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 else (
                     raw.get("price")
                     if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER}
+                    else raw.get("sell_price")
+                    if provider == UPIBOT_PROVIDER
                     else raw.get("your_unit_price")
                     if provider == CGPT_ACTIVE_PROVIDER
                     else raw.get("price_usd")
@@ -615,14 +690,15 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             else {}
         )
         unlimited_stock = (
-            provider == CGPT_ACTIVE_PROVIDER and raw.get("stock") is None
+            (provider == CGPT_ACTIVE_PROVIDER and raw.get("stock") is None)
+            or (provider == UPIBOT_PROVIDER and raw.get("stock_count") is None)
         )
         stock = max(0, int(
             (stats.get("available") or availability.get("available") or 0)
             if provider in CANBOSO_PROVIDERS
             else (
                 (raw.get("stock_count") or 0)
-                if provider == SHAMEKH_PROVIDER
+                if provider in {SHAMEKH_PROVIDER, UPIBOT_PROVIDER}
                 else raw.get("stock") or 0
             )
         ))
@@ -754,6 +830,7 @@ def detect_restock_events() -> dict[str, Any]:
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
+        UPIBOT_PROVIDER: bool(UPIBOT_API_KEY),
         VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
         CGPT_ACTIVE_PROVIDER: bool(CGPT_ACTIVE_API_KEY),
     }
@@ -807,6 +884,7 @@ def detect_supplier_price_changes() -> dict[str, Any]:
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
+        UPIBOT_PROVIDER: bool(UPIBOT_API_KEY),
         VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
         CGPT_ACTIVE_PROVIDER: bool(CGPT_ACTIVE_API_KEY),
     }
@@ -911,6 +989,7 @@ def save_catalog_product(
         CANBOSO_PROVIDER: "Produit API Piggy AI",
         GPT_CHEAP_PROVIDER: "Produit API GPT Cheap",
         SHOP_CRON_PROVIDER: "Produit API Shop Cron",
+        UPIBOT_PROVIDER: "Produit API UPIBot Shop",
         VENTEBOT_PROVIDER: "Produit API VenteBot",
         CGPT_ACTIVE_PROVIDER: "Produit API CGPT Active",
     }.get(provider, "Produit API MailReader")
@@ -1045,6 +1124,7 @@ def _delivery_items(payload: dict[str, Any]) -> list[str]:
         for key in (
             "delivery",
             "delivery_items",
+            "delivered_keys",
             "delivered_codes",
             "deliveredAccounts",
             "delivered_accounts",
@@ -1206,6 +1286,17 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                     "product_id": int(raw_product_id),
                     "quantity": int(order.get("qty") or 1),
                     "customer_reference": f"telegram_user_{int(order['user_id'])}",
+                    "idempotency_key": external_order_id,
+                },
+            )
+        elif provider == UPIBOT_PROVIDER:
+            response = _upibot_request_json(
+                "/orders",
+                method="POST",
+                body={
+                    "product_id": int(str(offer["supplier_product_id"])),
+                    "quantity": int(order.get("qty") or 1),
+                    "customer_name": f"telegram_user_{int(order['user_id'])}",
                     "idempotency_key": external_order_id,
                 },
             )

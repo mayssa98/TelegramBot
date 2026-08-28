@@ -70,7 +70,9 @@ const PROVIDERS = [
   ["canboso", "Piggy AI"],
   ["gpt_cheap", "GPT Cheap"],
   ["shop_cron", "Shop Cron"],
+  ["upibot", "UPIBot Shop"],
   ["ventebot", "VenteBot"],
+  ["cgpt_active", "CGPT Active"],
 ];
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS);
