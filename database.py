@@ -16,7 +16,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
@@ -383,6 +383,8 @@ def init_db():
     db.support_tickets.create_index("channel_message_ids")
     if not schema or int(schema.get("version") or 0) < 15:
         _remove_legacy_announcement_overrides(db)
+    if not schema or int(schema.get("version") or 0) < 17:
+        _retire_ventebot_provider(db)
     if os.environ.get("HP_SEED_DEFAULT_CATALOG", "").strip().lower() in {"1", "true", "yes"}:
         _seed_catalog()
     db.schema_meta.update_one(
@@ -409,6 +411,28 @@ def _remove_legacy_announcement_overrides(conn):
         "text": {"$regex": legacy_heading, "$options": "i"},
     })
     return int(result.deleted_count)
+
+
+def _retire_ventebot_provider(conn):
+    """Hide retired VenteBot offers while preserving orders and audit history."""
+    now = int(time.time())
+    offers = conn.offers.update_many(
+        {"supplier_provider": "ventebot"},
+        {"$set": {
+            "active": 0,
+            "archived": 1,
+            "archived_at": now,
+            "auto_delivery": False,
+        }},
+    )
+    products = conn.reseller_products.update_many(
+        {"provider": "ventebot"},
+        {"$set": {"enabled": False, "retired_at": now}},
+    )
+    return {
+        "offers_archived": int(offers.modified_count),
+        "products_disabled": int(products.modified_count),
+    }
 
 
 def _backfill_inventory_ids(conn):

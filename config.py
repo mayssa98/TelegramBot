@@ -180,15 +180,6 @@ AI_COMPARISON_AUTH_HEADER: str = env_value(
 AI_COMPARISON_AUTH_SCHEME: str = env_value("HP_AI_AUTH_SCHEME", "Bearer")
 
 # ---------------------------------------------------------------------------
-# Fournisseur revendeur VenteBot
-# ---------------------------------------------------------------------------
-VENTEBOT_API_KEY: str = env_value("HP_VENTEBOT_API_KEY")
-VENTEBOT_API_BASE: str = os.environ.get(
-    "HP_VENTEBOT_API_BASE",
-    "https://ventetelegrambotrailway-production.up.railway.app",
-).rstrip("/")
-
-# ---------------------------------------------------------------------------
 # Fournisseur revendeur CGPT Active
 # ---------------------------------------------------------------------------
 CGPT_ACTIVE_API_KEY: str = first_env_value(

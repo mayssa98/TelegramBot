@@ -811,99 +811,6 @@ def test_canboso_purchase_uses_stable_idempotency_key(monkeypatch, mock_mongodb)
     assert "supplier-secret" not in str(fulfillment)
 
 
-def test_ventebot_catalog_maps_wallet_and_stock_products_only(monkeypatch, mock_mongodb):
-    def fake_request(path, **_kwargs):
-        if path == "/api/reseller/me":
-            return {"success": True, "wallet_balance": 31.25}
-        return {
-            "success": True,
-            "products": [{
-                "id": 12,
-                "name": "Stock account",
-                "description": "Instant credentials",
-                "price_usd": 1.4,
-                "delivery_type": "stock",
-                "stock": 9,
-                "api_test": False,
-            }, {
-                "id": 13,
-                "name": "Activation service",
-                "price_usd": 2.0,
-                "delivery_type": "activation",
-                "stock": None,
-                "api_test": False,
-            }, {
-                "id": 99,
-                "name": "API test",
-                "price_usd": 0.01,
-                "delivery_type": "api_test",
-                "stock": 999,
-                "api_test": True,
-            }],
-        }
-
-    monkeypatch.setattr(reseller_service, "_ventebot_request_json", fake_request)
-
-    result = reseller_service.catalog("ventebot")
-
-    assert result["provider"] == "ventebot"
-    assert result["supplier_name"] == "VenteBot"
-    assert result["balance"] == 31.25
-    assert [product["id"] for product in result["products"]] == ["12"]
-    assert result["products"][0]["wholesale_price"] == 1.4
-    assert result["products"][0]["stock"] == 9
-
-
-def test_ventebot_purchase_is_idempotent_and_extracts_account_data(
-    monkeypatch, mock_mongodb,
-):
-    calls = []
-
-    def fake_request(path, **kwargs):
-        calls.append((path, kwargs))
-        return {
-            "success": True,
-            "order": {
-                "id": 812,
-                "status": "COMPLETED",
-                "items": [{"id": 1, "account_data": "user:password"}],
-            },
-        }
-
-    monkeypatch.setattr(reseller_service, "_ventebot_request_json", fake_request)
-    offer_id = db.add_offer(
-        db.add_service("VenteBot", "📦"),
-        "Stock account",
-        2.5,
-        5,
-        supplier_provider="ventebot",
-        supplier_product_id="12",
-    )
-    mock_mongodb.orders.insert_one({
-        "id": 96,
-        "user_id": 123,
-        "offer_id": offer_id,
-        "qty": 1,
-        "status": "payment_confirmed",
-    })
-
-    assert reseller_service.fulfill_paid_order(96) == ["user:password"]
-    assert reseller_service.fulfill_paid_order(96) == ["user:password"]
-    assert calls == [(
-        "/api/reseller/orders",
-        {
-            "method": "POST",
-            "body": {
-                "product_id": 12,
-                "quantity": 1,
-                "customer_reference": "telegram_user_123",
-                "idempotency_key": "BM-96",
-            },
-        },
-    )]
-    assert db.get_order(96)["status"] == "delivered"
-
-
 def test_upibot_client_uses_shop_key_header(monkeypatch):
     requests = []
 
@@ -1144,7 +1051,6 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
     monkeypatch.setattr(reseller_service, "UPIBOT_API_KEY", "")
-    monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CGPT_ACTIVE_API_KEY", "")
     monkeypatch.setattr(reseller_service, "catalog", fake_catalog)
 
@@ -1191,7 +1097,6 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
     monkeypatch.setattr(reseller_service, "UPIBOT_API_KEY", "")
-    monkeypatch.setattr(reseller_service, "VENTEBOT_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CGPT_ACTIVE_API_KEY", "")
     monkeypatch.setattr(
         reseller_service,
@@ -1227,6 +1132,5 @@ def test_all_supplier_bot_usernames_are_registered():
         "gpt_cheap": "GPTCheapChat_bot",
         "shop_cron": "shop_cron191_en_bot",
         "upibot": "scanupigptbot",
-        "ventebot": "",
         "cgpt_active": "RichAIStoreBot",
     }

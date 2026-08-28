@@ -134,6 +134,34 @@ def test_schema_migration_removes_only_obsolete_announcement_designs(mock_mongod
     assert mock_mongodb.text_overrides.find_one({"key": "welcome"}) is not None
 
 
+def test_ventebot_retirement_archives_offers_but_preserves_history(mock_mongodb):
+    mock_mongodb.offers.insert_many([
+        {"id": 701, "supplier_provider": "ventebot", "active": 1, "auto_delivery": True},
+        {"id": 702, "supplier_provider": "mailreader", "active": 1, "auto_delivery": True},
+    ])
+    mock_mongodb.reseller_products.insert_one({
+        "provider": "ventebot", "product_id": "12", "enabled": True,
+    })
+    mock_mongodb.orders.insert_one({
+        "id": 703, "offer_id": 701, "status": "delivered",
+    })
+    mock_mongodb.reseller_fulfillments.insert_one({
+        "provider": "ventebot", "external_order_id": "BM-703", "status": "completed",
+    })
+
+    result = db._retire_ventebot_provider(mock_mongodb)
+
+    retired = mock_mongodb.offers.find_one({"id": 701})
+    assert result == {"offers_archived": 1, "products_disabled": 1}
+    assert retired["active"] == 0
+    assert retired["archived"] == 1
+    assert retired["auto_delivery"] is False
+    assert mock_mongodb.offers.find_one({"id": 702})["active"] == 1
+    assert mock_mongodb.reseller_products.find_one({"provider": "ventebot"})["enabled"] is False
+    assert mock_mongodb.orders.find_one({"id": 703}) is not None
+    assert mock_mongodb.reseller_fulfillments.find_one({"external_order_id": "BM-703"}) is not None
+
+
 def test_supplier_restocks_are_sent_as_individual_product_messages(mock_mongodb):
     first_service = db.add_service("AI", "🤖")
     second_service = db.add_service("Learning", "🎓")

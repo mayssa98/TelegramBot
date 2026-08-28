@@ -30,8 +30,6 @@ from config import (
     SHOP_CRON_API_KEY,
     UPIBOT_API_BASE,
     UPIBOT_API_KEY,
-    VENTEBOT_API_BASE,
-    VENTEBOT_API_KEY,
     VEX_API_BASE,
     VEX_API_KEY,
 )
@@ -44,7 +42,6 @@ CANBOSO_PROVIDER = "canboso"
 GPT_CHEAP_PROVIDER = "gpt_cheap"
 SHOP_CRON_PROVIDER = "shop_cron"
 UPIBOT_PROVIDER = "upibot"
-VENTEBOT_PROVIDER = "ventebot"
 CGPT_ACTIVE_PROVIDER = "cgpt_active"
 CGPT_ACTIVE_DISPLAY_NAME = "Rich AI Store"
 PROVIDER_DISPLAY_NAMES = {
@@ -56,7 +53,6 @@ PROVIDER_DISPLAY_NAMES = {
     GPT_CHEAP_PROVIDER: "GPT Cheap",
     SHOP_CRON_PROVIDER: "Shop Cron",
     UPIBOT_PROVIDER: "UPIBot Shop",
-    VENTEBOT_PROVIDER: "VenteBot",
     CGPT_ACTIVE_PROVIDER: CGPT_ACTIVE_DISPLAY_NAME,
 }
 PROVIDER_BOT_USERNAMES = {
@@ -68,7 +64,6 @@ PROVIDER_BOT_USERNAMES = {
     GPT_CHEAP_PROVIDER: "GPTCheapChat_bot",
     SHOP_CRON_PROVIDER: "shop_cron191_en_bot",
     UPIBOT_PROVIDER: "scanupigptbot",
-    VENTEBOT_PROVIDER: "",
     CGPT_ACTIVE_PROVIDER: "RichAIStoreBot",
 }
 SUPPORTED_PROVIDERS = {
@@ -80,7 +75,6 @@ SUPPORTED_PROVIDERS = {
     GPT_CHEAP_PROVIDER,
     SHOP_CRON_PROVIDER,
     UPIBOT_PROVIDER,
-    VENTEBOT_PROVIDER,
     CGPT_ACTIVE_PROVIDER,
 }
 CANBOSO_PROVIDERS = {
@@ -419,60 +413,6 @@ def _upibot_request_json(
     return payload
 
 
-def _ventebot_request_json(
-    path: str,
-    *,
-    method: str = "GET",
-    body: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Call VenteBot's reseller API without exposing its credential."""
-    if not VENTEBOT_API_KEY:
-        raise ResellerApiError(
-            "VenteBot n’est pas configuré. Ajoutez HP_VENTEBOT_API_KEY "
-            "dans les variables d’environnement."
-        )
-    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
-    request = Request(
-        f"{VENTEBOT_API_BASE}{path}",
-        headers={
-            "X-Reseller-Key": VENTEBOT_API_KEY,
-            "Accept": "application/json",
-            **({"Content-Type": "application/json"} if body is not None else {}),
-            "User-Agent": "BlackMarket-Reseller/1.0",
-        },
-        data=payload_bytes,
-        method=method,
-    )
-    try:
-        with urlopen(request, timeout=20) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        messages = {
-            400: "Commande VenteBot invalide ou produit indisponible.",
-            401: "Clé API VenteBot refusée. Remplacez-la par une clé active.",
-            402: "Solde VenteBot insuffisant : aucune commande fournisseur n’a été créée.",
-            403: "Adresse IP refusée par la liste d’accès VenteBot.",
-            404: "Produit ou commande VenteBot introuvable.",
-            409: "Clé d’idempotence VenteBot déjà utilisée avec une autre commande.",
-            429: "Limite VenteBot atteinte. Respectez le délai Retry-After avant de réessayer.",
-            503: "VenteBot est temporairement indisponible.",
-        }
-        error_type = ResellerOrderNotCreatedError if exc.code == 402 else ResellerApiError
-        raise error_type(
-            messages.get(exc.code, f"VenteBot a répondu avec l’erreur HTTP {exc.code}.")
-        ) from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise ResellerApiError("VenteBot est temporairement indisponible.") from exc
-    if not isinstance(payload, dict):
-        raise ResellerApiError("Réponse VenteBot invalide.")
-    if payload.get("success") is False:
-        message = str(payload.get("message") or payload.get("code") or "Requête VenteBot refusée.")[:300]
-        if any(word in message.lower() for word in ("balance", "solde", "insufficient")):
-            raise ResellerOrderNotCreatedError(message)
-        raise ResellerApiError(message)
-    return payload
-
-
 def _cgpt_active_request_json(
     path: str,
     *,
@@ -585,12 +525,6 @@ def provider_summaries() -> list[dict[str, Any]]:
             "documentation_url": "https://upibot.00969600.xyz/shop-api/docs",
         },
         {
-            "id": VENTEBOT_PROVIDER,
-            "name": "VenteBot",
-            "configured": bool(VENTEBOT_API_KEY),
-            "documentation_url": f"{VENTEBOT_API_BASE}/api/swagger/",
-        },
-        {
             "id": CGPT_ACTIVE_PROVIDER,
             "name": CGPT_ACTIVE_DISPLAY_NAME,
             "configured": bool(CGPT_ACTIVE_API_KEY),
@@ -645,11 +579,6 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         )
         reseller = {"balance": balance}
         supplier_name = provider_name
-    elif provider == VENTEBOT_PROVIDER:
-        payload = _ventebot_request_json("/api/reseller/products?lang=en")
-        account = _ventebot_request_json("/api/reseller/me")
-        reseller = {"balance": account.get("wallet_balance", 0)}
-        supplier_name = "VenteBot"
     elif provider == UPIBOT_PROVIDER:
         payload = _upibot_request_json("/products")
         account = _upibot_request_json("/me")
@@ -678,13 +607,6 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
     for raw in raw_products:
         if not isinstance(raw, dict):
             continue
-        # VenteBot activation products need a service-specific customer
-        # identifier that this generic stock checkout does not collect. Its
-        # synthetic API test product must never be published to customers.
-        if provider == VENTEBOT_PROVIDER and (
-            raw.get("api_test") is True or raw.get("delivery_type") != "stock"
-        ):
-            continue
         # The current Telegram checkout has no supplier-input collection or
         # asynchronous invite polling yet. Only publish products that return
         # redeemable codes immediately after a successful purchase.
@@ -712,8 +634,6 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                     if provider == UPIBOT_PROVIDER
                     else raw.get("your_unit_price")
                     if provider == CGPT_ACTIVE_PROVIDER
-                    else raw.get("price_usd")
-                    if provider == VENTEBOT_PROVIDER
                     else raw.get("wholesale_price", "0")
                 )
             )))
@@ -867,7 +787,6 @@ def detect_restock_events() -> dict[str, Any]:
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
         UPIBOT_PROVIDER: bool(UPIBOT_API_KEY),
-        VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
         CGPT_ACTIVE_PROVIDER: bool(CGPT_ACTIVE_API_KEY),
     }
     events: list[dict[str, Any]] = []
@@ -921,7 +840,6 @@ def detect_supplier_price_changes() -> dict[str, Any]:
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
         UPIBOT_PROVIDER: bool(UPIBOT_API_KEY),
-        VENTEBOT_PROVIDER: bool(VENTEBOT_API_KEY),
         CGPT_ACTIVE_PROVIDER: bool(CGPT_ACTIVE_API_KEY),
     }
     changes: list[dict[str, Any]] = []
@@ -1026,7 +944,6 @@ def save_catalog_product(
         GPT_CHEAP_PROVIDER: "Produit API GPT Cheap",
         SHOP_CRON_PROVIDER: "Produit API Shop Cron",
         UPIBOT_PROVIDER: "Produit API UPIBot Shop",
-        VENTEBOT_PROVIDER: "Produit API VenteBot",
         CGPT_ACTIVE_PROVIDER: "Produit API Rich AI Store",
     }.get(provider, "Produit API MailReader")
     warranty = str(warranty or default_warranty).strip()[:250]
@@ -1312,18 +1229,6 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                 },
                 idempotency_key=external_order_id,
                 **({"provider": provider} if provider != CANBOSO_PROVIDER else {}),
-            )
-        elif provider == VENTEBOT_PROVIDER:
-            raw_product_id = str(offer["supplier_product_id"])
-            response = _ventebot_request_json(
-                "/api/reseller/orders",
-                method="POST",
-                body={
-                    "product_id": int(raw_product_id),
-                    "quantity": int(order.get("qty") or 1),
-                    "customer_reference": f"telegram_user_{int(order['user_id'])}",
-                    "idempotency_key": external_order_id,
-                },
             )
         elif provider == UPIBOT_PROVIDER:
             response = _upibot_request_json(
