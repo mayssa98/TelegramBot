@@ -47,6 +47,30 @@ UPIBOT_PROVIDER = "upibot"
 VENTEBOT_PROVIDER = "ventebot"
 CGPT_ACTIVE_PROVIDER = "cgpt_active"
 CGPT_ACTIVE_DISPLAY_NAME = "Rich AI Store"
+PROVIDER_DISPLAY_NAMES = {
+    PROVIDER: "MailReader",
+    SHAMEKH_PROVIDER: "Shamekh’s bot",
+    KAKAO_PROVIDER: "Kakao Shop",
+    VEX_PROVIDER: "VEX Reseller",
+    CANBOSO_PROVIDER: "Piggy AI",
+    GPT_CHEAP_PROVIDER: "GPT Cheap",
+    SHOP_CRON_PROVIDER: "Shop Cron",
+    UPIBOT_PROVIDER: "UPIBot Shop",
+    VENTEBOT_PROVIDER: "VenteBot",
+    CGPT_ACTIVE_PROVIDER: CGPT_ACTIVE_DISPLAY_NAME,
+}
+PROVIDER_BOT_USERNAMES = {
+    PROVIDER: "dodistore_bot",
+    SHAMEKH_PROVIDER: "Shamekhstock_bot",
+    KAKAO_PROVIDER: "Shop_KOKORO_BOT",
+    VEX_PROVIDER: "VexoranShoppieBot",
+    CANBOSO_PROVIDER: "PiggyAi799_Bot",
+    GPT_CHEAP_PROVIDER: "GPTCheapChat_bot",
+    SHOP_CRON_PROVIDER: "shop_cron191_en_bot",
+    UPIBOT_PROVIDER: "scanupigptbot",
+    VENTEBOT_PROVIDER: "",
+    CGPT_ACTIVE_PROVIDER: "RichAIStoreBot",
+}
 SUPPORTED_PROVIDERS = {
     PROVIDER,
     SHAMEKH_PROVIDER,
@@ -73,6 +97,17 @@ class ResellerApiError(RuntimeError):
 
 class ResellerOrderNotCreatedError(ResellerApiError):
     """The supplier rejected the purchase before creating an order."""
+
+
+def provider_display_name(provider: str) -> str:
+    """Return the public supplier name used in admin messages."""
+    normalized = str(provider or "").strip().lower()
+    return PROVIDER_DISPLAY_NAMES.get(normalized, normalized or "Fournisseur inconnu")
+
+
+def provider_bot_username(provider: str) -> str:
+    """Return the supplier's public Telegram bot username, without @."""
+    return PROVIDER_BOT_USERNAMES.get(str(provider or "").strip().lower(), "")
 
 
 def _request_json(

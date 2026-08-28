@@ -1215,3 +1215,18 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     assert result["flash_sales"][0]["previous_price"] == 15.0
     assert result["flash_sales"][0]["price"] == 12.0
     assert db.get_offer(offer_id)["price"] == 12.0
+
+
+def test_all_supplier_bot_usernames_are_registered():
+    assert reseller_service.PROVIDER_BOT_USERNAMES == {
+        "mailreader": "dodistore_bot",
+        "shamekh": "Shamekhstock_bot",
+        "kakao": "Shop_KOKORO_BOT",
+        "vex": "VexoranShoppieBot",
+        "canboso": "PiggyAi799_Bot",
+        "gpt_cheap": "GPTCheapChat_bot",
+        "shop_cron": "shop_cron191_en_bot",
+        "upibot": "scanupigptbot",
+        "ventebot": "",
+        "cgpt_active": "RichAIStoreBot",
+    }

@@ -1815,10 +1815,35 @@ def test_created_supplier_order_offers_admin_message_or_manual_fallback(
     mock_mongodb.orders.insert_one({
         "id": 504,
         "user_id": 42,
+        "offer_id": 12,
         "service_name": "Coursera",
         "offer_name": "Coursera account",
         "qty": 1,
+        "unit_price": 7.5,
+        "total_price": 7.5,
+        "txid": "PAY-504",
+        "verify_method": "binance",
         "status": "payment_confirmed",
+    })
+    mock_mongodb.users.insert_one({
+        "telegram_id": 42,
+        "username": "buyer42",
+        "first_name": "Buyer Name",
+        "lang": "en",
+    })
+    mock_mongodb.offers.insert_one({
+        "id": 12,
+        "service_id": 99,
+        "name": "Coursera account",
+        "supplier_provider": "cgpt_active",
+        "supplier_product_id": "789",
+        "price": 7.5,
+    })
+    mock_mongodb.reseller_fulfillments.insert_one({
+        "provider": "cgpt_active",
+        "external_order_id": "BM-504",
+        "supplier_order_id": "SUP-88",
+        "status": "delivery_pending",
     })
     notify_manual = AsyncMock()
     monkeypatch.setattr("bot.admin.notify_manual_delivery_request", notify_manual)
@@ -1846,9 +1871,75 @@ def test_created_supplier_order_offers_admin_message_or_manual_fallback(
     assert admin_alert.args[0] == 999
     assert "BM-504" in admin_alert.args[1]
     assert "éviter une double livraison" in admin_alert.args[1]
+    assert "Rich AI Store" in admin_alert.args[1]
+    assert "@RichAIStoreBot" in admin_alert.args[1]
+    assert "SUP-88" in admin_alert.args[1]
+    assert "buyer42" in admin_alert.args[1]
+    assert "Buyer Name" in admin_alert.args[1]
+    assert "PAY-504" in admin_alert.args[1]
+    assert "789" in admin_alert.args[1]
     keyboard = admin_alert.kwargs["reply_markup"]
     assert keyboard.inline_keyboard[0][0].callback_data == "adm_client_message:504"
     assert keyboard.inline_keyboard[0][1].callback_data == "adm_deliver:504"
+
+
+def test_rejected_supplier_order_sends_detailed_admin_incident(
+    monkeypatch, mock_mongodb,
+):
+    monkeypatch.setattr("bot.ADMIN_ID", 999)
+    mock_mongodb.users.insert_one({
+        "telegram_id": 42, "username": "api_buyer", "first_name": "API Buyer",
+    })
+    mock_mongodb.offers.insert_one({
+        "id": 13,
+        "service_id": 99,
+        "name": "Mailbox",
+        "supplier_provider": "mailreader",
+        "supplier_product_id": "mail-7",
+        "price": 2.0,
+    })
+    mock_mongodb.orders.insert_one({
+        "id": 505,
+        "user_id": 42,
+        "offer_id": 13,
+        "service_name": "Mail",
+        "offer_name": "Mailbox",
+        "qty": 2,
+        "unit_price": 2.0,
+        "total_price": 4.0,
+        "status": "payment_confirmed",
+    })
+    mock_mongodb.reseller_fulfillments.insert_one({
+        "provider": "mailreader",
+        "external_order_id": "BM-505",
+        "status": "not_created",
+    })
+    notify_manual = AsyncMock()
+    monkeypatch.setattr("bot.admin.notify_manual_delivery_request", notify_manual)
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    asyncio.run(send_payment_result(
+        SimpleNamespace(reply_text=AsyncMock()),
+        SimpleNamespace(bot=bot_client),
+        "fr",
+        505,
+        {
+            "status": "confirmed_no_delivery",
+            "affiliate": None,
+            "loyalty": None,
+            "delivered_content": None,
+            "error_code": "supplier_order_not_created",
+            "error_message": "Supplier balance is insufficient.",
+        },
+        42,
+    ))
+
+    notify_manual.assert_not_awaited()
+    incident = bot_client.send_message.await_args.args[1]
+    assert "@dodistore_bot" in incident
+    assert "api_buyer" in incident
+    assert "supplier_order_not_created" in incident
+    assert "Supplier balance is insufficient." in incident
 
 
 def test_manual_fallback_does_not_send_if_api_already_delivered(mock_mongodb):
