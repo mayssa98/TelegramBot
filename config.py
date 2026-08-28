@@ -25,6 +25,15 @@ def env_value(name: str, default: str = "") -> str:
     return value
 
 
+def first_env_value(*names: str, default: str = "") -> str:
+    """Return the first usable value among compatible deployment names."""
+    for name in names:
+        value = env_value(name)
+        if value:
+            return value
+    return default
+
+
 def normalized_http_url(value: str) -> str:
     """Accept a plain URL and repair Markdown links copied from a chat."""
     value = str(value or "").strip()
@@ -174,9 +183,18 @@ VENTEBOT_API_BASE: str = os.environ.get(
 # ---------------------------------------------------------------------------
 # Fournisseur revendeur CGPT Active
 # ---------------------------------------------------------------------------
-CGPT_ACTIVE_API_KEY: str = env_value("HP_CGPT_ACTIVE_API_KEY")
-CGPT_ACTIVE_API_BASE: str = os.environ.get(
-    "HP_CGPT_ACTIVE_API_BASE", "https://cgpt-active.pro/telegram/api"
+CGPT_ACTIVE_API_KEY: str = first_env_value(
+    "HP_CGPT_ACTIVE_API_KEY",
+    "CGPT_ACTIVE_API_KEY",
+    "HP_CGPT_API_KEY",
+    "CGPT_API_KEY",
+)
+CGPT_ACTIVE_API_BASE: str = first_env_value(
+    "HP_CGPT_ACTIVE_API_BASE",
+    "CGPT_ACTIVE_API_BASE",
+    "HP_CGPT_API_BASE",
+    "CGPT_API_BASE",
+    default="https://cgpt-active.pro/telegram/api",
 ).rstrip("/")
 _BINANCE_OFFICIAL_BASES = (
     "https://api.binance.com",
