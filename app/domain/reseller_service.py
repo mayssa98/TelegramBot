@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 from pymongo.errors import DuplicateKeyError
 
 import database as db
+from app.domain import warranty_service
 from config import (
     CANBOSO_API_BASE,
     CANBOSO_API_KEY,
@@ -749,6 +750,16 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 or (native_offer or {}).get("note")
                 or f"Produit API {supplier_name}"
             ),
+            "warranty_type": (
+                config.get("warranty_type")
+                or (native_offer or {}).get("warranty_type")
+                or ""
+            ),
+            "warranty_days": int(
+                config.get("warranty_days")
+                or (native_offer or {}).get("warranty_days")
+                or 0
+            ),
             "delivery_delay": config.get("delivery_delay") or "Instantané après confirmation",
             "sort_order": int(config.get("sort_order") or 0),
             "low_stock_threshold": int(config.get("low_stock_threshold") or 5),
@@ -919,6 +930,8 @@ def save_catalog_product(
     display_name: str = "",
     description: str = "",
     warranty: str = "Produit API MailReader",
+    warranty_type: str = "",
+    warranty_days: int | str | None = None,
     delivery_delay: str = "Instantané après confirmation",
     sort_order: int = 0,
     low_stock_threshold: int = 5,
@@ -946,7 +959,13 @@ def save_catalog_product(
         UPIBOT_PROVIDER: "Produit API UPIBot Shop",
         CGPT_ACTIVE_PROVIDER: "Produit API Rich AI Store",
     }.get(provider, "Produit API MailReader")
-    warranty = str(warranty or default_warranty).strip()[:250]
+    if warranty_type:
+        warranty_type, warranty_days = warranty_service.normalize_warranty(
+            warranty_type, warranty_days,
+        )
+        warranty = warranty_service.warranty_label(warranty_type, warranty_days)
+    else:
+        warranty = str(warranty or default_warranty).strip()[:250]
     delivery_delay = str(delivery_delay or "Instantané après confirmation").strip()[:120]
     service_emoji = str(service_emoji or "📦").strip()[:12]
     low_stock_threshold = max(0, int(low_stock_threshold or 0))
@@ -1009,6 +1028,8 @@ def save_catalog_product(
             manual_stock=False,
             supplier_provider=provider,
             supplier_product_id=product["id"],
+            warranty_type=warranty_type or None,
+            warranty_days=warranty_days,
         )
         if int(local_offer.get("service_id")) != int(service_id):
             db.get_conn().offers.update_one(
@@ -1033,6 +1054,8 @@ def save_catalog_product(
             manual_stock=False,
             supplier_provider=provider,
             supplier_product_id=product["id"],
+            warranty_type=warranty_type,
+            warranty_days=warranty_days,
         )
         db.update_offer(local_offer_id, sort_order=sort_order)
 
@@ -1051,6 +1074,8 @@ def save_catalog_product(
         service_emoji=service.get("emoji") or service_emoji,
         description=description,
         warranty=warranty,
+        warranty_type=warranty_type,
+        warranty_days=warranty_days,
         delivery_delay=delivery_delay,
         sort_order=sort_order,
         low_stock_threshold=low_stock_threshold,

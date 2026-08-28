@@ -14,7 +14,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 import database as db
-from app.domain import inventory_service, order_service, payment_service, reseller_service
+from app.domain import inventory_service, order_service, payment_service, reseller_service, warranty_service
 from config import CURRENCY
 
 KEY_PREFIX = "tgb_"
@@ -284,6 +284,9 @@ def products(key: dict[str, Any]) -> dict[str, Any]:
             "_id": str(offer["id"]),
             "product_name": str(offer.get("name") or offer["id"]),
             "description": str(offer.get("description") or offer.get("note") or ""),
+            "warranty": warranty_service.offer_warranty_label(offer),
+            "warrantyType": str(offer.get("warranty_type") or ""),
+            "warrantyDays": int(offer.get("warranty_days") or 0),
             "service": {
                 "id": str(service.get("id") or ""),
                 "name": str(service.get("name") or ""),

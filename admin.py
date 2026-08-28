@@ -2,6 +2,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 import database as db
+from app.domain import warranty_service
 from config import ADMIN_ID, CURRENCY
 from i18n import TRANSLATIONS
 
@@ -283,9 +284,11 @@ def order_detail_text(o):
     if not o:
         return "Commande introuvable."
     preorder = "\n⏳ *Pre-order (+10%)*" if o.get("is_preorder") else ""
+    warranty = warranty_service.order_warranty_label(o) or "—"
     return (f"🧾 *Commande #{o['id']}*{preorder}\nUtilisateur: `{o['user_id']}`\n"
             f"Produit: {o['service_name']} — {o['offer_name']}\n"
             f"Quantité: {o['qty']}\nTotal: *{o['total_price']:.2f} {CURRENCY}*\n"
+            f"Garantie: {warranty}\n"
             f"Statut: `{o['status']}`\nTXID: `{o['txid'] or '—'}`")
 
 

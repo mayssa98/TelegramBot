@@ -17,7 +17,7 @@ from pymongo import ReturnDocument
 
 import database as db
 from app.constants import InventoryStatus
-from app.domain import inventory_service
+from app.domain import inventory_service, warranty_service
 from config import TN_TND_PER_USDT, TN_WHATSAPP_NUMBER
 
 MAX_PROOF_BYTES = 4_000_000
@@ -271,7 +271,9 @@ def catalog(lang: str = "fr") -> dict[str, Any]:
                 "service_id": int(service["id"]),
                 "name": _localized(offer, "name", lang),
                 "description": _site_description(offer, lang),
-                "warranty": _localized(offer, "note", lang),
+                "warranty": warranty_service.offer_warranty_label(offer),
+                "warranty_type": str(offer.get("warranty_type") or ""),
+                "warranty_days": int(offer.get("warranty_days") or 0),
                 "delivery_delay": _localized(offer, "delivery_delay", lang),
                 "price_millimes": _price_millimes(offer),
                 "price": _price_millimes(offer) / 1000,

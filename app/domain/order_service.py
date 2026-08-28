@@ -12,7 +12,7 @@ from typing import Any
 
 import database as db
 from app.constants import PAID_STATUSES, TERMINAL_STATUSES, InventoryStatus, OrderStatus
-from app.domain import loyalty_service, wallet_service
+from app.domain import loyalty_service, wallet_service, warranty_service
 from config import CURRENCY, ORDER_EXPIRY_SECONDS, PENDING_PAYMENT_TIMEOUT_SECONDS
 
 log = logging.getLogger(__name__)
@@ -113,7 +113,9 @@ def create_order(
         "offer_id": offer["id"],
         "service_name": service["name"] if service else "",
         "offer_name": offer["name"],
-        "warranty": str(offer.get("note") or "").strip(),
+        "warranty": warranty_service.offer_warranty_label(offer),
+        "warranty_type": str(offer.get("warranty_type") or ""),
+        "warranty_days": int(offer.get("warranty_days") or 0),
         "qty": qty,
         "is_preorder": bool(preorder),
         "preorder_surcharge_percent": 10 if preorder else 0,
