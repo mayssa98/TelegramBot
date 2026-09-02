@@ -9,8 +9,8 @@ import io
 import logging
 import os
 import re
-import time
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -2851,34 +2851,28 @@ async def handle_pending_input(update, context, lang):
 
     if kind == "await_onchain_txid":
         order_id = int(ref["order_id"])
+        await update.message.reply_text(
+            premium_customer_text(lang, "verifying"),
+            parse_mode=ParseMode.HTML,
+        )
         result = await asyncio.to_thread(
             payment_service.submit_onchain_payment, order_id, text, uid,
         )
-        if result["status"] != "manual_review":
-            await update.message.reply_text(
-                result.get("error_message") or "Invalid transaction ID.",
+        if result["status"] in {"confirmed", "confirmed_no_delivery", "delivered"}:
+            PENDING.pop(uid, None)
+            await send_payment_result(
+                update.message, context, lang, order_id, result, uid,
             )
             return
-        PENDING.pop(uid, None)
+        if result["status"] == "pending":
+            await update.message.reply_text(
+                t(lang, "onchain_payment_pending", oid=order_id),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
         await update.message.reply_text(
-            t(
-                lang, "onchain_payment_submitted",
-                oid=order_id, network=result["network"],
-            ),
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.orders_keyboard(lang),
+            result.get("error_message") or "Invalid transaction ID.",
         )
-        with contextlib.suppress(Exception):
-            await context.bot.send_message(
-                ADMIN_ID,
-                "🔎 <b>On-chain payment review</b>\n"
-                f"Order: <b>#{order_id}</b>\n"
-                f"Network: <b>{html.escape(result['network'])}</b>\n"
-                f"Amount: <b>{float(result['order']['total_price']):.2f} USDT</b>\n"
-                 f"TXID: <code>{html.escape(text)}</code>",
-                 parse_mode=ParseMode.HTML,
-                 reply_markup=admin.onchain_payment_review_keyboard(order_id),
-             )
         return
 
     if kind == "await_topup_txid":
@@ -2925,7 +2919,7 @@ async def handle_pending_input(update, context, lang):
         )
         PENDING[uid] = (
             "await_onchain_topup_txid",
-            {"network": network, "amount": amount},
+            {"network": network, "amount": amount, "created_at": int(time.time())},
         )
         await update.message.reply_text(
             t(
@@ -2940,35 +2934,32 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "await_onchain_topup_txid":
+        await update.message.reply_text(
+            premium_customer_text(lang, "verifying"),
+            parse_mode=ParseMode.HTML,
+        )
         result = await asyncio.to_thread(
             wallet_service.submit_onchain_topup,
             uid, text, float(ref["amount"]), str(ref["network"]),
+            int(ref["created_at"]),
         )
-        if result["status"] != "manual_review":
+        if result["status"] == "pending":
+            await update.message.reply_text(t(lang, "topup_onchain_pending"))
+            return
+        if result["status"] != "confirmed":
             await update.message.reply_text(result.get("message") or "Invalid transaction ID.")
             return
         PENDING.pop(uid, None)
-        network_label = "BSC (BEP20)" if result["network"] == "bsc" else "Polygon"
         await update.message.reply_text(
-            t(
-                lang, "topup_onchain_submitted",
-                amount=f"{result['amount']:.2f}", network=network_label,
+            premium_customer_text(
+                lang,
+                "topup_onchain_approved",
+                amount=f"{result['amount']:.2f}",
+                balance=f"{result['balance']:.2f}",
             ),
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.HTML,
             reply_markup=kb.home_keyboard(lang, uid),
         )
-        with contextlib.suppress(Exception):
-            await context.bot.send_message(
-                ADMIN_ID,
-                "🔎 <b>Wallet top-up review</b>\n"
-                f"Request: <b>#{result['id']}</b>\n"
-                f"User: <code>{uid}</code>\n"
-                f"Network: <b>{network_label}</b>\n"
-                f"Claimed amount: <b>{result['amount']:.2f} USDT</b>\n"
-                f"TXID: <code>{html.escape(result['txid'])}</code>",
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.topup_review_keyboard(result["id"]),
-            )
         return
 
     # --- Admin : prix ---

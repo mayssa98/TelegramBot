@@ -17,7 +17,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
@@ -326,6 +326,7 @@ def init_db():
     db.wallets.create_index("user_id", unique=True)
     db.wallet_topups.create_index("txid", unique=True)
     db.wallet_topups.create_index("id", unique=True, sparse=True)
+    db.onchain_transactions.create_index("txid", unique=True)
     db.bulk_wallet_credits.create_index("operation_id", unique=True)
     db.buyer_api_keys.create_index("id", unique=True)
     db.buyer_api_keys.create_index("key_hash", unique=True)
@@ -1197,6 +1198,36 @@ def user_account_summary(user_id):
         "total_paid": round(sum(float(x.get("total_price") or 0) for x in paid), 2),
     })
     return user
+
+
+def claim_onchain_transaction(txid, network, user_id, reference_type, reference_id, amount):
+    """Atomically reserve a verified chain transaction across orders and top-ups."""
+    txid = str(txid).strip().lower()
+    reference_type = str(reference_type)
+    reference_id = int(reference_id)
+    existing = get_conn().onchain_transactions.find_one({"txid": txid})
+    if existing:
+        return (
+            existing.get("reference_type") == reference_type
+            and int(existing.get("reference_id") or 0) == reference_id
+        )
+    try:
+        get_conn().onchain_transactions.insert_one({
+            "txid": txid,
+            "network": str(network),
+            "user_id": int(user_id),
+            "reference_type": reference_type,
+            "reference_id": reference_id,
+            "amount": float(amount),
+            "created_at": int(time.time()),
+        })
+    except DuplicateKeyError:
+        existing = get_conn().onchain_transactions.find_one({"txid": txid}) or {}
+        return (
+            existing.get("reference_type") == reference_type
+            and int(existing.get("reference_id") or 0) == reference_id
+        )
+    return True
 
 
 def get_setting(key, default=None):

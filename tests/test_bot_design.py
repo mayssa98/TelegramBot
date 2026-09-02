@@ -14,14 +14,13 @@ import keyboards as kb
 from app.domain import affiliate_service, support_service
 from bot import (
     PENDING,
+    admin_text_preview,
     announce_api_flash_sale,
     announce_channel_purchase,
     announce_channel_restock,
     announce_flash_sale,
     announce_restock_digest,
-    announce_supplier_change_admin,
     announce_supplier_price_update,
-    admin_text_preview,
     block_maintenance_users,
     block_non_channel_members,
     broadcast_admin_message,
@@ -47,8 +46,8 @@ from bot import (
     orders_text_export,
     premium_customer_text,
     rich_text_from_message,
-    send_main_menu,
     send_admin_message_to_client,
+    send_main_menu,
     send_payment_result,
     show_account,
     text_with_custom_emoji_tokens,
@@ -2473,7 +2472,7 @@ def test_failed_manual_send_keeps_order_waiting(mock_mongodb):
     assert "Échec d'envoi" in update.message.reply_text.await_args.args[0]
 
 
-def test_onchain_txid_submission_sends_admin_accept_and_reject_buttons(
+def test_onchain_txid_submission_auto_verifies_without_admin_request(
     monkeypatch, mock_mongodb,
 ):
     monkeypatch.setattr("bot.ADMIN_ID", 999)
@@ -2502,18 +2501,21 @@ def test_onchain_txid_submission_sends_admin_accept_and_reject_buttons(
         effective_user=SimpleNamespace(id=42),
         message=message,
     )
+    monkeypatch.setattr(
+        "bot.payment_service.submit_onchain_payment",
+        lambda *_args, **_kwargs: {
+            "status": "pending", "network": "Polygon",
+            "error_code": "confirming", "error_message": "Waiting",
+        },
+    )
 
     asyncio.run(
         handle_pending_input(update, SimpleNamespace(bot=bot_client), "en")
     )
 
-    admin_call = bot_client.send_message.await_args
-    assert admin_call.args[0] == 999
-    assert "On-chain payment review" in admin_call.args[1]
-    keyboard = admin_call.kwargs["reply_markup"]
-    assert keyboard.inline_keyboard[0][0].callback_data == "adm_onchain_approve:154"
-    assert keyboard.inline_keyboard[0][1].callback_data == "adm_onchain_reject:154"
-    assert db.get_order(154)["status"] == "manual_review"
+    bot_client.send_message.assert_not_awaited()
+    assert message.reply_text.await_count == 2
+    assert "not confirmed yet" in message.reply_text.await_args.args[0]
 
 
 def test_customer_support_text_is_deleted_after_channel_delivery(mock_mongodb):

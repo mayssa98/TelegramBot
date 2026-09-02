@@ -82,6 +82,24 @@ USDT_EVM_ADDRESS: str = os.environ.get(
     "HP_USDT_EVM_ADDRESS",
     "0x6529804d712d5ef4bef5c60af4a3683bd7300411",
 ).strip()
+ONCHAIN_BSC_RPC_URL: str = os.environ.get(
+    "HP_ONCHAIN_BSC_RPC_URL", "https://bsc-dataseed.bnbchain.org"
+).strip()
+ONCHAIN_POLYGON_RPC_URL: str = os.environ.get(
+    "HP_ONCHAIN_POLYGON_RPC_URL", "https://polygon.drpc.org"
+).strip()
+USDT_BSC_CONTRACT: str = os.environ.get(
+    "HP_USDT_BSC_CONTRACT", "0x55d398326f99059fF775485246999027B3197955"
+).strip()
+USDT_POLYGON_CONTRACT: str = os.environ.get(
+    "HP_USDT_POLYGON_CONTRACT", "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"
+).strip()
+ONCHAIN_VERIFY_TIMEOUT: int = max(
+    0, int(os.environ.get("HP_ONCHAIN_VERIFY_TIMEOUT", "45"))
+)
+ONCHAIN_POLL_INTERVAL: float = max(
+    0.5, float(os.environ.get("HP_ONCHAIN_POLL_INTERVAL", "3"))
+)
 
 # ---------------------------------------------------------------------------
 # Vérification automatique via Binance API (lecture seule)

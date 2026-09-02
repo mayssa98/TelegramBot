@@ -320,65 +320,74 @@ def test_customer_cannot_use_admin_test_payment(mock_mongodb, monkeypatch):
     assert result["status"] == "failed"
     assert result["error_code"] == "not_found"
     assert db.get_order(41)["status"] == OrderStatus.PENDING_PAYMENT
-def test_onchain_payment_is_saved_for_manual_review(mock_mongodb):
+def test_onchain_payment_is_automatically_verified_and_delivered(
+    mock_mongodb, monkeypatch,
+):
     service_id = db.add_service("VPN", "🔒")
     offer_id = db.add_offer(service_id, "VPN plan", 5.0, 2)
+    db.add_inventory_items(offer_id, ["vpn-account"])
     order = order_service.create_order(
         42, db.get_offer(offer_id), payment_method="usdt_bsc",
     )
     txid = "0x" + "a" * 64
+    monkeypatch.setattr(
+        payment_service, "verify_onchain_usdt",
+        lambda *_args, **_kwargs: {"status": "confirmed", "code": "confirmed"},
+    )
 
     result = payment_service.submit_onchain_payment(order["id"], txid, 42)
 
     saved = db.get_order(order["id"])
-    assert result["status"] == "manual_review"
+    assert result["status"] == "delivered"
     assert result["network"] == "BSC (BEP20)"
-    assert saved["status"] == OrderStatus.MANUAL_REVIEW
+    assert result["delivered_content"] == ["vpn-account"]
+    assert saved["status"] == OrderStatus.DELIVERED
     assert saved["txid"] == txid
-    assert saved["verify_method"] == "manual_usdt_bsc"
+    assert saved["verify_method"] == "auto_usdt_bsc"
 
 
-def test_admin_approval_finalizes_onchain_order_exactly_once(mock_mongodb):
+def test_pending_onchain_payment_does_not_request_manual_review(
+    mock_mongodb, monkeypatch,
+):
     service_id = db.add_service("VPN", "T")
     offer_id = db.add_offer(service_id, "VPN plan", 5.0, 1)
-    db.add_inventory_items(offer_id, ["vpn-account"])
     order = order_service.create_order(
         42, db.get_offer(offer_id), payment_method="usdt_polygon",
     )
-    payment_service.submit_onchain_payment(order["id"], "0x" + "b" * 64, 42)
-
-    result = payment_service.review_onchain_payment(
-        order["id"], 999, approved=True,
-    )
-    repeated = payment_service.review_onchain_payment(
-        order["id"], 999, approved=True,
+    monkeypatch.setattr(
+        payment_service, "verify_onchain_usdt",
+        lambda *_args, **_kwargs: {
+            "status": "pending", "code": "confirming", "reason": "Waiting",
+        },
     )
 
-    assert result["status"] == "delivered"
-    assert result["delivered_content"] == ["vpn-account"]
-    assert result["order"]["verify_method"] == "approved_usdt_polygon"
-    assert result["order"]["reviewed_by"] == 999
-    assert repeated["status"] == "already_processed"
+    result = payment_service.submit_onchain_payment(
+        order["id"], "0x" + "b" * 64, 42,
+    )
+
+    assert result["status"] == "pending"
+    assert db.get_order(order["id"])["status"] == OrderStatus.AWAITING_VERIFICATION
 
 
-def test_admin_rejection_returns_onchain_order_to_failed_verification(mock_mongodb):
+def test_invalid_onchain_transfer_returns_order_to_payment(
+    mock_mongodb, monkeypatch,
+):
     service_id = db.add_service("VPN", "T")
     offer_id = db.add_offer(service_id, "VPN plan", 5.0, 1)
     order = order_service.create_order(
         42, db.get_offer(offer_id), payment_method="usdt_bsc",
     )
     txid = "0x" + "c" * 64
-    payment_service.submit_onchain_payment(order["id"], txid, 42)
-
-    result = payment_service.review_onchain_payment(
-        order["id"], 999, approved=False,
-    )
-    repeated = payment_service.review_onchain_payment(
-        order["id"], 999, approved=False,
+    monkeypatch.setattr(
+        payment_service, "verify_onchain_usdt",
+        lambda *_args, **_kwargs: {
+            "status": "failed", "code": "wrong_amount", "reason": "Wrong amount",
+        },
     )
 
-    assert result["status"] == "rejected"
-    assert result["order"]["status"] == OrderStatus.VERIFICATION_FAILED
-    assert result["order"]["verify_method"] == "rejected_usdt_bsc"
-    assert result["order"]["txid"] == txid
-    assert repeated["status"] == "already_processed"
+    result = payment_service.submit_onchain_payment(order["id"], txid, 42)
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "wrong_amount"
+    assert db.get_order(order["id"])["status"] == OrderStatus.PENDING_PAYMENT
+    assert db.get_order(order["id"])["txid"] == ""

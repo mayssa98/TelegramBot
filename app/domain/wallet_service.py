@@ -9,6 +9,8 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 import database as db
+from config import USDT_EVM_ADDRESS
+from onchain_verifier import verify_onchain_usdt
 from payment_verifier import verify_bybit_incoming_transfer, verify_incoming_transfer
 
 
@@ -62,8 +64,9 @@ def claim_transfer(user_id: int, txid: str, provider: str = "binance") -> dict[s
 
 def submit_onchain_topup(
     user_id: int, txid: str, amount: float, network: str,
+    created_at: int | None = None,
 ) -> dict[str, Any]:
-    """Create a manual-review BSC/Polygon wallet top-up."""
+    """Automatically verify and credit a BSC/Polygon wallet top-up."""
     txid = (txid or "").strip()
     network = str(network or "").lower()
     if network not in {"bsc", "polygon"}:
@@ -75,7 +78,25 @@ def submit_onchain_topup(
         return {"status": "failed", "code": "minimum", "message": "Minimum: 1 USDT."}
 
     conn = db.get_conn()
+    if conn.wallet_topups.find_one({"txid": txid}) or conn.orders.find_one({"txid": txid}):
+        return {"status": "failed", "code": "already_used", "message": "TXID déjà utilisé."}
+
+    verification = verify_onchain_usdt(
+        txid, network, amount_cents / 100, USDT_EVM_ADDRESS,
+        created_at,
+    )
+    if verification["status"] != "confirmed":
+        return {
+            "status": verification["status"],
+            "code": verification.get("code"),
+            "message": verification.get("reason"),
+        }
+
     topup_id = db._next_id("wallet_topups")
+    if not db.claim_onchain_transaction(
+        txid, network, user_id, "wallet_topup", topup_id, amount_cents / 100,
+    ):
+        return {"status": "failed", "code": "already_used", "message": "TXID déjà utilisé."}
     try:
         conn.wallet_topups.insert_one({
             "id": topup_id,
@@ -84,8 +105,8 @@ def submit_onchain_topup(
             "amount_cents": amount_cents,
             "currency": "USDT",
             "network": network,
-            "verification_method": "manual_onchain",
-            "status": "manual_review",
+            "verification_method": "automatic_onchain",
+            "status": "confirmed",
             "created_at": int(time.time()),
         })
     except DuplicateKeyError:
@@ -94,16 +115,23 @@ def submit_onchain_topup(
             "code": "already_used",
             "message": "Ce TXID a déjà été soumis.",
         }
+    conn.wallets.update_one(
+        {"user_id": int(user_id)},
+        {"$inc": {"balance_cents": amount_cents}},
+        upsert=True,
+    )
+    balance = balance_cents(user_id) / 100
     db.audit_event(
-        "wallet.topup_manual_review",
+        "wallet.topup_confirmed_onchain",
         actor_id=user_id,
         details={"topup_id": topup_id, "network": network, "amount_cents": amount_cents},
     )
     return {
-        "status": "manual_review",
+        "status": "confirmed",
         "id": topup_id,
         "txid": txid,
         "amount": amount_cents / 100,
+        "balance": balance,
         "network": network,
         "user_id": int(user_id),
     }

@@ -13,7 +13,8 @@ from typing import Any
 import database as db
 from app.constants import OrderStatus
 from app.domain import affiliate_service, inventory_service, loyalty_service, reseller_service
-from config import ADMIN_ID, CURRENCY, TEST_PAYMENT_ENABLED
+from config import ADMIN_ID, CURRENCY, TEST_PAYMENT_ENABLED, USDT_EVM_ADDRESS
+from onchain_verifier import verify_onchain_usdt
 from payment_verifier import verify_bybit_payment, verify_payment
 
 log = logging.getLogger(__name__)
@@ -326,12 +327,18 @@ def submit_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
 
 
 def submit_onchain_payment(order_id: int, txid: str, user_id: int) -> dict[str, Any]:
-    """Save a BSC/Polygon transaction for administrator verification."""
+    """Verify and finalize a BSC/Polygon USDT payment without admin approval."""
     try:
         txid = validate_txid_format(txid)
         check_txid_uniqueness(txid, order_id)
     except TxidValidationError as exc:
         return {"status": "failed", "error_code": exc.code, "error_message": exc.message}
+
+    if db.get_conn().wallet_topups.find_one({"txid": txid}):
+        return {
+            "status": "failed", "error_code": "already_used",
+            "error_message": "Ce TXID a déjà été utilisé pour un rechargement.",
+        }
 
     order = db.get_order(order_id)
     if not order or order.get("user_id") != user_id:
@@ -365,15 +372,60 @@ def submit_onchain_payment(order_id: int, txid: str, user_id: int) -> dict[str, 
             "error_message": "Cette commande a expiré.",
         }
 
-    network = "BSC (BEP20)" if order["payment_method"] == "usdt_bsc" else "Polygon"
+    network_key = "bsc" if order["payment_method"] == "usdt_bsc" else "polygon"
+    network = "BSC (BEP20)" if network_key == "bsc" else "Polygon"
     db.update_order(
         order_id,
         txid=txid,
         status=OrderStatus.AWAITING_VERIFICATION,
-        verify_method=f"manual_{order['payment_method']}",
+        verify_method=f"auto_{order['payment_method']}",
     )
-    mark_manual_review(order_id, f"USDT {network} — TXID: {txid}")
-    return {"status": "manual_review", "order": db.get_order(order_id), "network": network}
+    verification = verify_onchain_usdt(
+        txid, network_key, order["total_price"], USDT_EVM_ADDRESS,
+        order.get("created_at"),
+    )
+    if verification["status"] == "confirmed":
+        claimed = db.claim_onchain_transaction(
+            txid, network_key, user_id, "order", order_id, order["total_price"],
+        )
+        if not claimed:
+            db.update_order(order_id, status=OrderStatus.PENDING_PAYMENT, txid="")
+            return {
+                "status": "failed", "error_code": "already_used",
+                "error_message": "This transaction has already been used.",
+            }
+        result = _finalize_confirmed_payment(
+            order_id, user_id, txid, f"auto_{order['payment_method']}",
+        )
+        result["network"] = network
+        return result
+
+    if verification["status"] == "pending":
+        return {
+            "status": "pending", "order": db.get_order(order_id), "network": network,
+            "error_code": verification.get("code"),
+            "error_message": verification.get("reason"),
+        }
+
+    db.update_order(
+        order_id,
+        status=OrderStatus.PENDING_PAYMENT,
+        txid="",
+        verify_method=f"failed_{order['payment_method']}",
+    )
+    db.audit_event(
+        "payment.onchain_verification_failed",
+        actor_id=user_id,
+        details={
+            "order_id": order_id, "txid": txid,
+            "reason": verification.get("reason", ""),
+        },
+    )
+    return {
+        "status": "failed", "order": db.get_order(order_id), "network": network,
+        "error_code": verification.get("code", "verification_failed"),
+        "error_message": verification.get("reason", "On-chain verification failed."),
+    }
 
 
 def review_onchain_payment(

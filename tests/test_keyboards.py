@@ -131,13 +131,6 @@ def test_onchain_payment_keyboard_submits_txid_without_auto_confirmation():
     assert keyboard.inline_keyboard[1][0].callback_data == "cancel_buy:81"
 
 
-def test_admin_onchain_review_keyboard_has_accept_and_reject_actions():
-    keyboard = admin.onchain_payment_review_keyboard(154)
-
-    assert keyboard.inline_keyboard[0][0].callback_data == "adm_onchain_approve:154"
-    assert keyboard.inline_keyboard[0][1].callback_data == "adm_onchain_reject:154"
-
-
 def test_manual_delivery_keyboard_separates_message_from_order_delivery():
     keyboard = admin.manual_delivery_request_keyboard(503)
 

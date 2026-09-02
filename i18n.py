@@ -127,9 +127,14 @@ TRANSLATIONS = {
         "ar": "💰 Enter the amount to add to your wallet via USDT {network} (minimum 1 USDT):",
     },
     "topup_onchain_instructions": {
-        "fr": "💳 *RECHARGEMENT USDT — {network}*\n\nEnvoyez exactement *{amount} USDT* à :\n`{address}`\n\n⚠️ Utilisez uniquement le réseau *{network}*.\n{contract_warning}\n\nAprès le transfert, envoyez ici le hash/TXID. Le solde sera crédité après vérification administrative.",
-        "en": "💳 *USDT TOP UP — {network}*\n\nSend exactly *{amount} USDT* to:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\n\nAfter transferring, send the hash/transaction ID here. Your wallet is credited after administrator verification.",
-        "ar": "💳 *USDT TOP UP — {network}*\n\nSend exactly *{amount} USDT* to:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\n\nAfter transferring, send the hash/transaction ID here. Your wallet is credited after administrator verification.",
+        "fr": "💳 *RECHARGEMENT USDT — {network}*\n\nEnvoyez exactement *{amount} USDT* à :\n`{address}`\n\n⚠️ Utilisez uniquement le réseau *{network}*.\n{contract_warning}\n\nAprès le transfert, envoyez ici le hash/TXID. La vérification et le crédit sont automatiques.",
+        "en": "💳 *USDT TOP UP — {network}*\n\nSend exactly *{amount} USDT* to:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\n\nAfter transferring, send the hash/transaction ID here. Verification and credit are automatic.",
+        "ar": "💳 *USDT TOP UP — {network}*\n\nSend exactly *{amount} USDT* to:\n`{address}`\n\n⚠️ Use only the *{network}* network.\n{contract_warning}\n\nAfter transferring, send the hash/transaction ID here. Verification and credit are automatic.",
+    },
+    "topup_onchain_pending": {
+        "fr": "⏳ Transaction pas encore confirmée. Réessayez avec le même TXID dans quelques secondes.",
+        "en": "⏳ Transaction is not confirmed yet. Retry the same TXID in a few seconds.",
+        "ar": "⏳ لم يتم تأكيد المعاملة بعد. أعد إرسال TXID نفسه بعد بضع ثوانٍ.",
     },
     "topup_onchain_submitted": {
         "fr": "🔎 *Rechargement soumis*\n\nMontant : *{amount} USDT*\nRéseau : *{network}*\nVotre demande attend la vérification administrative. Le solde n’est pas encore crédité.",
@@ -572,6 +577,11 @@ TRANSLATIONS = {
         "fr": "🔎 *Transaction enregistrée*\n\nCommande #{oid} — USDT {network}\nVotre paiement attend maintenant la vérification de l’administrateur. La livraison commencera uniquement après confirmation.",
         "en": "🔎 *Transaction submitted*\n\nOrder #{oid} — USDT {network}\nYour payment is now awaiting administrator verification. Delivery starts only after confirmation.",
         "ar": "🔎 *Transaction submitted*\n\nOrder #{oid} — USDT {network}\nYour payment is now awaiting administrator verification. Delivery starts only after confirmation.",
+    },
+    "onchain_payment_pending": {
+        "fr": "⏳ La transaction de la commande #{oid} n’est pas encore confirmée. Réessayez avec le même TXID dans quelques secondes.",
+        "en": "⏳ The transaction for order #{oid} is not confirmed yet. Retry the same TXID in a few seconds.",
+        "ar": "⏳ لم يتم تأكيد معاملة الطلب #{oid} بعد. أعد إرسال TXID نفسه بعد بضع ثوانٍ.",
     },
     "onchain_payment_rejected": {
         "fr": "❌ *Paiement non accepté*\n\nLe paiement de la commande #{oid} sur {network} n’a pas été validé par l’administrateur. Vérifiez votre transfert puis soumettez un autre TXID, ou contactez le support.",

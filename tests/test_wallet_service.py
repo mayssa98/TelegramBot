@@ -70,21 +70,22 @@ def test_topup_txid_cannot_be_reused_across_providers(mock_mongodb, monkeypatch)
     )["code"] == "already_used"
 
 
-def test_onchain_topup_requires_admin_approval_before_credit(mock_mongodb):
+def test_onchain_topup_is_automatically_verified_and_credited(
+    mock_mongodb, monkeypatch,
+):
+    monkeypatch.setattr(
+        wallet_service, "verify_onchain_usdt",
+        lambda *_args, **_kwargs: {"status": "confirmed", "code": "confirmed"},
+    )
     submitted = wallet_service.submit_onchain_topup(
         42, "0x" + "a" * 64, 8.5, "polygon",
     )
 
-    assert submitted["status"] == "manual_review"
-    assert wallet_service.balance_cents(42) == 0
-
-    approved = wallet_service.approve_onchain_topup(submitted["id"], 999)
-
-    assert approved["status"] == "confirmed"
-    assert approved["balance"] == 8.5
+    assert submitted["status"] == "confirmed"
+    assert submitted["balance"] == 8.5
     assert wallet_service.balance_cents(42) == 850
-    assert wallet_service.approve_onchain_topup(submitted["id"], 999) is None
-    assert wallet_service.balance_cents(42) == 850
+    saved = mock_mongodb.wallet_topups.find_one({"id": submitted["id"]})
+    assert saved["verification_method"] == "automatic_onchain"
 
 
 def test_wallet_pays_order_and_reduces_external_total(mock_mongodb):
