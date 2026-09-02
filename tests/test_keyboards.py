@@ -721,11 +721,11 @@ def test_home_menu_hides_channel_link_but_keeps_optional_group(mock_mongodb):
         if button.url
     }
 
-    assert "https://t.me/blackmarketBotChannel" not in urls
+    assert "https://t.me/bmcmethods" not in urls
     assert "https://t.me/Blackmarketgrp" in urls
 
     required_keyboard = kb.channel_join_keyboard("en")
-    assert required_keyboard.inline_keyboard[0][0].url == "https://t.me/blackmarketBotChannel"
+    assert required_keyboard.inline_keyboard[0][0].url == "https://t.me/bmcmethods"
 
 
 def test_home_and_reseller_dashboard_expose_self_service_api(mock_mongodb):

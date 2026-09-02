@@ -799,8 +799,8 @@ def test_start_requires_official_channel_membership(monkeypatch):
     call = message.reply_text.await_args
     assert "MEMBERS-ONLY ACCESS" in call.args[0]
     assert call.kwargs["reply_markup"] is not None
-    assert call.kwargs["reply_markup"].inline_keyboard[0][0].url.endswith("/blackmarketBotChannel")
-    bot_client.get_chat_member.assert_awaited_once_with("@blackmarketBotChannel", 42)
+    assert call.kwargs["reply_markup"].inline_keyboard[0][0].url.endswith("/bmcmethods")
+    bot_client.get_chat_member.assert_awaited_once_with("@bmcmethods", 42)
     assert PENDING.get(42) == ("await_channel_join", 0)
 
 
@@ -855,7 +855,7 @@ def test_verify_joining_unlocks_marketing_welcome(monkeypatch):
     assert "1 USDT" in rendered
     assert "12% OFF" in rendered
     assert query.edit_message_text.await_args.kwargs["parse_mode"] == ParseMode.HTML
-    bot_client.get_chat_member.assert_awaited_once_with("@blackmarketBotChannel", 42)
+    bot_client.get_chat_member.assert_awaited_once_with("@bmcmethods", 42)
 
 
 def test_only_official_channel_membership_is_required(monkeypatch):
@@ -2401,8 +2401,7 @@ def test_manual_order_is_delivered_and_retried_to_channel(monkeypatch, mock_mong
     assert sent.kwargs["parse_mode"] == ParseMode.HTML
     assert "[HTML]" not in sent.kwargs["text"]
     assert "<b>Your order #602 has been delivered!</b>" in sent.kwargs["text"]
-    channel_post.assert_awaited_once()
-    assert channel_post.await_args.args[1]["status"] == "delivered"
+    channel_post.assert_not_awaited()
 
 
 def test_manual_delivery_preserves_urls_and_special_characters(mock_mongodb):

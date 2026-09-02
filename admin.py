@@ -448,121 +448,9 @@ def move_offer_keyboard(offer_id):
     return InlineKeyboardMarkup(rows)
 
 
-import html
-import logging
-import os
-from telegram.constants import ParseMode
-
-log = logging.getLogger("admin")
-
-
-def _purchase_product_total(order, offer=None):
-    """Return the catalogue value of an order, not only its unpaid balance."""
-    qty = max(1, int(order.get("qty") or 1))
-
-    gross_total = order.get("gross_total")
-    if gross_total is not None:
-        return max(0.0, float(gross_total))
-
-    unit_price = order.get("unit_price")
-    if unit_price is not None:
-        return max(0.0, float(unit_price) * qty)
-
-    if offer and offer.get("price") is not None:
-        return max(0.0, float(offer["price"]) * qty)
-
-    # Legacy wallet orders may only contain the wallet contribution and the
-    # remaining external amount.
-    return max(
-        0.0,
-        float(order.get("wallet_amount") or 0.0)
-        + float(order.get("total_price") or 0.0),
-    )
-
-
 async def post_purchase_to_channel(context, order):
-    """Post the correct paid purchase or pre-order announcement to the channel."""
-    order_id = int(order.get("id") or 0)
-    if str(order.get("verify_method") or "") == "admin_test":
-        return False
-    claimed = bool(order_id and db.claim_order_channel_announcement(order_id))
-    if order_id and not claimed:
-        return False
-    try:
-        channel_id = os.environ.get("HP_REQUIRED_CHANNEL", "@blackmarketBotChannel").strip()
-        if not channel_id:
-            if claimed:
-                db.release_order_channel_announcement(order_id)
-            return False
-
-        bot = context.bot
-        bot_info = await bot.get_me()
-        bot_username = bot_info.username
-
-        service_name = str(order.get("service_name") or "Service").strip()
-        offer_name = str(order.get("offer_name") or "Offre").strip()
-        qty = int(order.get("qty") or 1)
-        offer_id = order.get("offer_id")
-        service_id = order.get("service_id")
-
-        offer = None
-        rem_stock_text = "∞ (Unlimited)"
-        if offer_id:
-            offer = db.get_offer(int(offer_id))
-            if offer and not offer.get("unlimited_stock"):
-                rem_stock = int(offer.get("stock") or 0)
-                rem_stock_text = f"{rem_stock} left" if rem_stock > 0 else "0 (Pre-order available)"
-
-        product_total = _purchase_product_total(order, offer)
-        is_preorder = bool(order.get("is_preorder"))
-
-        if offer_id:
-            start_param = f"off_{offer_id}"
-        elif service_id:
-            start_param = f"svc_{service_id}"
-        else:
-            start_param = "catalog"
-
-        buy_url = f"https://t.me/{bot_username}?start={start_param}"
-
-        if is_preorder:
-            message_text = (
-                "⏳ <b>NEW PRE-ORDER CONFIRMED!</b> ⏳\n\n"
-                f"📋 <b>Product:</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
-                f"📦 <b>Quantity Pre-ordered:</b> <code>{qty}</code>\n"
-                f"💰 <b>Pre-order Total:</b> <code>${product_total:.2f} USDT</code>\n"
-                "✅ <b>Status:</b> <code>Paid — Awaiting Restock</code>\n\n"
-                "✨ <i>Reserve yours now on BlackMarket Bot!</i>"
-            )
-            action_label = "⏳ Pre-order Now"
-        else:
-            message_text = (
-                "🔥 <b>NEW ORDER COMPLETED!</b> 🔥\n\n"
-                f"🛒 <b>Product:</b> <code>{html.escape(service_name)} — {html.escape(offer_name)}</code>\n"
-                f"📦 <b>Quantity Ordered:</b> <code>{qty}</code>\n"
-                f"📊 <b>Remaining Stock:</b> <code>{rem_stock_text}</code>\n"
-                f"💰 <b>Total Price:</b> <code>${product_total:.2f} USDT</code>\n"
-                f"⚡ <b>Status:</b> <code>Paid & Confirmed 🟢</code>\n\n"
-                "✨ <i>Get yours directly on BlackMarket Bot!</i>"
-            )
-            action_label = "🛒 Buy Now"
-
-        reply_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton(action_label, url=buy_url, style="success")
-        ]])
-
-        await bot.send_message(
-            chat_id=channel_id,
-            text=message_text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=reply_markup,
-        )
-        return True
-    except Exception as exc:
-        if claimed:
-            db.release_order_channel_announcement(order_id)
-        log.warning("Channel order broadcast failed: %s", exc)
-        return False
+    """Compatibility no-op: purchases must remain private to the customer/admin."""
+    return False
 
 
 async def notify_new_order(context, order):
@@ -570,7 +458,6 @@ async def notify_new_order(context, order):
         ADMIN_ID, order_detail_text(order), parse_mode="Markdown",
         reply_markup=order_detail_keyboard(order),
     )
-    await post_purchase_to_channel(context, order)
 
 
 async def notify_manual_delivery_request(context, order):
@@ -585,4 +472,3 @@ async def notify_manual_delivery_request(context, order):
         parse_mode="Markdown",
         reply_markup=manual_delivery_request_keyboard(order["id"]),
     )
-    await post_purchase_to_channel(context, order)
