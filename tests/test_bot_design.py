@@ -1386,8 +1386,8 @@ def test_inline_home_avoids_actions_repeated_in_profile():
     keyboard = kb.home_keyboard("fr", user_id=42)
     callbacks = {button.callback_data for row in keyboard.inline_keyboard for button in row}
 
-    assert {"catalog", "lovable", "topup", "account", "support", "language"} <= callbacks
-    assert {"orders", "affiliate", "reseller_api"}.isdisjoint(callbacks)
+    assert {"catalog", "topup", "account", "support", "language"} <= callbacks
+    assert {"lovable", "orders", "affiliate", "reseller_api"}.isdisjoint(callbacks)
     assert "help" not in callbacks
 
 

@@ -131,6 +131,27 @@ def clean_button_name(value):
     return pattern.sub("", text).strip()
 
 
+def offer_warranty_period_label(lang, offer):
+    """Return the compact warranty period shown between name and price."""
+    warranty_type = str(offer.get("warranty_type") or "").strip().upper()
+    try:
+        warranty_days = int(offer.get("warranty_days") or 0)
+    except (TypeError, ValueError):
+        warranty_days = 0
+    if warranty_type == "FW" and warranty_days > 0:
+        if lang == "fr":
+            return f"{warranty_days} j"
+        if lang == "ar":
+            return f"{warranty_days} يوم"
+        return f"{warranty_days} day{'s' if warranty_days != 1 else ''}"
+    no_warranty = {
+        "fr": "Sans garantie",
+        "ar": "بدون ضمان",
+        "en": "No warranty",
+    }
+    return no_warranty.get(lang, no_warranty["en"])
+
+
 def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
     price = offer.get("price")
     if price is None:
@@ -142,18 +163,32 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
 
     label = stock_label if stock_label is not None else t(lang, "stock_label")
     lbl = str(label or "Stock").title()
+    period = offer_warranty_period_label(lang, offer)
+
+    icon_id = str(
+        offer.get("custom_emoji_id") or offer.get("service_custom_emoji_id") or ""
+    ).strip()
+    emoji = ""
+    if not (icon_id and icon_id.isascii()):
+        emoji = str(
+            (icon_id if icon_id else offer.get("emoji") or offer.get("service_emoji"))
+            or ""
+        ).strip()
+    clean_name = clean_button_name(offer["name"])
 
     if offer.get("unlimited_stock"):
-        suffix = f"{price_text} | {lbl}: ∞"
+        suffix = f"{period} | {price_text} | {lbl}: ∞"
         max_name_length = max(8, 64 - len(suffix) - 3)
-        name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
-        return f"{name} | {suffix}"
+        name = compact_offer_name(clean_name, max_name_length - len(emoji) - int(bool(emoji)))
+        display_name = " ".join(part for part in (emoji, name) if part)
+        return f"{display_name} | {suffix}"
 
     stock = int(offer.get("stock") or 0)
-    suffix = f"{price_text} | {lbl}: {stock}"
+    suffix = f"{period} | {price_text} | {lbl}: {stock}"
     max_name_length = max(8, 64 - len(suffix) - 3)
-    name = compact_offer_name(clean_button_name(offer["name"]), max_name_length)
-    return f"{name} | {suffix}"
+    name = compact_offer_name(clean_name, max_name_length - len(emoji) - int(bool(emoji)))
+    display_name = " ".join(part for part in (emoji, name) if part)
+    return f"{display_name} | {suffix}"
 
 
 def lang_keyboard():
@@ -238,13 +273,12 @@ def main_menu_keyboard(lang, user_id):
 def home_keyboard(lang, user_id):
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     candidate_rows = [
-        [translated_button(lang, "menu_catalog", callback_data="catalog")],
-        [translated_button(lang, "menu_lovable", callback_data="lovable")],
+        [translated_button(lang, "menu_catalog", callback_data="catalog", style="primary")],
         [translated_button(lang, "menu_topup", callback_data="topup", style="success")],
-        [translated_button(lang, "menu_account", callback_data="account")],
-        [translated_button(lang, "menu_support", callback_data="support")],
+        [translated_button(lang, "menu_account", callback_data="account", style="success")],
+        [translated_button(lang, "menu_support", callback_data="support", style="success")],
         [
-            translated_button(lang, "menu_lang", callback_data="language"),
+            translated_button(lang, "menu_lang", callback_data="language", style="success"),
         ],
     ]
     rows = []
@@ -254,9 +288,11 @@ def home_keyboard(lang, user_id):
             rows.append(visible)
     for button in db.list_custom_buttons():
         label = button.get(f"label_{lang}") or button.get("label_fr") or "Lien"
-        rows.append([InlineKeyboardButton(label[:64], url=button["url"])])
+        rows.append([InlineKeyboardButton(label[:64], url=button["url"], style="success")])
     if user_id == ADMIN_ID:
-        rows.append([translated_button(lang, "menu_admin", callback_data="adm_panel")])
+        rows.append([translated_button(
+            lang, "menu_admin", callback_data="adm_panel", style="success",
+        )])
     return InlineKeyboardMarkup(rows)
 
 
@@ -357,6 +393,7 @@ def catalog_offers_keyboard(lang, catalog_notifications_enabled=True):
             "stock_label", "price_tbd", "catalog_request_button",
             "catalog_preorder_button", "catalog_notifications_on",
             "catalog_notifications_off", "btn_refresh_short", "btn_main_menu_short",
+            "menu_lovable",
         ),
         lang,
     )
@@ -459,6 +496,11 @@ def catalog_offers_keyboard(lang, catalog_notifications_enabled=True):
     # 2. Add individual offer buttons below
     buttons.extend(regular_offer_buttons)
 
+    # Lovable Unlimited keeps its dedicated purchase flow but now lives in Shop.
+    buttons.append([translated_button(
+        lang, "menu_lovable", callback_data="lovable", style="success",
+    )])
+
     buttons.append([
         translated_button(
             lang,
@@ -516,6 +558,10 @@ def offers_keyboard(lang, service_id):
         off_name = (off.get("name") or f"Offre #{off['id']}").strip()
         clean_name = clean_button_name(off_name) or off_name
         emoji = (safe_offer.get("emoji") or svc_emoji).strip()
+        safe_offer["service_emoji"] = emoji
+        safe_offer["service_custom_emoji_id"] = (
+            service.get("custom_emoji_id") if service else None
+        )
         button_icon = (
             db.get_text_override_icon("stock_label", lang)
             or off.get("custom_emoji_id")

@@ -753,7 +753,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
     price: offer?.price ?? "",
     description: offer?.description || "",
     note: offer?.note || "",
-    warranty_type: offer?.warranty_type || (/\bNW\b|no warranty|sans garantie/i.test(offer?.note || "") ? "NW" : "FW"),
+    warranty_type: offer?.warranty_type || (/\bFW\b|full warranty|\d{1,3}\s*(?:d|day|days|j|jour|jours)/i.test(offer?.note || "") ? "FW" : "NW"),
     warranty_days: offer?.warranty_days || Number((offer?.note || "").match(/\d{1,3}/)?.[0]) || 30,
     delivery_delay: offer?.delivery_delay || "Instantané après confirmation",
     low_stock_threshold: offer?.low_stock_threshold ?? 5,
@@ -922,13 +922,13 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
           <Field label="Description arabe" wide>
             <textarea dir="rtl" value={form.description_ar} onChange={(event) => set("description_ar", event.target.value)} placeholder="وصف المنتج بالعربية" />
           </Field>
-          <Field label="Type de garantie">
+          <Field label="Garantie">
             <select value={form.warranty_type} onChange={(event) => set("warranty_type", event.target.value)}>
-              <option value="FW">FW — Full Warranty</option>
-              <option value="NW">NW — No Warranty</option>
+              <option value="NW">Aucune garantie</option>
+              <option value="FW">Sélectionner une période</option>
             </select>
           </Field>
-          <Field label="Durée de garantie">
+          <Field label="Période de garantie">
             <select
               disabled={form.warranty_type === "NW"}
               value={form.warranty_days}
@@ -2008,7 +2008,7 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
     enabled: Boolean(product.enabled),
     description: product.description || "",
     warranty: product.warranty || "",
-    warranty_type: product.warranty_type || (/\bNW\b|no warranty|sans garantie/i.test(product.warranty || "") ? "NW" : "FW"),
+    warranty_type: product.warranty_type || (/\bFW\b|full warranty|\d{1,3}\s*(?:d|day|days|j|jour|jours)/i.test(product.warranty || "") ? "FW" : "NW"),
     warranty_days: product.warranty_days || Number((product.warranty || "").match(/\d{1,3}/)?.[0]) || 30,
     delivery_delay: product.delivery_delay || "Instantané après confirmation",
     low_stock_threshold: product.low_stock_threshold || 5,
@@ -2160,13 +2160,13 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
             onChange={(event) => set("description", event.target.value)}
           />
         </Field>
-        <Field label="Type de garantie">
+        <Field label="Garantie">
           <select value={form.warranty_type} onChange={(event) => set("warranty_type", event.target.value)}>
-            <option value="FW">FW — Full Warranty</option>
-            <option value="NW">NW — No Warranty</option>
+            <option value="NW">Aucune garantie</option>
+            <option value="FW">Sélectionner une période</option>
           </select>
         </Field>
-        <Field label="Durée de garantie">
+        <Field label="Période de garantie">
           <select
             disabled={form.warranty_type === "NW"}
             value={form.warranty_days}

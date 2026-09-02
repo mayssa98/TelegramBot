@@ -3041,8 +3041,8 @@ def render_dashboard(
                     <label>Prix</label>
                     <input type="number" name="price" step="0.01" min="0" required>
                 </div>
-                <div class="form-group"><label>Type de garantie</label><select name="warranty_type" onchange="document.getElementById('add-offer-warranty-days').disabled = this.value === 'NW'"><option value="FW">FW — Full Warranty</option><option value="NW">NW — No Warranty</option></select></div>
-                <div class="form-group"><label>Durée (jours)</label><select name="warranty_days" id="add-offer-warranty-days">__WARRANTY_DAY_OPTIONS__</select></div>
+                <div class="form-group"><label>Garantie</label><select name="warranty_type" onchange="document.getElementById('add-offer-warranty-days').disabled = this.value === 'NW'"><option value="NW">Aucune garantie</option><option value="FW">Sélectionner une période</option></select></div>
+                <div class="form-group"><label>Période de garantie</label><select name="warranty_days" id="add-offer-warranty-days" disabled>__WARRANTY_DAY_OPTIONS__</select></div>
                 <div class="form-group"><label>Description détaillée</label><textarea name="description"></textarea></div>
                 <div class="form-group"><label>Comptes initiaux — stock automatique (# = 1 produit)</label><textarea name="initial_inventory" placeholder="#1&#10;Email: compte1@example.com&#10;Password: secret&#10;&#10;#2&#10;Code: produit-2"></textarea></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" value="Instantané après confirmation"></div>
@@ -3060,8 +3060,8 @@ def render_dashboard(
                 <input type="hidden" name="offer_id" id="edit-offer-id">
                 <div class="form-group"><label>Nom</label><input name="name" id="edit-offer-name" required></div>
                 <div class="form-group"><label>Description du produit</label><textarea name="description" id="edit-offer-description"></textarea></div>
-                <div class="form-group"><label>Type de garantie</label><select name="warranty_type" id="edit-offer-warranty-type" onchange="document.getElementById('edit-offer-warranty-days').disabled = this.value === 'NW'"><option value="FW">FW — Full Warranty</option><option value="NW">NW — No Warranty</option></select></div>
-                <div class="form-group"><label>Durée (jours)</label><select name="warranty_days" id="edit-offer-warranty-days">__WARRANTY_DAY_OPTIONS__</select></div>
+                <div class="form-group"><label>Garantie</label><select name="warranty_type" id="edit-offer-warranty-type" onchange="document.getElementById('edit-offer-warranty-days').disabled = this.value === 'NW'"><option value="NW">Aucune garantie</option><option value="FW">Sélectionner une période</option></select></div>
+                <div class="form-group"><label>Période de garantie</label><select name="warranty_days" id="edit-offer-warranty-days">__WARRANTY_DAY_OPTIONS__</select></div>
                 <div class="form-group"><label>Prix</label><input type="number" step="0.01" min="0" name="price" id="edit-offer-price" required></div>
                 <div class="form-group"><label>Ordre</label><input type="number" min="0" name="sort_order" id="edit-offer-sort"></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" id="edit-offer-delay"></div>
@@ -4684,7 +4684,7 @@ def render_dashboard(
             document.getElementById("edit-offer-name").value = offer.name || "";
             document.getElementById("edit-offer-description").value = offer.description || "";
             const legacyWarranty = offer.note || "";
-            document.getElementById("edit-offer-warranty-type").value = offer.warranty_type || (/\bNW\b|no warranty|sans garantie/i.test(legacyWarranty) ? "NW" : "FW");
+            document.getElementById("edit-offer-warranty-type").value = offer.warranty_type || (/\\bFW\\b|full warranty|\\d{1,3}\\s*(?:d|day|days|j|jour|jours)/i.test(legacyWarranty) ? "FW" : "NW");
             document.getElementById("edit-offer-warranty-days").value = offer.warranty_days || Number((legacyWarranty.match(/\\d{1,3}/) || [])[0]) || 30;
             document.getElementById("edit-offer-warranty-days").disabled = document.getElementById("edit-offer-warranty-type").value === "NW";
             document.getElementById("edit-offer-price").value = offer.price ?? 0;

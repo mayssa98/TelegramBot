@@ -97,6 +97,7 @@ def test_catalog_reuses_shared_translation_and_icon_lookups(monkeypatch):
             "catalog_notifications_off": "Catalog alerts: off",
             "btn_refresh_short": "Refresh",
             "btn_main_menu_short": "Home",
+            "menu_lovable": "Lovable Unlimited Credit",
         }[key]
 
     def fake_icon(key, lang):
@@ -149,13 +150,14 @@ def test_offer_button_label_uses_store_style():
         "en",
         {
             "name": "SuperGrok 12 Months",
-            "note": "Full Warranty",
+            "warranty_type": "FW",
+            "warranty_days": 365,
             "price": 30.0,
             "stock": 12,
         },
     )
 
-    assert label == "SuperGrok 12 Months | $30 | Stock: 12"
+    assert label == "SuperGrok 12 Months | 365 days | $30 | Stock: 12"
 
 
 def test_offer_button_label_uses_sky_blue_for_low_stock():
@@ -163,13 +165,13 @@ def test_offer_button_label_uses_sky_blue_for_low_stock():
         "en",
         {
             "name": "Low Stock Product",
-            "note": "Full Warranty",
+            "warranty_type": "NW",
             "price": 5.0,
             "stock": 2,
         },
     )
 
-    assert label == "Low Stock Product | $5 | Stock: 2"
+    assert label == "Low Stock Product | No warranty | $5 | Stock: 2"
 
 
 def test_offer_button_keeps_non_dollar_currency_visible():
@@ -178,7 +180,23 @@ def test_offer_button_keeps_non_dollar_currency_visible():
         {"name": "European plan", "price": 4.5, "currency": "EUR", "stock": 3},
     )
 
-    assert label == "European plan | 4.5 EUR | Stock: 3"
+    assert label == "European plan | No warranty | 4.5 EUR | Stock: 3"
+
+
+def test_offer_button_places_unicode_emoji_and_period_before_price():
+    label = offer_button_label(
+        "en",
+        {
+            "name": "Premium",
+            "service_emoji": "⭐",
+            "warranty_type": "FW",
+            "warranty_days": 30,
+            "price": 5,
+            "stock": 4,
+        },
+    )
+
+    assert label == "⭐ Premium | 30 days | $5 | Stock: 4"
 
 
 def test_offer_button_always_keeps_price_and_live_stock_visible_with_long_name():
@@ -486,7 +504,7 @@ def test_offer_button_uses_admin_selected_animated_emoji(monkeypatch):
 
     button = kb.offers_keyboard("en", 1).inline_keyboard[0][0]
 
-    assert button.text == "Premium | $5 | Stock: 2"
+    assert button.text == "Premium | No warranty | $5 | Stock: 2"
     assert button.icon_custom_emoji_id == "admin-selected-id"
 
 
@@ -721,6 +739,31 @@ def test_home_menu_hides_channel_and_group_links(mock_mongodb):
     assert required_keyboard.inline_keyboard[0][0].url == "https://t.me/bmcmethods"
 
 
+def test_home_uses_blue_shop_and_green_remaining_actions(mock_mongodb):
+    keyboard = kb.home_keyboard("en", 42)
+    actions = {
+        button.callback_data: button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data
+    }
+
+    assert keyboard.inline_keyboard[0][0].callback_data == "catalog"
+    assert actions["catalog"].text == "🛍️ Shop"
+    assert actions["catalog"].style == "primary"
+    assert {
+        actions[action].style for action in ("topup", "account", "support", "language")
+    } == {"success"}
+    assert "lovable" not in actions
+
+    shop = kb.catalog_offers_keyboard("en")
+    lovable = next(
+        button for row in shop.inline_keyboard for button in row
+        if button.callback_data == "lovable"
+    )
+    assert lovable.style == "success"
+
+
 def test_reseller_api_stays_in_profile_and_dashboard(mock_mongodb):
     home_callbacks = {
         button.callback_data
@@ -896,7 +939,7 @@ def test_premium_service_icon_replaces_unicode_emoji_in_catalog_button(monkeypat
 
     button = kb.catalog_offers_keyboard("en").inline_keyboard[0][0]
 
-    assert button.text == "Chat GPT Plus | $5 | Stock: 8"
+    assert button.text == "Chat GPT Plus | No warranty | $5 | Stock: 8"
     assert button.callback_data == "off:11"
     assert button.icon_custom_emoji_id == "premium-chatgpt"
 
@@ -912,7 +955,7 @@ def test_premium_offer_icon_replaces_unicode_emoji_in_offer_button(monkeypatch):
 
     button = kb.offers_keyboard("en", 3).inline_keyboard[0][0]
 
-    assert button.text == "Chat GPT Plus | $5 | Stock: 8"
+    assert button.text == "Chat GPT Plus | No warranty | $5 | Stock: 8"
     assert button.icon_custom_emoji_id == "premium-chatgpt"
 
 

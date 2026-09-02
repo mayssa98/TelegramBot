@@ -29,10 +29,13 @@ def test_dedicated_lovable_plans_have_fixed_prices_and_stay_out_of_catalog(mock_
     )
 
 
-def test_lovable_home_and_buy_buttons_are_dedicated(mock_mongodb):
+def test_lovable_moves_from_home_into_shop_and_keeps_dedicated_buy_buttons(mock_mongodb):
     home = kb.home_keyboard("en", 42)
-    callbacks = [button.callback_data for row in home.inline_keyboard for button in row]
-    assert "lovable" in callbacks
+    home_callbacks = [button.callback_data for row in home.inline_keyboard for button in row]
+    shop = kb.catalog_offers_keyboard("en")
+    shop_callbacks = [button.callback_data for row in shop.inline_keyboard for button in row]
+    assert "lovable" not in home_callbacks
+    assert "lovable" in shop_callbacks
 
     plans = kb.lovable_plans_keyboard("en")
     plan_callbacks = [button.callback_data for row in plans.inline_keyboard for button in row]
