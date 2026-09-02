@@ -1382,11 +1382,12 @@ def test_dynamic_orders_button_supports_admin_premium_emoji():
     assert keyboard.inline_keyboard[0][0].icon_custom_emoji_id == "premium-orders-all"
 
 
-def test_inline_home_exposes_every_primary_journey():
+def test_inline_home_avoids_actions_repeated_in_profile():
     keyboard = kb.home_keyboard("fr", user_id=42)
     callbacks = {button.callback_data for row in keyboard.inline_keyboard for button in row}
 
-    assert {"catalog", "orders", "topup", "account", "affiliate", "support", "language"} <= callbacks
+    assert {"catalog", "lovable", "topup", "account", "support", "language"} <= callbacks
+    assert {"orders", "affiliate", "reseller_api"}.isdisjoint(callbacks)
     assert "help" not in callbacks
 
 

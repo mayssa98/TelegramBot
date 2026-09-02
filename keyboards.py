@@ -28,7 +28,7 @@ def InlineKeyboardButton(*args, style=None, **kwargs):
     return btn
 
 import database as db
-from config import ADMIN_ID, REQUIRED_CHANNEL, REQUIRED_GROUP
+from config import ADMIN_ID, REQUIRED_CHANNEL
 from i18n import t
 
 BUTTON_TEXT_KEYS = {
@@ -241,23 +241,10 @@ def home_keyboard(lang, user_id):
         [translated_button(lang, "menu_catalog", callback_data="catalog")],
         [translated_button(lang, "menu_lovable", callback_data="lovable")],
         [translated_button(lang, "menu_topup", callback_data="topup", style="success")],
-        [translated_button(lang, "menu_reseller_api", callback_data="reseller_api", style="primary")],
-        [
-            translated_button(lang, "menu_orders", callback_data="orders"),
-            translated_button(lang, "menu_account", callback_data="account"),
-        ],
-        [
-            translated_button(lang, "menu_affiliate", callback_data="affiliate"),
-            translated_button(lang, "menu_support", callback_data="support"),
-        ],
+        [translated_button(lang, "menu_account", callback_data="account")],
+        [translated_button(lang, "menu_support", callback_data="support")],
         [
             translated_button(lang, "menu_lang", callback_data="language"),
-        ],
-        [
-            translated_button(
-                lang, "btn_join_group",
-                url=f"https://t.me/{REQUIRED_GROUP.lstrip('@')}",
-            ),
         ],
     ]
     rows = []

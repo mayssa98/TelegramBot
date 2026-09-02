@@ -705,7 +705,7 @@ def test_admin_can_customize_and_preview_ticket_design():
     } <= style_callbacks
 
 
-def test_home_menu_hides_channel_link_but_keeps_optional_group(mock_mongodb):
+def test_home_menu_hides_channel_and_group_links(mock_mongodb):
     keyboard = kb.home_keyboard("en", 42)
     urls = {
         button.url
@@ -715,13 +715,13 @@ def test_home_menu_hides_channel_link_but_keeps_optional_group(mock_mongodb):
     }
 
     assert "https://t.me/bmcmethods" not in urls
-    assert "https://t.me/Blackmarketgrp" in urls
+    assert "https://t.me/Blackmarketgrp" not in urls
 
     required_keyboard = kb.channel_join_keyboard("en")
     assert required_keyboard.inline_keyboard[0][0].url == "https://t.me/bmcmethods"
 
 
-def test_home_and_reseller_dashboard_expose_self_service_api(mock_mongodb):
+def test_reseller_api_stays_in_profile_and_dashboard(mock_mongodb):
     home_callbacks = {
         button.callback_data
         for row in kb.home_keyboard("en", 42).inline_keyboard
@@ -735,7 +735,15 @@ def test_home_and_reseller_dashboard_expose_self_service_api(mock_mongodb):
         "en", has_key=True, docs_url="https://shop.example/api/swagger"
     )
 
-    assert "reseller_api" in home_callbacks
+    profile_callbacks = {
+        button.callback_data
+        for row in kb.profile_keyboard("en").inline_keyboard
+        for button in row
+        if button.callback_data
+    }
+
+    assert "reseller_api" not in home_callbacks
+    assert "reseller_api" in profile_callbacks
     assert create_keyboard.inline_keyboard[0][0].callback_data == "reseller_api_create"
     assert create_keyboard.inline_keyboard[1][0].url == "https://shop.example/api/swagger"
     assert active_keyboard.inline_keyboard[0][0].callback_data == "reseller_api_regen"
