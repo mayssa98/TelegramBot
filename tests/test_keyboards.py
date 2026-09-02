@@ -28,6 +28,23 @@ def test_delivery_keeps_customer_inside_bot_without_admin_contact():
     assert button.url is None
 
 
+def test_profile_keyboard_matches_customer_profile_navigation():
+    keyboard = kb.profile_keyboard("en")
+    callbacks = [
+        [button.callback_data for button in row]
+        for row in keyboard.inline_keyboard
+    ]
+
+    assert callbacks == [
+        ["topup", "profile_withdraw"],
+        ["orders", "affiliate"],
+        ["catalog"],
+        ["profile_notifications"],
+        ["reseller_api"],
+        ["home"],
+    ]
+
+
 def test_catalog_reuses_shared_translation_and_icon_lookups(monkeypatch):
     offers = [
         {
@@ -50,6 +67,8 @@ def test_catalog_reuses_shared_translation_and_icon_lookups(monkeypatch):
             "price_tbd": "Price TBD",
             "catalog_request_button": "Request",
             "catalog_preorder_button": "Pre-order",
+            "catalog_notifications_on": "Catalog alerts: on",
+            "catalog_notifications_off": "Catalog alerts: off",
             "btn_refresh_short": "Refresh",
             "btn_main_menu_short": "Home",
         }[key]

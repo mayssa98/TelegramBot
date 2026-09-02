@@ -50,10 +50,48 @@ from bot import (
     send_main_menu,
     send_admin_message_to_client,
     send_payment_result,
+    show_account,
     text_with_custom_emoji_tokens,
     text_without_custom_emojis,
 )
 from i18n import t
+
+
+def test_profile_uses_quote_panels_and_dedicated_navigation(mock_mongodb):
+    mock_mongodb.users.insert_one({
+        "telegram_id": 42,
+        "first_name": "Anwer - BMC",
+        "username": "Anwer_07",
+        "lang": "en",
+    })
+    mock_mongodb.wallets.insert_one({"user_id": 42, "balance_cents": 1250})
+    mock_mongodb.orders.insert_many([
+        {"id": 1, "user_id": 42, "status": "delivered", "total_price": 5.0},
+        {"id": 2, "user_id": 42, "status": "pending", "total_price": 4.0},
+    ])
+    message = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42, full_name="Anwer - BMC"),
+        effective_message=message,
+    )
+
+    asyncio.run(show_account(update, SimpleNamespace()))
+
+    call = message.reply_text.await_args
+    assert call.kwargs["parse_mode"] == ParseMode.HTML
+    assert call.args[0].count("<blockquote>") == 2
+    assert "Total Orders: <b>2</b>" in call.args[0]
+    assert "Delivered: <b>1</b>" in call.args[0]
+    assert "<code>ref_42</code>" in call.args[0]
+    callbacks = {
+        button.callback_data
+        for row in call.kwargs["reply_markup"].inline_keyboard
+        for button in row
+    }
+    assert {
+        "topup", "profile_withdraw", "orders", "affiliate", "catalog",
+        "profile_notifications", "reseller_api", "home",
+    } <= callbacks
 
 
 def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb):
@@ -80,6 +118,50 @@ def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb)
         call.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"buy:{offer_id}"
         for call in calls
     )
+
+
+def test_catalog_updates_skip_customers_who_disabled_alerts(mock_mongodb):
+    service_id = db.add_service("Chat GPT", "🤖")
+    offer_id = db.add_offer(service_id, "Premium 30 days", 5.0, 3)
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101, "lang": "en"},
+        {
+            "telegram_id": 202,
+            "lang": "en",
+            "catalog_notifications_enabled": False,
+        },
+    ])
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    sent = asyncio.run(
+        announce_channel_restock(SimpleNamespace(bot=bot_client), offer_id, 3, 3)
+    )
+
+    assert sent == 1
+    assert bot_client.send_message.await_args.kwargs["chat_id"] == 101
+
+
+def test_catalog_notification_toggle_updates_preference_and_button(monkeypatch):
+    query = SimpleNamespace(
+        data="catalog_notifications_toggle",
+        from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(text="Catalog"),
+        answer=AsyncMock(),
+        edit_message_reply_markup=AsyncMock(),
+    )
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace()))
+
+    assert db.catalog_notifications_enabled(42) is False
+    markup = query.edit_message_reply_markup.await_args.kwargs["reply_markup"]
+    toggle = next(
+        button
+        for row in markup.inline_keyboard
+        for button in row
+        if button.callback_data == "catalog_notifications_toggle"
+    )
+    assert "off" in toggle.text.lower()
 
 
 def test_service_premium_emoji_is_included_in_customized_announcement(mock_mongodb):

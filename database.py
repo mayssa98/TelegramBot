@@ -503,7 +503,11 @@ def upsert_user(telegram_id, username, first_name):
     now = int(time.time())
     result = get_conn().users.update_one(
         {"telegram_id": telegram_id},
-        {"$set": {"username": username, "first_name": first_name}, "$setOnInsert": {"lang": "fr", "created_at": now}},
+        {"$set": {"username": username, "first_name": first_name}, "$setOnInsert": {
+            "lang": "fr",
+            "catalog_notifications_enabled": True,
+            "created_at": now,
+        }},
         upsert=True,
     )
     return result.upserted_id is not None
@@ -516,6 +520,28 @@ def get_user_lang(telegram_id):
 
 def set_user_lang(telegram_id, lang):
     get_conn().users.update_one({"telegram_id": telegram_id}, {"$set": {"lang": lang}})
+
+
+def catalog_notifications_enabled(telegram_id):
+    """Return the catalog-alert preference; existing users remain opted in."""
+    row = get_conn().users.find_one(
+        {"telegram_id": int(telegram_id)},
+        {"catalog_notifications_enabled": 1},
+    )
+    return not row or row.get("catalog_notifications_enabled") is not False
+
+
+def set_catalog_notifications_enabled(telegram_id, enabled):
+    """Persist a customer's preference for stock, price, and flash-sale alerts."""
+    get_conn().users.update_one(
+        {"telegram_id": int(telegram_id)},
+        {
+            "$set": {"catalog_notifications_enabled": bool(enabled)},
+            "$setOnInsert": {"created_at": int(time.time()), "lang": "fr"},
+        },
+        upsert=True,
+    )
+    return bool(enabled)
 
 
 def register_referral(referred_id, referrer_id, target=10, reward_cents=100):
@@ -1134,6 +1160,7 @@ def user_account_summary(user_id):
         "orders": orders,
         "order_count": db.orders.count_documents({"user_id": user_id}),
         "paid_count": db.orders.count_documents({"user_id": user_id, "status": {"$in": list(paid_statuses)}}),
+        "delivered_count": db.orders.count_documents({"user_id": user_id, "status": "delivered"}),
         "total_paid": round(sum(float(x.get("total_price") or 0) for x in paid), 2),
     })
     return user
@@ -1890,16 +1917,26 @@ def list_users(limit=100):
     return [_public(x) for x in get_conn().users.find({}).sort("created_at", DESCENDING).limit(limit)]
 
 
-def list_broadcast_users():
+CATALOG_UPDATE_BROADCAST_KINDS = {
+    "stock", "restock_digest", "flash_sale", "api_flash_sale",
+    "supplier_price_update",
+}
+
+
+def list_broadcast_users(*, catalog_updates_only=False):
     """Return every active bot user eligible for private announcements."""
+    query = {
+        "telegram_id": {"$exists": True},
+        "banned": {"$ne": True},
+        "broadcast_blocked": {"$ne": True},
+    }
+    if catalog_updates_only:
+        # Missing means enabled so customers created before this option stay opted in.
+        query["catalog_notifications_enabled"] = {"$ne": False}
     return [
         _public(row)
         for row in get_conn().users.find(
-            {
-                "telegram_id": {"$exists": True},
-                "banned": {"$ne": True},
-                "broadcast_blocked": {"$ne": True},
-            },
+            query,
             {"telegram_id": 1, "lang": 1},
         )
     ]
@@ -1913,17 +1950,20 @@ def create_broadcast_job(kind, payload, *, dedupe_key=""):
         existing = get_conn().broadcast_jobs.find_one({"dedupe_key": dedupe_key})
         if existing:
             return _public(existing), False
+    recipient_query = {
+        "telegram_id": {"$exists": True},
+        "banned": {"$ne": True},
+        "broadcast_blocked": {"$ne": True},
+    }
+    if kind in CATALOG_UPDATE_BROADCAST_KINDS:
+        recipient_query["catalog_notifications_enabled"] = {"$ne": False}
     job = {
         "id": _next_id("broadcast_jobs"),
         "kind": kind,
         "payload": dict(payload or {}),
         "status": "queued",
         "attempts": 0,
-        "recipient_count": get_conn().users.count_documents({
-            "telegram_id": {"$exists": True},
-            "banned": {"$ne": True},
-            "broadcast_blocked": {"$ne": True},
-        }),
+        "recipient_count": get_conn().users.count_documents(recipient_query),
         "sent_count": 0,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),

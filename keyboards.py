@@ -35,6 +35,9 @@ BUTTON_TEXT_KEYS = {
     "menu_catalog", "menu_lovable", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
     "menu_support", "menu_lang", "menu_admin", "menu_reseller_api", "btn_main_menu", "support_no_order",
     "catalog_request_button", "catalog_preorder_button",
+    "catalog_notifications_on", "catalog_notifications_off",
+    "profile_deposit", "profile_withdraw", "profile_orders", "profile_referral",
+    "profile_shop", "profile_notifications", "profile_reseller_api", "profile_main_menu",
     "topup_verify_txid", "topup_verify_bybit", "topup_bsc", "topup_polygon",
     "topup_home_button",
     "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
@@ -359,13 +362,14 @@ def format_split_button_texts(name, price_str, right_text):
     return left_label, right_label
 
 
-def catalog_offers_keyboard(lang):
+def catalog_offers_keyboard(lang, catalog_notifications_enabled=True):
     """Group multi-offer services and show single offers directly."""
     buttons = []
     db.preload_text_overrides(
         (
             "stock_label", "price_tbd", "catalog_request_button",
-            "catalog_preorder_button", "btn_refresh_short", "btn_main_menu_short",
+            "catalog_preorder_button", "catalog_notifications_on",
+            "catalog_notifications_off", "btn_refresh_short", "btn_main_menu_short",
         ),
         lang,
     )
@@ -480,6 +484,19 @@ def catalog_offers_keyboard(lang):
         translated_button(
             lang, "catalog_request_button",
             callback_data="catalog_request", style="primary",
+        ),
+    ])
+    notification_key = (
+        "catalog_notifications_on"
+        if catalog_notifications_enabled
+        else "catalog_notifications_off"
+    )
+    buttons.append([
+        translated_button(
+            lang,
+            notification_key,
+            callback_data="catalog_notifications_toggle",
+            style="success" if catalog_notifications_enabled else "danger",
         ),
     ])
     buttons.append([
@@ -598,6 +615,43 @@ def preorder_services_keyboard(lang):
         rows.append(row)
     rows.append([translated_button(lang, "btn_back", callback_data="catalog")])
     return InlineKeyboardMarkup(rows)
+
+
+def profile_keyboard(lang):
+    """Compact profile navigation matching the two-column customer layout."""
+    return InlineKeyboardMarkup([
+        [
+            translated_button(lang, "profile_deposit", callback_data="topup", style="success"),
+            translated_button(lang, "profile_withdraw", callback_data="profile_withdraw"),
+        ],
+        [
+            translated_button(lang, "profile_orders", callback_data="orders"),
+            translated_button(lang, "profile_referral", callback_data="affiliate", style="primary"),
+        ],
+        [translated_button(lang, "profile_shop", callback_data="catalog", style="success")],
+        [translated_button(lang, "profile_notifications", callback_data="profile_notifications")],
+        [translated_button(lang, "profile_reseller_api", callback_data="reseller_api", style="primary")],
+        [translated_button(lang, "profile_main_menu", callback_data="home", style="danger")],
+    ])
+
+
+def profile_notifications_keyboard(lang, enabled):
+    notification_key = "catalog_notifications_on" if enabled else "catalog_notifications_off"
+    return InlineKeyboardMarkup([
+        [translated_button(
+            lang,
+            notification_key,
+            callback_data="profile_catalog_notifications_toggle",
+            style="success" if enabled else "danger",
+        )],
+        [translated_button(lang, "menu_account", callback_data="account")],
+    ])
+
+
+def profile_back_keyboard(lang):
+    return InlineKeyboardMarkup([[
+        translated_button(lang, "menu_account", callback_data="account"),
+    ]])
 
 
 def lovable_home_keyboard(lang, *, is_admin=False):

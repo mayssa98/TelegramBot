@@ -715,9 +715,14 @@ def _is_blocked_broadcast_error(exc):
     return "blocked" in message or "chat not found" in message or "deactivated" in message
 
 
-async def _broadcast_in_batches(send_one, *, label):
+async def _broadcast_in_batches(send_one, *, label, catalog_updates_only=False):
     """Send concurrently in Telegram-safe chunks, with retries for rate limits."""
-    users = [row for row in db.list_broadcast_users() if row.get("telegram_id")]
+    users = [
+        row for row in db.list_broadcast_users(
+            catalog_updates_only=catalog_updates_only,
+        )
+        if row.get("telegram_id")
+    ]
 
     async def deliver(user):
         user_id = int(user["telegram_id"])
@@ -884,7 +889,9 @@ async def announce_channel_restock(
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
         _track_broadcast_message(context, sent_message, user_id)
-    return await _broadcast_in_batches(send_one, label="New-stock broadcast")
+    return await _broadcast_in_batches(
+        send_one, label="New-stock broadcast", catalog_updates_only=True,
+    )
 
 
 async def send_new_stock_broadcast(context, offer_id, added, stock):
@@ -926,7 +933,9 @@ async def announce_flash_sale(context, offer_id):
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
         _track_broadcast_message(context, sent_message, user_id)
-    return await _broadcast_in_batches(send_one, label="Flash-sale broadcast")
+    return await _broadcast_in_batches(
+        send_one, label="Flash-sale broadcast", catalog_updates_only=True,
+    )
 
 
 async def announce_api_flash_sale(context, event):
@@ -963,7 +972,11 @@ async def announce_api_flash_sale(context, event):
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
         _track_broadcast_message(context, sent_message, user_id)
-    return await _broadcast_in_batches(send_one, label="Automatic flash-sale broadcast")
+    return await _broadcast_in_batches(
+        send_one,
+        label="Automatic flash-sale broadcast",
+        catalog_updates_only=True,
+    )
 
 
 async def announce_supplier_price_update(context, event):
@@ -1417,11 +1430,16 @@ async def show_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = t(
         lang, "profile_card", name=name, username=username, telegram_id=uid,
         wallet=f"{wallet:.2f}", invites=stats["referrals"],
+        orders=account["order_count"], delivered=account["delivered_count"],
+        referral_code=f"ref_{uid}",
         qualified=stats["valid_referrals"], total_buy=f"{account['total_paid']:.2f}",
         level=level.title(), discount=loyalty["discount_percent"], expires=expires,
     )
-    await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML,
-                                              reply_markup=kb.home_keyboard(lang, uid))
+    await update.effective_message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.profile_keyboard(lang),
+    )
 
 
 async def show_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1608,8 +1626,12 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_catalog(update, context, lang):
     text = t(lang, "catalog_flat_title", shop=SHOP_NAME)
     msg = update.message or update.callback_query.message
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN,
-                         reply_markup=kb.catalog_offers_keyboard(lang))
+    notifications_enabled = db.catalog_notifications_enabled(update.effective_user.id)
+    await msg.reply_text(
+        text,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb.catalog_offers_keyboard(lang, notifications_enabled),
+    )
 
 
 async def show_lovable(update, context, lang):
@@ -1780,7 +1802,40 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_callback_screen(
             q,
             t(lang, "catalog_flat_title", shop=SHOP_NAME),
-            reply_markup=kb.catalog_offers_keyboard(lang),
+            reply_markup=kb.catalog_offers_keyboard(
+                lang, db.catalog_notifications_enabled(uid),
+            ),
+        )
+        return
+    if data == "catalog_notifications_toggle":
+        enabled = not db.catalog_notifications_enabled(uid)
+        db.set_catalog_notifications_enabled(uid, enabled)
+        await q.edit_message_reply_markup(
+            reply_markup=kb.catalog_offers_keyboard(lang, enabled),
+        )
+        return
+    if data == "profile_notifications":
+        enabled = db.catalog_notifications_enabled(uid)
+        await show_callback_screen(
+            q,
+            t(lang, "profile_notifications_title"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.profile_notifications_keyboard(lang, enabled),
+        )
+        return
+    if data == "profile_catalog_notifications_toggle":
+        enabled = not db.catalog_notifications_enabled(uid)
+        db.set_catalog_notifications_enabled(uid, enabled)
+        await q.edit_message_reply_markup(
+            reply_markup=kb.profile_notifications_keyboard(lang, enabled),
+        )
+        return
+    if data == "profile_withdraw":
+        await show_callback_screen(
+            q,
+            t(lang, "profile_withdraw_unavailable"),
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.profile_back_keyboard(lang),
         )
         return
     if data == "lovable":
@@ -2014,7 +2069,9 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_callback_screen(
                 q,
                 t(lang, "catalog_flat_title", shop=SHOP_NAME),
-                reply_markup=kb.catalog_offers_keyboard(lang),
+                reply_markup=kb.catalog_offers_keyboard(
+                    lang, db.catalog_notifications_enabled(uid),
+                ),
             )
             return
         offers = db.list_offers(sid)

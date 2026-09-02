@@ -294,6 +294,16 @@ TRANSLATIONS = {
         "en": "🛍️ *{shop} CATALOG*\n\n🟢 Store operational\n⚡ Fast or instant delivery\n🛡️ Verified products with support\n\nChoose your category:",
         "ar": "🛍️ *كتالوج {shop}*\n\n🟢 المتجر يعمل\n⚡ تسليم سريع أو فوري\n🛡️ منتجات موثوقة مع الدعم\n\nاختر الفئة:",
     },
+    "catalog_notifications_on": {
+        "fr": "🔔 Alertes catalogue : activées",
+        "en": "🔔 Catalog alerts: on",
+        "ar": "🔔 تنبيهات المتجر: مفعّلة",
+    },
+    "catalog_notifications_off": {
+        "fr": "🔕 Alertes catalogue : désactivées",
+        "en": "🔕 Catalog alerts: off",
+        "ar": "🔕 تنبيهات المتجر: متوقفة",
+    },
     "catalog_request_button": {
         "fr": "🔎 Can't find what you need?",
         "en": "🔎 Can't find what you need?",
@@ -430,9 +440,27 @@ TRANSLATIONS = {
         "ar": "🏆 مستوى {level}: *-{percent}%* (-{amount} {cur})",
     },
     "profile_card": {
-        "fr": "👤 <b>MON PROFIL</b>\n\n🪪 <b>Nom :</b> {name}\n🔗 <b>Utilisateur :</b> {username}\n🆔 <b>Telegram ID :</b> <code>{telegram_id}</code>\n\n💳 <b>Portefeuille :</b> {wallet} USDT\n👥 <b>Filleuls valides :</b> {invites}\n🛍️ <b>Total des achats :</b> {total_buy} USDT\n\n🏆 <b>Niveau :</b> {level}\n🎁 <b>Remise active :</b> {discount}%\n⏳ <b>Expiration :</b> {expires}",
-        "en": "👤 <b>MY PROFILE</b>\n\n🪪 <b>Name:</b> {name}\n🔗 <b>Username:</b> {username}\n🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n\n💳 <b>Wallet:</b> {wallet} USDT\n👥 <b>Valid referrals:</b> {invites}\n🛍️ <b>Total purchases:</b> {total_buy} USDT\n\n🏆 <b>Level:</b> {level}\n🎁 <b>Active discount:</b> {discount}%\n⏳ <b>Expires:</b> {expires}",
-        "ar": "👤 <b>ملفي</b>\n\n🪪 <b>الاسم:</b> {name}\n🆔 <b>معرف تيليغرام:</b> <code>{telegram_id}</code>\n💳 <b>المحفظة:</b> {wallet} USDT\n👥 <b>الإحالات الصالحة:</b> {invites}\n🛍️ <b>إجمالي المشتريات:</b> {total_buy} USDT\n🏆 <b>المستوى:</b> {level}\n🎁 <b>الخصم:</b> {discount}%\n⏳ <b>الانتهاء:</b> {expires}",
+        "fr": "👤 <b>Mon profil</b>\n\n<blockquote>Nom : <b>{name}</b>\nUtilisateur : {username}\nID : <code>{telegram_id}</code></blockquote>\n\n<blockquote>Solde : <b>${wallet} USDT</b>\nTotal commandes : <b>{orders}</b>\nLivrées : <b>{delivered}</b>\nFilleuls : <b>{invites}</b></blockquote>\n\nCode de parrainage : <code>{referral_code}</code>",
+        "en": "👤 <b>My Profile</b>\n\n<blockquote>Name: <b>{name}</b>\nUsername: {username}\nID: <code>{telegram_id}</code></blockquote>\n\n<blockquote>Balance: <b>${wallet} USDT</b>\nTotal Orders: <b>{orders}</b>\nDelivered: <b>{delivered}</b>\nReferrals: <b>{invites}</b></blockquote>\n\nReferral Code: <code>{referral_code}</code>",
+        "ar": "👤 <b>ملفي</b>\n\n<blockquote>الاسم: <b>{name}</b>\nاسم المستخدم: {username}\nالمعرف: <code>{telegram_id}</code></blockquote>\n\n<blockquote>الرصيد: <b>${wallet} USDT</b>\nإجمالي الطلبات: <b>{orders}</b>\nتم التسليم: <b>{delivered}</b>\nالإحالات: <b>{invites}</b></blockquote>\n\nرمز الإحالة: <code>{referral_code}</code>",
+    },
+    "profile_deposit": {"fr": "🪙 Dépôt", "en": "🪙 Deposit", "ar": "🪙 إيداع"},
+    "profile_withdraw": {"fr": "💸 Retrait", "en": "💸 Withdraw", "ar": "💸 سحب"},
+    "profile_orders": {"fr": "🗓️ Mes commandes", "en": "🗓️ My Orders", "ar": "🗓️ طلباتي"},
+    "profile_referral": {"fr": "🫴 Parrainer & gagner", "en": "🫴 Refer & Earn", "ar": "🫴 ادعُ واربح"},
+    "profile_shop": {"fr": "🛍️ Boutique", "en": "🛍️ Shop", "ar": "🛍️ المتجر"},
+    "profile_notifications": {"fr": "🔔 Notifications", "en": "🔔 Notifications", "ar": "🔔 الإشعارات"},
+    "profile_reseller_api": {"fr": "🔗 API Revendeur", "en": "🔗 Reseller API", "ar": "🔗 واجهة الموزع"},
+    "profile_main_menu": {"fr": "🔺 Menu principal", "en": "🔺 Main Menu", "ar": "🔺 القائمة الرئيسية"},
+    "profile_notifications_title": {
+        "fr": "🔔 <b>Notifications</b>\n\nGérez les alertes concernant les nouveaux stocks, les changements de prix et les ventes flash.",
+        "en": "🔔 <b>Notifications</b>\n\nManage alerts for new stock, price changes, and flash sales.",
+        "ar": "🔔 <b>الإشعارات</b>\n\nتحكم في تنبيهات المخزون الجديد وتغييرات الأسعار والعروض السريعة.",
+    },
+    "profile_withdraw_unavailable": {
+        "fr": "💸 <b>Retrait indisponible</b>\n\nLe solde du portefeuille est un crédit boutique utilisable pour vos achats et ne peut pas être retiré.",
+        "en": "💸 <b>Withdrawal unavailable</b>\n\nWallet balance is store credit for purchases and cannot be withdrawn.",
+        "ar": "💸 <b>السحب غير متاح</b>\n\nرصيد المحفظة مخصص للشراء من المتجر ولا يمكن سحبه.",
     },
     "loyalty_activated": {
         "fr": "🏆 *Nouveau niveau {level} !*\n\nVous bénéficiez maintenant de *-{discount}%* sur tous les produits pendant 3 jours.",
