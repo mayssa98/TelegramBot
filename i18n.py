@@ -453,9 +453,9 @@ TRANSLATIONS = {
     "profile_reseller_api": {"fr": "🔗 API Revendeur", "en": "🔗 Reseller API", "ar": "🔗 واجهة الموزع"},
     "profile_main_menu": {"fr": "🔺 Menu principal", "en": "🔺 Main Menu", "ar": "🔺 القائمة الرئيسية"},
     "profile_notifications_title": {
-        "fr": "🔔 <b>Notifications</b>\n\nGérez les alertes concernant les nouveaux stocks, les changements de prix et les ventes flash.",
-        "en": "🔔 <b>Notifications</b>\n\nManage alerts for new stock, price changes, and flash sales.",
-        "ar": "🔔 <b>الإشعارات</b>\n\nتحكم في تنبيهات المخزون الجديد وتغييرات الأسعار والعروض السريعة.",
+        "fr": "🔔 <b>Notifications</b>\n\nGérez les alertes de nouveaux stocks, changements de prix et ventes flash. Le réglage général remplace les choix individuels lorsqu’il est désactivé.\n\n<b>Produits :</b>",
+        "en": "🔔 <b>Notifications</b>\n\nManage alerts for new stock, price changes, and flash sales. The master setting overrides individual product choices when it is off.\n\n<b>Products:</b>",
+        "ar": "🔔 <b>الإشعارات</b>\n\nتحكم في تنبيهات المخزون الجديد وتغييرات الأسعار والعروض السريعة. عند إيقاف الإعداد العام، تتوقف جميع تنبيهات المنتجات.\n\n<b>المنتجات:</b>",
     },
     "profile_withdraw_unavailable": {
         "fr": "💸 <b>Retrait indisponible</b>\n\nLe solde du portefeuille est un crédit boutique utilisable pour vos achats et ne peut pas être retiré.",

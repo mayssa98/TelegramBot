@@ -635,17 +635,54 @@ def profile_keyboard(lang):
     ])
 
 
-def profile_notifications_keyboard(lang, enabled):
+def profile_notifications_keyboard(lang, user_id, enabled, page=0, page_size=8):
+    """Show a master switch plus paginated notification switches per product."""
     notification_key = "catalog_notifications_on" if enabled else "catalog_notifications_off"
-    return InlineKeyboardMarkup([
+    offers = db.list_catalog_offers()
+    total_pages = max(1, (len(offers) + page_size - 1) // page_size)
+    page = max(0, min(int(page), total_pages - 1))
+    page_offers = offers[page * page_size:(page + 1) * page_size]
+    disabled = db.disabled_catalog_notification_offer_ids(
+        user_id, [offer["id"] for offer in page_offers],
+    )
+    rows = [
         [translated_button(
             lang,
             notification_key,
             callback_data="profile_catalog_notifications_toggle",
             style="success" if enabled else "danger",
         )],
-        [translated_button(lang, "menu_account", callback_data="account")],
-    ])
+    ]
+    for offer in page_offers:
+        offer_id = int(offer["id"])
+        product_enabled = offer_id not in disabled
+        service = clean_button_name(offer.get("service_name"))
+        name = clean_button_name(offer.get("name")) or f"Product #{offer_id}"
+        product_name = f"{service} — {name}" if service else name
+        status = "🔔" if product_enabled else "🔕"
+        rows.append([InlineKeyboardButton(
+            f"{status} {compact_offer_name(product_name, 57)}",
+            callback_data=f"profile_product_notification:{offer_id}:{page}",
+            style="success" if product_enabled else "danger",
+        )])
+    if not page_offers:
+        rows.append([InlineKeyboardButton("—", callback_data="profile_notifications")])
+    if total_pages > 1:
+        pagination = []
+        if page > 0:
+            pagination.append(InlineKeyboardButton(
+                "⬅️", callback_data=f"profile_notifications_page:{page - 1}",
+            ))
+        pagination.append(InlineKeyboardButton(
+            f"{page + 1}/{total_pages}", callback_data=f"profile_notifications_page:{page}",
+        ))
+        if page + 1 < total_pages:
+            pagination.append(InlineKeyboardButton(
+                "➡️", callback_data=f"profile_notifications_page:{page + 1}",
+            ))
+        rows.append(pagination)
+    rows.append([translated_button(lang, "menu_account", callback_data="account")])
+    return InlineKeyboardMarkup(rows)
 
 
 def profile_back_keyboard(lang):

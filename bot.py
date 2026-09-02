@@ -715,11 +715,14 @@ def _is_blocked_broadcast_error(exc):
     return "blocked" in message or "chat not found" in message or "deactivated" in message
 
 
-async def _broadcast_in_batches(send_one, *, label, catalog_updates_only=False):
+async def _broadcast_in_batches(
+    send_one, *, label, catalog_updates_only=False, catalog_offer_id=None,
+):
     """Send concurrently in Telegram-safe chunks, with retries for rate limits."""
     users = [
         row for row in db.list_broadcast_users(
             catalog_updates_only=catalog_updates_only,
+            catalog_offer_id=catalog_offer_id,
         )
         if row.get("telegram_id")
     ]
@@ -890,7 +893,10 @@ async def announce_channel_restock(
         )
         _track_broadcast_message(context, sent_message, user_id)
     return await _broadcast_in_batches(
-        send_one, label="New-stock broadcast", catalog_updates_only=True,
+        send_one,
+        label="New-stock broadcast",
+        catalog_updates_only=True,
+        catalog_offer_id=offer_id,
     )
 
 
@@ -934,7 +940,10 @@ async def announce_flash_sale(context, offer_id):
         )
         _track_broadcast_message(context, sent_message, user_id)
     return await _broadcast_in_batches(
-        send_one, label="Flash-sale broadcast", catalog_updates_only=True,
+        send_one,
+        label="Flash-sale broadcast",
+        catalog_updates_only=True,
+        catalog_offer_id=offer_id,
     )
 
 
@@ -976,6 +985,7 @@ async def announce_api_flash_sale(context, event):
         send_one,
         label="Automatic flash-sale broadcast",
         catalog_updates_only=True,
+        catalog_offer_id=offer["id"],
     )
 
 
@@ -1820,14 +1830,41 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             q,
             t(lang, "profile_notifications_title"),
             parse_mode=ParseMode.HTML,
-            reply_markup=kb.profile_notifications_keyboard(lang, enabled),
+            reply_markup=kb.profile_notifications_keyboard(lang, uid, enabled),
         )
         return
     if data == "profile_catalog_notifications_toggle":
         enabled = not db.catalog_notifications_enabled(uid)
         db.set_catalog_notifications_enabled(uid, enabled)
         await q.edit_message_reply_markup(
-            reply_markup=kb.profile_notifications_keyboard(lang, enabled),
+            reply_markup=kb.profile_notifications_keyboard(lang, uid, enabled),
+        )
+        return
+    if data.startswith("profile_notifications_page:"):
+        page = int(data.rsplit(":", 1)[1])
+        await q.edit_message_reply_markup(
+            reply_markup=kb.profile_notifications_keyboard(
+                lang, uid, db.catalog_notifications_enabled(uid), page,
+            ),
+        )
+        return
+    if data.startswith("profile_product_notification:"):
+        _prefix, offer_id, page = data.split(":")
+        offer_id = int(offer_id)
+        offer = db.get_offer(offer_id)
+        if not offer or not offer.get("active", 1):
+            await q.edit_message_reply_markup(
+                reply_markup=kb.profile_notifications_keyboard(
+                    lang, uid, db.catalog_notifications_enabled(uid), int(page),
+                ),
+            )
+            return
+        product_enabled = not db.product_notifications_enabled(uid, offer_id)
+        db.set_product_notifications_enabled(uid, offer_id, product_enabled)
+        await q.edit_message_reply_markup(
+            reply_markup=kb.profile_notifications_keyboard(
+                lang, uid, db.catalog_notifications_enabled(uid), int(page),
+            ),
         )
         return
     if data == "profile_withdraw":

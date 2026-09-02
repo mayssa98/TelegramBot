@@ -544,6 +544,39 @@ def set_catalog_notifications_enabled(telegram_id, enabled):
     return bool(enabled)
 
 
+def disabled_catalog_notification_offer_ids(telegram_id, offer_ids=None):
+    """Return the products muted by one customer, optionally limited to a page."""
+    row = get_conn().users.find_one(
+        {"telegram_id": int(telegram_id)},
+        {"catalog_notification_disabled_offer_ids": 1},
+    ) or {}
+    disabled = {
+        int(offer_id)
+        for offer_id in row.get("catalog_notification_disabled_offer_ids", [])
+    }
+    if offer_ids is None:
+        return disabled
+    return disabled.intersection(int(offer_id) for offer_id in offer_ids)
+
+
+def product_notifications_enabled(telegram_id, offer_id):
+    return int(offer_id) not in disabled_catalog_notification_offer_ids(telegram_id)
+
+
+def set_product_notifications_enabled(telegram_id, offer_id, enabled):
+    """Enable or mute catalog-update alerts for one product."""
+    operator = "$pull" if enabled else "$addToSet"
+    get_conn().users.update_one(
+        {"telegram_id": int(telegram_id)},
+        {
+            operator: {"catalog_notification_disabled_offer_ids": int(offer_id)},
+            "$setOnInsert": {"created_at": int(time.time()), "lang": "fr"},
+        },
+        upsert=True,
+    )
+    return bool(enabled)
+
+
 def register_referral(referred_id, referrer_id, target=10, reward_cents=100):
     if referred_id == referrer_id or target < 1 or reward_cents < 0:
         return {"accepted": False, "rewarded": False, **affiliate_stats(referrer_id, target)}
@@ -1923,7 +1956,7 @@ CATALOG_UPDATE_BROADCAST_KINDS = {
 }
 
 
-def list_broadcast_users(*, catalog_updates_only=False):
+def list_broadcast_users(*, catalog_updates_only=False, catalog_offer_id=None):
     """Return every active bot user eligible for private announcements."""
     query = {
         "telegram_id": {"$exists": True},
@@ -1933,6 +1966,10 @@ def list_broadcast_users(*, catalog_updates_only=False):
     if catalog_updates_only:
         # Missing means enabled so customers created before this option stay opted in.
         query["catalog_notifications_enabled"] = {"$ne": False}
+        if catalog_offer_id is not None:
+            query["catalog_notification_disabled_offer_ids"] = {
+                "$ne": int(catalog_offer_id),
+            }
     return [
         _public(row)
         for row in get_conn().users.find(
@@ -1945,6 +1982,7 @@ def list_broadcast_users(*, catalog_updates_only=False):
 def create_broadcast_job(kind, payload, *, dedupe_key=""):
     """Persist a Telegram broadcast before a background worker starts it."""
     kind = str(kind or "")[:60]
+    payload = dict(payload or {})
     dedupe_key = str(dedupe_key or "").strip()[:240]
     if dedupe_key:
         existing = get_conn().broadcast_jobs.find_one({"dedupe_key": dedupe_key})
@@ -1957,10 +1995,17 @@ def create_broadcast_job(kind, payload, *, dedupe_key=""):
     }
     if kind in CATALOG_UPDATE_BROADCAST_KINDS:
         recipient_query["catalog_notifications_enabled"] = {"$ne": False}
+        offer_id = payload.get("offer_id")
+        if kind in {"api_flash_sale", "supplier_price_update"}:
+            offer_id = (payload.get("event") or {}).get("offer_id")
+        if offer_id is not None:
+            recipient_query["catalog_notification_disabled_offer_ids"] = {
+                "$ne": int(offer_id),
+            }
     job = {
         "id": _next_id("broadcast_jobs"),
         "kind": kind,
-        "payload": dict(payload or {}),
+        "payload": payload,
         "status": "queued",
         "attempts": 0,
         "recipient_count": get_conn().users.count_documents(recipient_query),

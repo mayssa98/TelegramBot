@@ -34,7 +34,6 @@ def test_profile_keyboard_matches_customer_profile_navigation():
         [button.callback_data for button in row]
         for row in keyboard.inline_keyboard
     ]
-
     assert callbacks == [
         ["topup", "profile_withdraw"],
         ["orders", "affiliate"],
@@ -44,6 +43,33 @@ def test_profile_keyboard_matches_customer_profile_navigation():
         ["home"],
     ]
 
+
+def test_notification_manager_lists_every_product_with_pagination(monkeypatch):
+    offers = [
+        {"id": index, "name": f"Plan {index}", "service_name": "AI"}
+        for index in range(1, 11)
+    ]
+    monkeypatch.setattr(kb.db, "list_catalog_offers", lambda: offers)
+    monkeypatch.setattr(
+        kb.db, "disabled_catalog_notification_offer_ids", lambda _uid, _ids: {2},
+    )
+
+    keyboard = kb.profile_notifications_keyboard("en", 42, True)
+    product_buttons = [
+        button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data.startswith("profile_product_notification:")
+    ]
+
+    assert len(product_buttons) == 8
+    assert product_buttons[0].text.startswith("🔔")
+    assert product_buttons[1].text.startswith("🔕")
+    assert any(
+        button.callback_data == "profile_notifications_page:1"
+        for row in keyboard.inline_keyboard
+        for button in row
+    )
 
 def test_catalog_reuses_shared_translation_and_icon_lookups(monkeypatch):
     offers = [

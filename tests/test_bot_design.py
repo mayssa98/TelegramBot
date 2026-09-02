@@ -141,6 +141,61 @@ def test_catalog_updates_skip_customers_who_disabled_alerts(mock_mongodb):
     assert bot_client.send_message.await_args.kwargs["chat_id"] == 101
 
 
+def test_catalog_updates_respect_each_customers_product_preferences(mock_mongodb):
+    service_id = db.add_service("AI", "🤖")
+    muted_offer_id = db.add_offer(service_id, "Muted product", 5.0, 3)
+    followed_offer_id = db.add_offer(service_id, "Followed product", 6.0, 3)
+    mock_mongodb.users.insert_many([
+        {"telegram_id": 101, "lang": "en"},
+        {"telegram_id": 202, "lang": "en"},
+    ])
+    db.set_product_notifications_enabled(202, muted_offer_id, False)
+    bot_client = SimpleNamespace(send_message=AsyncMock())
+
+    muted_sent = asyncio.run(announce_channel_restock(
+        SimpleNamespace(bot=bot_client), muted_offer_id, 3, 3,
+    ))
+    muted_recipients = {
+        call.kwargs["chat_id"] for call in bot_client.send_message.await_args_list
+    }
+    bot_client.send_message.reset_mock()
+    followed_sent = asyncio.run(announce_channel_restock(
+        SimpleNamespace(bot=bot_client), followed_offer_id, 3, 3,
+    ))
+
+    assert muted_sent == 1
+    assert muted_recipients == {101}
+    assert followed_sent == 2
+    assert {
+        call.kwargs["chat_id"] for call in bot_client.send_message.await_args_list
+    } == {101, 202}
+
+
+def test_profile_product_notification_callback_toggles_one_offer(monkeypatch):
+    service_id = db.add_service("AI", "🤖")
+    offer_id = db.add_offer(service_id, "Claude Pro", 5.0, 3)
+    query = SimpleNamespace(
+        data=f"profile_product_notification:{offer_id}:0",
+        from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(text="Notifications"),
+        answer=AsyncMock(),
+        edit_message_reply_markup=AsyncMock(),
+    )
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
+
+    asyncio.run(cb_navigation(SimpleNamespace(callback_query=query), SimpleNamespace()))
+
+    assert db.product_notifications_enabled(42, offer_id) is False
+    markup = query.edit_message_reply_markup.await_args.kwargs["reply_markup"]
+    product_button = next(
+        button
+        for row in markup.inline_keyboard
+        for button in row
+        if button.callback_data.startswith("profile_product_notification:")
+    )
+    assert product_button.text.startswith("🔕")
+
+
 def test_catalog_notification_toggle_updates_preference_and_button(monkeypatch):
     query = SimpleNamespace(
         data="catalog_notifications_toggle",
