@@ -807,7 +807,9 @@ async def announce_supplier_change_admin(context, event, change_type):
     values = {
         "emoji": _announcement_service_emoji(service),
         "service": _announcement_plain(service.get("name") or SHOP_NAME),
-        "offer": _announcement_plain(offer.get("name") or f"Offer #{offer['id']}"),
+        "offer": _announcement_plain(offer.get("name") or f"Offer #{offer.get('id', 0)}"),
+        "period": kb.offer_period_label(lang, offer),
+        "warranty": warranty_service.offer_warranty_label(offer, lang=lang) or "NW",
         "cur": CURRENCY,
     }
     if change_type == "stock":
@@ -879,6 +881,8 @@ async def announce_channel_restock(
             "emoji": _announcement_service_emoji(service),
             "service": _announcement_plain(service.get("name") or SHOP_NAME),
             "offer": _announcement_plain(offer.get("name") or f"Offer #{offer_id}"),
+            "period": kb.offer_period_label(lang, offer),
+            "warranty": warranty_service.offer_warranty_label(offer, lang=lang) or "NW",
             "price": price,
             "cur": CURRENCY,
             "stock": "∞" if unlimited else int(stock),
@@ -929,6 +933,8 @@ async def announce_flash_sale(context, offer_id):
                 emoji=_announcement_service_emoji(service, "🎁"),
                 service=_announcement_plain(service.get("name") or SHOP_NAME),
                 offer=_announcement_plain(offer.get("name") or f"Offer #{offer_id}"),
+                period=kb.offer_period_label(lang, offer),
+                warranty=warranty_service.offer_warranty_label(offer, lang=lang) or "NW",
                 old_price=f"{old_price:.2f}",
                 price=f"{new_price:.2f}",
                 cur=CURRENCY,
@@ -971,6 +977,8 @@ async def announce_api_flash_sale(context, event):
                 emoji=_announcement_service_emoji(service, "🔥"),
                 service=_announcement_plain(service.get("name") or SHOP_NAME),
                 offer=_announcement_plain(offer.get("name") or f"Offer #{offer['id']}"),
+                period=kb.offer_period_label(lang, offer),
+                warranty=warranty_service.offer_warranty_label(offer, lang=lang) or "NW",
                 old_price=f"{old_price:.2f}",
                 price=f"{new_price:.2f}",
                 cur=CURRENCY,

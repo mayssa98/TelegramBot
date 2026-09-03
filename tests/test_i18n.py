@@ -112,3 +112,28 @@ def test_offer_detail_template_has_premium_sections():
     assert "*Duration*" in message
     assert "*Mail*" in message
     assert "*Access*" in message
+
+
+def test_announcement_templates_include_product_catalog_period_and_warranty():
+    for key in ("channel_stock_announcement", "offer_stock_announcement", "flash_sale_announcement"):
+        for lang in ("fr", "en", "ar"):
+            msg = t(
+                lang,
+                key,
+                emoji="🍿",
+                service="Streaming VOD",
+                offer="Netflix 4K Ultra",
+                period="30 j" if lang == "fr" else "30 days",
+                warranty="NW",
+                price="4.99",
+                cur="USDT",
+                stock=10,
+                added=5,
+                old_price="7.99",
+                discount=38,
+                remaining="2h 15m",
+            )
+            assert "Streaming VOD" in msg
+            assert "Netflix 4K Ultra" in msg
+            assert ("30 j" if lang == "fr" else "30 days") in msg
+            assert "NW" in msg
