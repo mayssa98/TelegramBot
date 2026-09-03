@@ -753,8 +753,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
     price: offer?.price ?? "",
     description: offer?.description || "",
     note: offer?.note || "",
-    warranty_type: offer?.warranty_type || (/\bFW\b|full warranty|\d{1,3}\s*(?:d|day|days|j|jour|jours)/i.test(offer?.note || "") ? "FW" : "NW"),
-    warranty_days: offer?.warranty_days || Number((offer?.note || "").match(/\d{1,3}/)?.[0]) || 30,
+    period_days: offer?.period_days ?? 30,
     delivery_delay: offer?.delivery_delay || "Instantané après confirmation",
     low_stock_threshold: offer?.low_stock_threshold ?? 5,
     auto_delivery: offer?.auto_delivery !== false,
@@ -922,22 +921,24 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
           <Field label="Description arabe" wide>
             <textarea dir="rtl" value={form.description_ar} onChange={(event) => set("description_ar", event.target.value)} placeholder="وصف المنتج بالعربية" />
           </Field>
-          <Field label="Garantie">
-            <select value={form.warranty_type} onChange={(event) => set("warranty_type", event.target.value)}>
-              <option value="NW">Aucune garantie</option>
-              <option value="FW">Sélectionner une période</option>
-            </select>
+          <Field label="Période (jours)">
+            <input
+              type="number"
+              min="1"
+              max="3650"
+              value={form.period_days}
+              onChange={(event) => set("period_days", event.target.value)}
+              placeholder="Ex: 30"
+              required
+            />
           </Field>
-          <Field label="Période de garantie">
-            <select
-              disabled={form.warranty_type === "NW"}
-              value={form.warranty_days}
-              onChange={(event) => set("warranty_days", event.target.value)}
-            >
-              {Array.from({ length: 365 }, (_, index) => index + 1).map((days) => (
-                <option key={days} value={days}>{days} jour{days > 1 ? "s" : ""}</option>
-              ))}
-            </select>
+          <Field label="Garantie (texte affiché)">
+            <input
+              value={form.note}
+              onChange={(event) => set("note", event.target.value)}
+              placeholder="Ex: Remplacement sous 24h"
+              maxLength={250}
+            />
           </Field>
           {!offer && (
             <Field label="Stock initial" wide>
@@ -2008,8 +2009,7 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
     enabled: Boolean(product.enabled),
     description: product.description || "",
     warranty: product.warranty || "",
-    warranty_type: product.warranty_type || (/\bFW\b|full warranty|\d{1,3}\s*(?:d|day|days|j|jour|jours)/i.test(product.warranty || "") ? "FW" : "NW"),
-    warranty_days: product.warranty_days || Number((product.warranty || "").match(/\d{1,3}/)?.[0]) || 30,
+    period_days: product.period_days ?? 30,
     delivery_delay: product.delivery_delay || "Instantané après confirmation",
     low_stock_threshold: product.low_stock_threshold || 5,
   });
@@ -2160,22 +2160,24 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
             onChange={(event) => set("description", event.target.value)}
           />
         </Field>
-        <Field label="Garantie">
-          <select value={form.warranty_type} onChange={(event) => set("warranty_type", event.target.value)}>
-            <option value="NW">Aucune garantie</option>
-            <option value="FW">Sélectionner une période</option>
-          </select>
+        <Field label="Période (jours)">
+          <input
+            type="number"
+            min="1"
+            max="3650"
+            value={form.period_days}
+            onChange={(event) => set("period_days", event.target.value)}
+            placeholder="Ex: 30"
+            required
+          />
         </Field>
-        <Field label="Période de garantie">
-          <select
-            disabled={form.warranty_type === "NW"}
-            value={form.warranty_days}
-            onChange={(event) => set("warranty_days", event.target.value)}
-          >
-            {Array.from({ length: 365 }, (_, index) => index + 1).map((days) => (
-              <option key={days} value={days}>{days} jour{days > 1 ? "s" : ""}</option>
-            ))}
-          </select>
+        <Field label="Garantie (texte affiché)">
+          <input
+            value={form.warranty}
+            onChange={(event) => set("warranty", event.target.value)}
+            placeholder="Ex: Remplacement sous 24h"
+            maxLength={250}
+          />
         </Field>
         <Field label="Délai de livraison">
           <input
