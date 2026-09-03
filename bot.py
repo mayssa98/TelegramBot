@@ -2089,7 +2089,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not order or order.get("user_id") != uid:
             await q.answer(t(lang, "not_for_you"), show_alert=True)
             return
-        warranty = warranty_service.order_warranty_label(order) or "—"
+        warranty = str(order.get("warranty") or "").strip() or "—"
         await q.message.reply_text(
             t(lang, "order_card", oid=oid, offer=order["offer_name"], qty=order["qty"],
               total=f"{order['total_price']:.2f}", cur=CURRENCY,
@@ -2763,7 +2763,6 @@ async def handle_pending_input(update, context, lang):
         PENDING.pop(uid, None)
         await update.message.reply_text("✅ Bouton ajouté au menu principal.", reply_markup=admin.buttons_editor_keyboard())
         return
-
     if kind == "adm_addoff_image" and uid == ADMIN_ID:
         await update.message.reply_text("🖼 Envoyez une image (photo), pas un message texte.")
         return
@@ -2779,23 +2778,23 @@ async def handle_pending_input(update, context, lang):
             return
         data = dict(ref)
         data["name"] = clean_name
-        PENDING[uid] = ("adm_addoff_warranty", data)
+        PENDING[uid] = ("adm_addoff_period", data)
         await update.message.reply_text(
-            "🛡 *Étape 3/5* — envoyez `NW` (sans garantie) ou `FW 30` "
-            "pour une garantie complète de 30 jours (1 à 365) :",
+            "📅 *Étape 3/5* — envoyez la période en jours (ex: 30) :",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
 
-    if kind == "adm_addoff_warranty" and uid == ADMIN_ID:
+    if kind == "adm_addoff_period" and uid == ADMIN_ID:
         try:
-            warranty_type, warranty_days = warranty_service.parse_warranty_input(text)
-        except ValueError as exc:
-            await update.message.reply_text(f"⚠️ {exc}")
+            period_days = int(text.strip())
+            if period_days < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            await update.message.reply_text("⚠️ Envoyez un nombre de jours valide (minimum 1).")
             return
         data = dict(ref)
-        data["warranty_type"] = warranty_type
-        data["warranty_days"] = warranty_days
+        data["period_days"] = period_days
         PENDING[uid] = ("adm_addoff_description", data)
         await update.message.reply_text(
             "📝 *Étape 4/5* — envoyez la description de l’offre :",
@@ -3059,16 +3058,16 @@ async def handle_pending_input(update, context, lang):
             )
             return
         elif kind == "adm_offnote":
+            db.update_offer(ref, note=text.strip()[:250])
+        elif kind == "adm_offperiod":
             try:
-                warranty_type, warranty_days = warranty_service.parse_warranty_input(text)
-            except ValueError as exc:
-                await update.message.reply_text(f"⚠️ {exc}")
+                period_days = int(text.strip())
+                if period_days < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                await update.message.reply_text("⚠️ Envoyez un nombre de jours valide (minimum 1).")
                 return
-            db.update_offer(
-                ref,
-                warranty_type=warranty_type,
-                warranty_days=warranty_days,
-            )
+            db.update_offer(ref, period_days=period_days)
         elif kind == "adm_offdesc":
             db.update_offer(ref, description=rich_text_from_message(update.message))
         else:
@@ -3994,9 +3993,9 @@ def orders_text_export(lang, orders, title):
             else unit_price * qty if unit_price else paid_total
         )
         offer = db.get_offer(order.get("offer_id")) if order.get("offer_id") else None
-        warranty = warranty_service.order_warranty_label(order)
+        warranty = str(order.get("warranty") or "").strip()
         if not warranty:
-            warranty = warranty_service.offer_warranty_label(offer)
+            warranty = str((offer or {}).get("note") or "").strip()
         warranty = warranty or "No warranty information recorded"
         delivered_content = order_service.delivery_content_for_order(order)
         payment_method = str(
@@ -4677,6 +4676,16 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("adm_svcdel:"):
         sid = int(data.split(":")[1])
+        return
+    if data.startswith("adm_svctoggle:"):
+        sid = int(data.split(":")[1])
+        svc = db.get_service(sid)
+        db.update_service(sid, active=0 if svc["active"] else 1)
+        await q.edit_message_text("✅ Statut du service modifié.",
+                                  reply_markup=admin.catalog_admin_keyboard())
+        return
+    if data.startswith("adm_svcdel:"):
+        sid = int(data.split(":")[1])
         db.archive_service(sid)
         await q.edit_message_text("🗑 Service archivé avec ses offres.",
                                   reply_markup=admin.catalog_admin_keyboard())
@@ -4716,17 +4725,19 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🧩 *{off['name']}*\n💵 Prix : {price}\n"
             f"📦 Stock : {'♾ Illimité' if off.get('unlimited_stock') else off['stock']}\n"
             f"🚚 Livraison : {'Admin' if off.get('manual_stock') else 'Automatique'}\n"
-            f"🛡 {warranty_service.offer_warranty_label(off) or '—'}",
+            f"🛡 {str(off.get('note') or '').strip() or '—'}\n"
+            f"📅 Période : {int(off.get('period_days') or 0)} j",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid))
         return
-    if data.startswith(("adm_offname:", "adm_offemoji:", "adm_offnote:", "adm_offdesc:", "adm_offdelay:")):
+    if data.startswith(("adm_offname:", "adm_offemoji:", "adm_offnote:", "adm_offperiod:", "adm_offdesc:", "adm_offdelay:")):
         action, oid = data.split(":")
         PENDING[uid] = (action, int(oid))
         prompts = {
             "adm_offname": "✏️ Envoyez le nouveau nom :",
             "adm_offemoji": "🎨 Envoyez un emoji Telegram Premium animé :",
-            "adm_offnote": "🛡 Envoyez `NW` ou `FW` suivi de 1 à 365 jours (exemple : `FW 30`) :",
+            "adm_offnote": "🛡 Envoyez le texte de garantie à afficher :",
+            "adm_offperiod": "📅 Envoyez la période en jours (minimum 1) :",
             "adm_offdesc": "📄 Envoyez la description complète :",
             "adm_offdelay": "🚚 Envoyez le délai de livraison affiché :",
         }

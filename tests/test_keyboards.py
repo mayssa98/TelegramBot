@@ -150,8 +150,7 @@ def test_offer_button_label_uses_store_style():
         "en",
         {
             "name": "SuperGrok 12 Months",
-            "warranty_type": "FW",
-            "warranty_days": 365,
+            "period_days": 365,
             "price": 30.0,
             "stock": 12,
         },
@@ -165,13 +164,12 @@ def test_offer_button_label_uses_sky_blue_for_low_stock():
         "en",
         {
             "name": "Low Stock Product",
-            "warranty_type": "NW",
             "price": 5.0,
             "stock": 2,
         },
     )
 
-    assert label == "Low Stock Product | No warranty | $5 | Stock: 2"
+    assert label == "Low Stock Product | $5 | Stock: 2"
 
 
 def test_offer_button_keeps_non_dollar_currency_visible():
@@ -180,7 +178,7 @@ def test_offer_button_keeps_non_dollar_currency_visible():
         {"name": "European plan", "price": 4.5, "currency": "EUR", "stock": 3},
     )
 
-    assert label == "European plan | No warranty | 4.5 EUR | Stock: 3"
+    assert label == "European plan | 4.5 EUR | Stock: 3"
 
 
 def test_offer_button_places_unicode_emoji_and_period_before_price():
@@ -189,8 +187,7 @@ def test_offer_button_places_unicode_emoji_and_period_before_price():
         {
             "name": "Premium",
             "service_emoji": "⭐",
-            "warranty_type": "FW",
-            "warranty_days": 30,
+            "period_days": 30,
             "price": 5,
             "stock": 4,
         },
@@ -504,7 +501,7 @@ def test_offer_button_uses_admin_selected_animated_emoji(monkeypatch):
 
     button = kb.offers_keyboard("en", 1).inline_keyboard[0][0]
 
-    assert button.text == "Premium | No warranty | $5 | Stock: 2"
+    assert button.text == "Premium | $5 | Stock: 2"
     assert button.icon_custom_emoji_id == "admin-selected-id"
 
 
@@ -939,7 +936,7 @@ def test_premium_service_icon_replaces_unicode_emoji_in_catalog_button(monkeypat
 
     button = kb.catalog_offers_keyboard("en").inline_keyboard[0][0]
 
-    assert button.text == "Chat GPT Plus | No warranty | $5 | Stock: 8"
+    assert button.text == "Chat GPT Plus | $5 | Stock: 8"
     assert button.callback_data == "off:11"
     assert button.icon_custom_emoji_id == "premium-chatgpt"
 
@@ -955,7 +952,7 @@ def test_premium_offer_icon_replaces_unicode_emoji_in_offer_button(monkeypatch):
 
     button = kb.offers_keyboard("en", 3).inline_keyboard[0][0]
 
-    assert button.text == "Chat GPT Plus | No warranty | $5 | Stock: 8"
+    assert button.text == "Chat GPT Plus | $5 | Stock: 8"
     assert button.icon_custom_emoji_id == "premium-chatgpt"
 
 

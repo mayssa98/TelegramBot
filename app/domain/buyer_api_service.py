@@ -285,8 +285,7 @@ def products(key: dict[str, Any]) -> dict[str, Any]:
             "product_name": str(offer.get("name") or offer["id"]),
             "description": str(offer.get("description") or offer.get("note") or ""),
             "warranty": warranty_service.offer_warranty_label(offer),
-            "warrantyType": str(offer.get("warranty_type") or ""),
-            "warrantyDays": int(offer.get("warranty_days") or 0),
+            "periodDays": int(offer.get("period_days") or 0),
             "service": {
                 "id": str(service.get("id") or ""),
                 "name": str(service.get("name") or ""),

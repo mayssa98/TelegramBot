@@ -440,24 +440,12 @@ def _retire_ventebot_provider(conn):
 
 
 def _backfill_structured_warranties(conn):
-    """Structure recognizable legacy warranties without changing their text."""
-    updated = 0
-    for offer in conn.offers.find(
-        {"warranty_type": {"$exists": False}},
-        {"_id": 1, "note": 1},
-    ):
-        warranty_type, warranty_days = warranty_service.infer_warranty(offer.get("note", ""))
-        if not warranty_type:
-            continue
-        conn.offers.update_one(
-            {"_id": offer["_id"]},
-            {"$set": {
-                "warranty_type": warranty_type,
-                "warranty_days": warranty_days,
-            }},
-        )
-        updated += 1
-    return updated
+    """Backfill default period_days for offers missing it."""
+    result = conn.offers.update_many(
+        {"period_days": {"$exists": False}},
+        {"$set": {"period_days": 30}},
+    )
+    return result.modified_count
 
 
 def _backfill_inventory_ids(conn):
@@ -818,8 +806,7 @@ def update_offer(
     site_badge=None,
     site_badge_ar=None,
     site_featured=None,
-    warranty_type=None,
-    warranty_days=None,
+    period_days=None,
 ):
     existing = get_conn().offers.find_one({"id": offer_id}, {"service_id": 1}) or {}
     if service_id is not None and int(service_id) != int(existing.get("service_id") or 0):
@@ -829,11 +816,6 @@ def update_offer(
             raise ValueError("Service de destination introuvable")
         if (source_service and is_otp_service_name(source_service.get("name"))) or is_otp_service_name(target_service.get("name")):
             raise ValueError("Les offres Codex number ne peuvent pas être déplacées")
-    if warranty_type is not None:
-        warranty_type, warranty_days = warranty_service.normalize_warranty(
-            warranty_type, warranty_days,
-        )
-        note = warranty_service.warranty_label(warranty_type, warranty_days)
     values = {
         key: value
         for key, value in {
@@ -869,8 +851,7 @@ def update_offer(
             "site_badge": site_badge,
             "site_badge_ar": site_badge_ar,
             "site_featured": site_featured,
-            "warranty_type": warranty_type,
-            "warranty_days": warranty_days,
+            "period_days": period_days,
         }.items()
         if value is not None
     }
@@ -998,14 +979,8 @@ def add_offer(
     site_badge="",
     site_badge_ar="",
     site_featured=False,
-    warranty_type="",
-    warranty_days=None,
+    period_days=30,
 ):
-    if warranty_type:
-        warranty_type, warranty_days = warranty_service.normalize_warranty(
-            warranty_type, warranty_days,
-        )
-        note = warranty_service.warranty_label(warranty_type, warranty_days)
     oid = _next_id("offers")
     last = get_conn().offers.find_one({"service_id": service_id}, sort=[("sort_order", DESCENDING)])
     service = get_service(service_id) or {}
@@ -1043,8 +1018,7 @@ def add_offer(
         "site_badge": str(site_badge or "")[:60],
         "site_badge_ar": str(site_badge_ar or "")[:60],
         "site_featured": bool(site_featured),
-        "warranty_type": str(warranty_type or ""),
-        "warranty_days": int(warranty_days or 0),
+        "period_days": int(period_days or 30),
         **special_values,
     })
     return oid
@@ -1088,8 +1062,7 @@ def duplicate_offer(offer_id):
         site_badge=source.get("site_badge", ""),
         site_badge_ar=source.get("site_badge_ar", ""),
         site_featured=source.get("site_featured", False),
-        warranty_type=source.get("warranty_type", ""),
-        warranty_days=source.get("warranty_days"),
+        period_days=source.get("period_days", 30),
     )
 
 
@@ -1140,7 +1113,7 @@ def create_order(user_id, offer, qty):
     unit = offer.get("price") or 0
     service = get_service(offer["service_id"])
     oid = _next_id("orders")
-    get_conn().orders.insert_one({"id": oid, "user_id": user_id, "offer_id": offer["id"], "service_name": service["name"] if service else "", "offer_name": offer["name"], "warranty": warranty_service.offer_warranty_label(offer), "warranty_type": str(offer.get("warranty_type") or ""), "warranty_days": int(offer.get("warranty_days") or 0), "qty": qty, "unit_price": unit, "total_price": round(unit * qty, 2), "status": "pending_payment", "txid": "", "verify_method": "", "delivery_text": "", "created_at": now, "updated_at": now})
+    get_conn().orders.insert_one({"id": oid, "user_id": user_id, "offer_id": offer["id"], "service_name": service["name"] if service else "", "offer_name": offer["name"], "warranty": warranty_service.offer_warranty_label(offer), "period_days": int(offer.get("period_days") or 0), "qty": qty, "unit_price": unit, "total_price": round(unit * qty, 2), "status": "pending_payment", "txid": "", "verify_method": "", "delivery_text": "", "created_at": now, "updated_at": now})
     return oid
 
 
@@ -1441,8 +1414,7 @@ def save_reseller_product_config(
     service_emoji="",
     description="",
     warranty="Produit API MailReader",
-    warranty_type="",
-    warranty_days=None,
+    period_days=30,
     delivery_delay="Instantané après confirmation",
     sort_order=0,
     low_stock_threshold=5,
@@ -1471,8 +1443,7 @@ def save_reseller_product_config(
                 "service_emoji": str(service_emoji or "")[:16],
                 "description": str(description or "")[:2000],
                 "warranty": str(warranty or "")[:250],
-                "warranty_type": str(warranty_type or ""),
-                "warranty_days": int(warranty_days or 0),
+                "period_days": int(period_days or 30),
                 "delivery_delay": str(delivery_delay or "")[:120],
                 "sort_order": max(0, int(sort_order or 0)),
                 "low_stock_threshold": max(0, int(low_stock_threshold or 0)),

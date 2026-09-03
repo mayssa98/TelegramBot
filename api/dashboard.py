@@ -25,10 +25,6 @@ def render_dashboard(
 
     # Encodage sécurisé en JSON pour JS
     json_data_str = json.dumps(data, default=str)
-    warranty_day_options = "".join(
-        f'<option value="{day}"{" selected" if day == 30 else ""}>{day} jour{"s" if day > 1 else ""}</option>'
-        for day in range(1, 366)
-    )
 
     # Alertes HTML
     alerts_html = ""
@@ -43,7 +39,6 @@ def render_dashboard(
             """
     else:
         alerts_html = '<div class="empty-state"><p>✅ Aucune alerte active. Tout fonctionne normalement.</p></div>'
-
     # Vue d'ensemble KPI
     conversion_rate = summary.get("conversion_rate", 0.0)
     kpis_html = f"""
@@ -3041,8 +3036,8 @@ def render_dashboard(
                     <label>Prix</label>
                     <input type="number" name="price" step="0.01" min="0" required>
                 </div>
-                <div class="form-group"><label>Garantie</label><select name="warranty_type" onchange="document.getElementById('add-offer-warranty-days').disabled = this.value === 'NW'"><option value="NW">Aucune garantie</option><option value="FW">Sélectionner une période</option></select></div>
-                <div class="form-group"><label>Période de garantie</label><select name="warranty_days" id="add-offer-warranty-days" disabled>__WARRANTY_DAY_OPTIONS__</select></div>
+                <div class="form-group"><label>Période (jours)</label><input type="number" name="period_days" min="1" max="3650" value="30" required></div>
+                <div class="form-group"><label>Garantie (texte affiché)</label><input type="text" name="note" maxlength="250" placeholder="Ex: Remplacement sous 24h"></div>
                 <div class="form-group"><label>Description détaillée</label><textarea name="description"></textarea></div>
                 <div class="form-group"><label>Comptes initiaux — stock automatique (# = 1 produit)</label><textarea name="initial_inventory" placeholder="#1&#10;Email: compte1@example.com&#10;Password: secret&#10;&#10;#2&#10;Code: produit-2"></textarea></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" value="Instantané après confirmation"></div>
@@ -3060,8 +3055,8 @@ def render_dashboard(
                 <input type="hidden" name="offer_id" id="edit-offer-id">
                 <div class="form-group"><label>Nom</label><input name="name" id="edit-offer-name" required></div>
                 <div class="form-group"><label>Description du produit</label><textarea name="description" id="edit-offer-description"></textarea></div>
-                <div class="form-group"><label>Garantie</label><select name="warranty_type" id="edit-offer-warranty-type" onchange="document.getElementById('edit-offer-warranty-days').disabled = this.value === 'NW'"><option value="NW">Aucune garantie</option><option value="FW">Sélectionner une période</option></select></div>
-                <div class="form-group"><label>Période de garantie</label><select name="warranty_days" id="edit-offer-warranty-days">__WARRANTY_DAY_OPTIONS__</select></div>
+                <div class="form-group"><label>Période (jours)</label><input type="number" name="period_days" id="edit-offer-period-days" min="1" max="3650" required></div>
+                <div class="form-group"><label>Garantie (texte affiché)</label><input type="text" name="note" id="edit-offer-note" maxlength="250"></div>
                 <div class="form-group"><label>Prix</label><input type="number" step="0.01" min="0" name="price" id="edit-offer-price" required></div>
                 <div class="form-group"><label>Ordre</label><input type="number" min="0" name="sort_order" id="edit-offer-sort"></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" id="edit-offer-delay"></div>
@@ -4683,10 +4678,8 @@ def render_dashboard(
             document.getElementById("edit-offer-id").value = offer.id;
             document.getElementById("edit-offer-name").value = offer.name || "";
             document.getElementById("edit-offer-description").value = offer.description || "";
-            const legacyWarranty = offer.note || "";
-            document.getElementById("edit-offer-warranty-type").value = offer.warranty_type || (/\\bFW\\b|full warranty|\\d{1,3}\\s*(?:d|day|days|j|jour|jours)/i.test(legacyWarranty) ? "FW" : "NW");
-            document.getElementById("edit-offer-warranty-days").value = offer.warranty_days || Number((legacyWarranty.match(/\\d{1,3}/) || [])[0]) || 30;
-            document.getElementById("edit-offer-warranty-days").disabled = document.getElementById("edit-offer-warranty-type").value === "NW";
+            document.getElementById("edit-offer-period-days").value = offer.period_days || 30;
+            document.getElementById("edit-offer-note").value = offer.note || "";
             document.getElementById("edit-offer-price").value = offer.price ?? 0;
             document.getElementById("edit-offer-sort").value = offer.sort_order ?? 0;
             document.getElementById("edit-offer-delay").value = offer.delivery_delay || "";
@@ -5338,7 +5331,6 @@ def render_dashboard(
         .replace("__ALERTS_HTML__", alerts_html)
         .replace("__KPIS_HTML__", kpis_html)
         .replace("__JSON_DATA__", json_data_str)
-        .replace("__WARRANTY_DAY_OPTIONS__", warranty_day_options)
         .replace("__DASHBOARD_WRITE_TOKEN__", json.dumps(dashboard_write_token))
     )
     for tab in allowed_tabs:

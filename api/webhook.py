@@ -1407,8 +1407,7 @@ class handler(BaseHTTPRequestHandler):
                     site_badge=form.get("site_badge", "").strip(),
                     site_badge_ar=form.get("site_badge_ar", "").strip(),
                     site_featured=form.get("site_featured", "") == "on",
-                    warranty_type=form.get("warranty_type", "NW").strip(),
-                    warranty_days=form.get("warranty_days", "30").strip(),
+                    period_days=int(form.get("period_days", "30").strip()),
                 )
                 if emoji_val and sid:
                     db.update_service(sid, emoji=emoji_val)
@@ -1478,8 +1477,7 @@ class handler(BaseHTTPRequestHandler):
                     site_badge=form.get("site_badge", "").strip(),
                     site_badge_ar=form.get("site_badge_ar", "").strip(),
                     site_featured=form.get("site_featured", "") == "on",
-                    warranty_type=form.get("warranty_type", "NW").strip(),
-                    warranty_days=form.get("warranty_days", "30").strip(),
+                    period_days=int(form.get("period_days", "30").strip()),
                 )
                 existing_offer = db.get_offer(oid)
                 if emoji_val and existing_offer and existing_offer.get("service_id"):
@@ -1933,8 +1931,7 @@ class handler(BaseHTTPRequestHandler):
                     display_name=form.get("display_name", "").strip(),
                     description=form.get("description", "").strip(),
                     warranty=form.get("warranty", "").strip(),
-                    warranty_type=form.get("warranty_type", "NW").strip(),
-                    warranty_days=form.get("warranty_days", "30").strip(),
+                    period_days=int(form.get("period_days", "30").strip()),
                     delivery_delay=form.get(
                         "delivery_delay", "Instantané après confirmation"
                     ).strip(),

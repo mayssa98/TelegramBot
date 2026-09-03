@@ -131,25 +131,19 @@ def clean_button_name(value):
     return pattern.sub("", text).strip()
 
 
-def offer_warranty_period_label(lang, offer):
-    """Return the compact warranty period shown between name and price."""
-    warranty_type = str(offer.get("warranty_type") or "").strip().upper()
+def offer_period_label(lang, offer):
+    """Return the compact period label shown between name and price."""
     try:
-        warranty_days = int(offer.get("warranty_days") or 0)
+        period_days = int(offer.get("period_days") or 0)
     except (TypeError, ValueError):
-        warranty_days = 0
-    if warranty_type == "FW" and warranty_days > 0:
+        period_days = 0
+    if period_days > 0:
         if lang == "fr":
-            return f"{warranty_days} j"
+            return f"{period_days} j"
         if lang == "ar":
-            return f"{warranty_days} يوم"
-        return f"{warranty_days} day{'s' if warranty_days != 1 else ''}"
-    no_warranty = {
-        "fr": "Sans garantie",
-        "ar": "بدون ضمان",
-        "en": "No warranty",
-    }
-    return no_warranty.get(lang, no_warranty["en"])
+            return f"{period_days} يوم"
+        return f"{period_days} day{'s' if period_days != 1 else ''}"
+    return ""
 
 
 def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
@@ -163,7 +157,7 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
 
     label = stock_label if stock_label is not None else t(lang, "stock_label")
     lbl = str(label or "Stock").title()
-    period = offer_warranty_period_label(lang, offer)
+    period = offer_period_label(lang, offer)
 
     icon_id = str(
         offer.get("custom_emoji_id") or offer.get("service_custom_emoji_id") or ""
@@ -177,14 +171,16 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
     clean_name = clean_button_name(offer["name"])
 
     if offer.get("unlimited_stock"):
-        suffix = f"{period} | {price_text} | {lbl}: ∞"
+        suffix_parts = [p for p in (period, price_text, f"{lbl}: ∞") if p]
+        suffix = " | ".join(suffix_parts)
         max_name_length = max(8, 64 - len(suffix) - 3)
         name = compact_offer_name(clean_name, max_name_length - len(emoji) - int(bool(emoji)))
         display_name = " ".join(part for part in (emoji, name) if part)
         return f"{display_name} | {suffix}"
 
     stock = int(offer.get("stock") or 0)
-    suffix = f"{period} | {price_text} | {lbl}: {stock}"
+    suffix_parts = [p for p in (period, price_text, f"{lbl}: {stock}") if p]
+    suffix = " | ".join(suffix_parts)
     max_name_length = max(8, 64 - len(suffix) - 3)
     name = compact_offer_name(clean_name, max_name_length - len(emoji) - int(bool(emoji)))
     display_name = " ".join(part for part in (emoji, name) if part)
