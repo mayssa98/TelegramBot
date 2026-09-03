@@ -169,7 +169,7 @@ def test_offer_button_label_uses_sky_blue_for_low_stock():
         },
     )
 
-    assert label == "Low Stock Product | $5 | Stock: 2"
+    assert label == "Low Stock Product | 30 days | $5 | Stock: 2"
 
 
 def test_offer_button_keeps_non_dollar_currency_visible():
@@ -178,7 +178,7 @@ def test_offer_button_keeps_non_dollar_currency_visible():
         {"name": "European plan", "price": 4.5, "currency": "EUR", "stock": 3},
     )
 
-    assert label == "European plan | 4.5 EUR | Stock: 3"
+    assert label == "European plan | 30 days | 4.5 EUR | Stock: 3"
 
 
 def test_offer_button_places_unicode_emoji_and_period_before_price():
@@ -501,7 +501,7 @@ def test_offer_button_uses_admin_selected_animated_emoji(monkeypatch):
 
     button = kb.offers_keyboard("en", 1).inline_keyboard[0][0]
 
-    assert button.text == "Premium | $5 | Stock: 2"
+    assert button.text == "Premium | 30 days | $5 | Stock: 2"
     assert button.icon_custom_emoji_id == "admin-selected-id"
 
 
@@ -936,7 +936,7 @@ def test_premium_service_icon_replaces_unicode_emoji_in_catalog_button(monkeypat
 
     button = kb.catalog_offers_keyboard("en").inline_keyboard[0][0]
 
-    assert button.text == "Chat GPT Plus | $5 | Stock: 8"
+    assert button.text == "Chat GPT Plus | 30 days | $5 | Stock: 8"
     assert button.callback_data == "off:11"
     assert button.icon_custom_emoji_id == "premium-chatgpt"
 
@@ -952,7 +952,7 @@ def test_premium_offer_icon_replaces_unicode_emoji_in_offer_button(monkeypatch):
 
     button = kb.offers_keyboard("en", 3).inline_keyboard[0][0]
 
-    assert button.text == "Chat GPT Plus | $5 | Stock: 8"
+    assert button.text == "Chat GPT Plus | 30 days | $5 | Stock: 8"
     assert button.icon_custom_emoji_id == "premium-chatgpt"
 
 

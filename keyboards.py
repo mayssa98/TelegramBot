@@ -134,16 +134,21 @@ def clean_button_name(value):
 def offer_period_label(lang, offer):
     """Return the compact period label shown between name and price."""
     try:
-        period_days = int(offer.get("period_days") or 0)
+        raw = offer.get("period_days")
+        if raw is None or raw == "" or int(raw) <= 0:
+            raw = offer.get("warranty_days")
+        period_days = int(raw or 0)
     except (TypeError, ValueError):
         period_days = 0
-    if period_days > 0:
-        if lang == "fr":
-            return f"{period_days} j"
-        if lang == "ar":
-            return f"{period_days} يوم"
-        return f"{period_days} day{'s' if period_days != 1 else ''}"
-    return ""
+    if period_days <= 0:
+        note = str(offer.get("note") or "")
+        match = re.search(r"(\d{1,3})\s*(?:d|day|days|j|jour|jours)", note, re.I)
+        period_days = int(match.group(1)) if match else 30
+    if lang == "fr":
+        return f"{period_days} j"
+    if lang == "ar":
+        return f"{period_days} يوم"
+    return f"{period_days} day{'s' if period_days != 1 else ''}"
 
 
 def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
@@ -168,6 +173,12 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
             (icon_id if icon_id else offer.get("emoji") or offer.get("service_emoji"))
             or ""
         ).strip()
+        if not emoji:
+            sid = offer.get("service_id")
+            if sid:
+                svc = db.get_service(sid)
+                if svc:
+                    emoji = str(svc.get("emoji") or "").strip()
     clean_name = clean_button_name(offer["name"])
 
     if offer.get("unlimited_stock"):
