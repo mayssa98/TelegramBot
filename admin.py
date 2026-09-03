@@ -217,7 +217,11 @@ def texts_editor_keyboard(page=0, page_size=8):
 
 def text_languages_keyboard(key):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🇬🇧 English", callback_data=f"adm_text_lang:{key}:en")],
+        [
+            InlineKeyboardButton("🇫🇷 Français", callback_data=f"adm_text_lang:{key}:fr"),
+            InlineKeyboardButton("🇬🇧 English", callback_data=f"adm_text_lang:{key}:en"),
+            InlineKeyboardButton("🇸🇦 العربية", callback_data=f"adm_text_lang:{key}:ar"),
+        ],
         [InlineKeyboardButton("⬅️ Catégories", callback_data="adm_texts")],
     ])
 

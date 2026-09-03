@@ -3569,6 +3569,9 @@ function SettingsPage({ data, onAction, onHealthCheck }) {
     terms_message: data.terms_message || "",
     privacy_message: data.privacy_message || "",
     active_languages: data.active_languages || "fr,en,ar",
+    announcement_new_stock: data.announcement_new_stock || "",
+    announcement_flash_sale: data.announcement_flash_sale || "",
+    announcement_restock: data.announcement_restock || "",
   });
   const set = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -3759,6 +3762,33 @@ function SettingsPage({ data, onAction, onHealthCheck }) {
                 value={form.active_languages}
                 onChange={(event) =>
                   set("active_languages", event.target.value)
+                }
+              />
+            </Field>
+            <Field label="Annonce Nouveau Stock" help="Variables: {emoji}, {service}, {offer}, {period}, {warranty}, {price}, {cur}, {stock}, {added}" wide>
+              <textarea
+                rows={5}
+                value={form.announcement_new_stock}
+                onChange={(event) =>
+                  set("announcement_new_stock", event.target.value)
+                }
+              />
+            </Field>
+            <Field label="Annonce Vente Flash" help="Variables: {emoji}, {service}, {offer}, {period}, {warranty}, {old_price}, {price}, {cur}, {discount}, {remaining}" wide>
+              <textarea
+                rows={5}
+                value={form.announcement_flash_sale}
+                onChange={(event) =>
+                  set("announcement_flash_sale", event.target.value)
+                }
+              />
+            </Field>
+            <Field label="Annonce Restock / Produit disponible" help="Variables: {emoji}, {service}, {offer}, {period}, {warranty}, {price}, {cur}, {stock}" wide>
+              <textarea
+                rows={5}
+                value={form.announcement_restock}
+                onChange={(event) =>
+                  set("announcement_restock", event.target.value)
                 }
               />
             </Field>

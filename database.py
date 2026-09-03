@@ -1494,9 +1494,31 @@ def shop_settings():
         "terms_message": "",
         "privacy_message": "",
         "active_languages": "en",
+        "announcement_new_stock": "",
+        "announcement_flash_sale": "",
+        "announcement_restock": "",
     }
     rows = {row["key"]: row.get("value") for row in get_conn().settings.find({"key": {"$in": list(defaults)}})}
     result = defaults | rows
+    try:
+        from i18n import TRANSLATIONS
+        if not result.get("announcement_new_stock"):
+            result["announcement_new_stock"] = (
+                get_text_override("channel_stock_announcement", "fr")
+                or TRANSLATIONS.get("channel_stock_announcement", {}).get("fr", "")
+            )
+        if not result.get("announcement_flash_sale"):
+            result["announcement_flash_sale"] = (
+                get_text_override("flash_sale_announcement", "fr")
+                or TRANSLATIONS.get("flash_sale_announcement", {}).get("fr", "")
+            )
+        if not result.get("announcement_restock"):
+            result["announcement_restock"] = (
+                get_text_override("offer_stock_announcement", "fr")
+                or TRANSLATIONS.get("offer_stock_announcement", {}).get("fr", "")
+            )
+    except Exception:
+        pass
     for key in ("order_expiry_seconds", "low_stock_threshold", "affiliate_target", "affiliate_reward_cents"):
         result[key] = int(result[key])
     for key in ("affiliate_enabled", "maintenance_enabled"):

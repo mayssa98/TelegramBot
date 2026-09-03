@@ -439,11 +439,14 @@ def compact_offer_text(offer: dict, lang: str) -> str:
 
 
 def admin_text_preview(key: str) -> str:
-    current = db.get_text_override(key, "en") or TRANSLATIONS.get(key, {}).get("en") or "—"
-    rendered = render_stored_rich_text(current)
+    en_current = db.get_text_override(key, "en") or TRANSLATIONS.get(key, {}).get("en") or "—"
+    fr_current = db.get_text_override(key, "fr") or TRANSLATIONS.get(key, {}).get("fr") or "—"
+    rendered_en = render_stored_rich_text(en_current)
+    rendered_fr = render_stored_rich_text(fr_current)
     return (
         f"✏️ <b>{html.escape(key)}</b>\n\n"
-        f"🇬🇧 <b>Aperçu Telegram</b>\n\n{rendered}\n\n"
+        f"🇫🇷 <b>Aperçu Français :</b>\n{rendered_fr}\n\n"
+        f"🇬🇧 <b>English Preview :</b>\n{rendered_en}\n\n"
         "Choisissez la langue pour modifier ce texte :"
     )
 
@@ -4422,8 +4425,8 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("adm_text_lang:"):
         key, selected_lang = data.removeprefix("adm_text_lang:").rsplit(":", 1)
-        if selected_lang != "en":
-            await q.answer("English is the only available language.", show_alert=True)
+        if selected_lang not in {"fr", "en", "ar"}:
+            await q.answer("Langue non supportée.", show_alert=True)
             return
         current = db.get_text_override(key, selected_lang)
         if current is None:

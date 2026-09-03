@@ -1921,6 +1921,18 @@ class handler(BaseHTTPRequestHandler):
                 db.set_setting("terms_message", form.get("terms_message", "").strip()[:4000])
                 db.set_setting("privacy_message", form.get("privacy_message", "").strip()[:4000])
                 db.set_setting("active_languages", active_languages)
+                ann_new = form.get("announcement_new_stock", "").strip()
+                ann_flash = form.get("announcement_flash_sale", "").strip()
+                ann_restock = form.get("announcement_restock", "").strip()
+                if ann_new:
+                    db.set_setting("announcement_new_stock", ann_new)
+                    db.set_text_override("channel_stock_announcement", "fr", ann_new)
+                if ann_flash:
+                    db.set_setting("announcement_flash_sale", ann_flash)
+                    db.set_text_override("flash_sale_announcement", "fr", ann_flash)
+                if ann_restock:
+                    db.set_setting("announcement_restock", ann_restock)
+                    db.set_text_override("offer_stock_announcement", "fr", ann_restock)
                 db.audit_event("settings.updated")
 
             elif action == "save_reseller_product":
