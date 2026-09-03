@@ -269,19 +269,19 @@ TRANSLATIONS = {
         "ar": "🎉 *AFFILIATE REWARD UNLOCKED!*\n\n🏆 A community member reached *{count} valid referrals*\n💰 *{reward} USDT* was added instantly to their wallet\n\n🔥 Share your referral link, grow the community and unlock your own rewards!",
     },
     "channel_stock_announcement": {
-        "fr": "💫 *NOUVEAU DROP DISPONIBLE*\n\n📁 Catalogue : {emoji} *{service}*\n🏷 Produit : *{offer}*\n📅 Période : *{period}*\n🛡 Garantie : *{warranty}*\n\n💎 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n🆕 Ajout : *+{added}*\n\n⚡ Quantités limitées — commandez maintenant !",
-        "en": "💫 *NEW DROP AVAILABLE*\n\n📁 Catalog: {emoji} *{service}*\n🏷 Product: *{offer}*\n📅 Period: *{period}*\n🛡 Warranty: *{warranty}*\n\n💎 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n🆕 Added: *+{added}*\n\n⚡ Limited quantities — claim yours now!",
-        "ar": "💫 *دفعة جديدة متاحة*\n\n📁 الكتالوج: {emoji} *{service}*\n🏷 المنتج: *{offer}*\n📅 المدة: *{period}*\n🛡 الضمان: *{warranty}*\n\n💎 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n🆕 تمت الإضافة: *+{added}*\n\n⚡ الكمية محدودة — اطلب الآن!",
+        "fr": "💫 *NOUVEAU DROP DISPONIBLE*\n\n{emoji} *{service}*\n🎁 *{offer}*\n📅 Période : *{period}*\n🛡 Garantie : *{warranty}*\n\n💎 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n🆕 Ajout : *+{added}*\n\n⚡ Quantités limitées — commandez maintenant !",
+        "en": "💫 *NEW DROP AVAILABLE*\n\n{emoji} *{service}*\n🎁 *{offer}*\n📅 Period: *{period}*\n🛡 Warranty: *{warranty}*\n\n💎 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n🆕 Added: *+{added}*\n\n⚡ Limited quantities — claim yours now!",
+        "ar": "💫 *دفعة جديدة متاحة*\n\n{emoji} *{service}*\n🎁 *{offer}*\n📅 المدة: *{period}*\n🛡 الضمان: *{warranty}*\n\n💎 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n🆕 تمت الإضافة: *+{added}*\n\n⚡ الكمية محدودة — اطلب الآن!",
     },
     "flash_sale_announcement": {
-        "fr": "🔥 *VENTE FLASH — DROP LIMITÉ*\n\n📁 Catalogue : {emoji} *{service}*\n🏷 Produit : *{offer}*\n📅 Période : *{period}*\n🛡 Garantie : *{warranty}*\n\n🏷 Ancien prix : *{old_price} {cur}*\n⚡ Prix flash : *{price} {cur}*\n🎯 Économie : *{discount}%*\n⌛ Fin dans : *{remaining}*\n\n🛒 Appuyez ci-dessous pour profiter de l’offre !",
-        "en": "🔥 *FLASH SALE — LIMITED DROP*\n\n📁 Catalog: {emoji} *{service}*\n🏷 Product: *{offer}*\n📅 Period: *{period}*\n🛡 Warranty: *{warranty}*\n\n🏷 Old price: *{old_price} {cur}*\n⚡ Flash price: *{price} {cur}*\n🎯 Save: *{discount}%*\n⌛ Ends in: *{remaining}*\n\n🛒 Tap below to claim the deal!",
-        "ar": "🔥 *تخفيض سريع — عرض محدود*\n\n📁 الكتالوج: {emoji} *{service}*\n🏷 المنتج: *{offer}*\n📅 المدة: *{period}*\n🛡 الضمان: *{warranty}*\n\n🏷 السعر السابق: *{old_price} {cur}*\n⚡ سعر العرض: *{price} {cur}*\n🎯 الخصم: *{discount}%*\n⌛ ينتهي خلال: *{remaining}*\n\n🛒 اضغط أدناه للاستفادة من العرض!",
+        "fr": "🔥 *VENTE FLASH — DROP LIMITÉ*\n\n{emoji} *{service} — {offer}*\n📅 Période : *{period}*\n🛡 Garantie : *{warranty}*\n\n🏷 Ancien prix : *{old_price} {cur}*\n⚡ Prix flash : *{price} {cur}*\n🎯 Économie : *{discount}%*\n⌛ Fin dans : *{remaining}*\n\n🛒 Appuyez ci-dessous pour profiter de l’offre !",
+        "en": "🔥 *FLASH SALE — LIMITED DROP*\n\n{emoji} *{service} — {offer}*\n📅 Period: *{period}*\n🛡 Warranty: *{warranty}*\n\n🏷 Old price: *{old_price} {cur}*\n⚡ Flash price: *{price} {cur}*\n🎯 Save: *{discount}%*\n⌛ Ends in: *{remaining}*\n\n🛒 Tap below to claim the deal!",
+        "ar": "🔥 *تخفيض سريع — عرض محدود*\n\n{emoji} *{service} — {offer}*\n📅 المدة: *{period}*\n🛡 الضمان: *{warranty}*\n\n🏷 السعر السابق: *{old_price} {cur}*\n⚡ سعر العرض: *{price} {cur}*\n🎯 الخصم: *{discount}%*\n⌛ ينتهي خلال: *{remaining}*\n\n🛒 اضغط أدناه للاستفادة من العرض!",
     },
     "offer_stock_announcement": {
-        "fr": "💫 *NOUVEAU DROP DISPONIBLE*\n\n📁 Catalogue : {emoji} *{service}*\n🏷 Produit : *{offer}*\n📅 Période : *{period}*\n🛡 Garantie : *{warranty}*\n\n💎 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n\n⚡ Quantités limitées — commandez maintenant !",
-        "en": "💫 *NEW DROP AVAILABLE*\n\n📁 Catalog: {emoji} *{service}*\n🏷 Product: *{offer}*\n📅 Period: *{period}*\n🛡 Warranty: *{warranty}*\n\n💎 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n\n⚡ Limited quantities — claim yours now!",
-        "ar": "💫 *دفعة جديدة متاحة*\n\n📁 الكتالوج: {emoji} *{service}*\n🏷 المنتج: *{offer}*\n📅 المدة: *{period}*\n🛡 الضمان: *{warranty}*\n\n💎 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n\n⚡ الكمية محدودة — اطلب الآن!",
+        "fr": "💫 *NOUVEAU DROP DISPONIBLE*\n\n{emoji} *{service}*\n🎁 *{offer}*\n📅 Période : *{period}*\n🛡 Garantie : *{warranty}*\n\n💎 Prix : *{price} {cur}*\n📦 Stock : *{stock}*\n\n⚡ Quantités limitées — commandez maintenant !",
+        "en": "💫 *NEW DROP AVAILABLE*\n\n{emoji} *{service}*\n🎁 *{offer}*\n📅 Period: *{period}*\n🛡 Warranty: *{warranty}*\n\n💎 Price: *{price} {cur}*\n📦 Stock: *{stock}*\n\n⚡ Limited quantities — claim yours now!",
+        "ar": "💫 *دفعة جديدة متاحة*\n\n{emoji} *{service}*\n🎁 *{offer}*\n📅 المدة: *{period}*\n🛡 الضمان: *{warranty}*\n\n💎 السعر: *{price} {cur}*\n📦 المخزون: *{stock}*\n\n⚡ الكمية محدودة — اطلب الآن!",
     },
     "channel_purchase_success": {
         "fr": "🎉 *ANOTHER SUCCESSFUL PURCHASE*\n\n✅ A customer just secured:\n🛍 *{service} — {offer}*\n📦 Quantity: *{qty}*\n💎 Order value: *{total} {cur}*\n🔥 Remaining stock: *{stock} account(s)*\n\nTrusted delivery. Real products. Join the next drop before it sells out!",
