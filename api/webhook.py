@@ -1457,6 +1457,10 @@ class handler(BaseHTTPRequestHandler):
                 note = form.get("note", "").strip()[:250]
                 if warranty_days is not None and (not note or note.isdigit() or note == "0"):
                     note = "NW" if warranty_days == 0 else f"{warranty_days} days"
+                channel = form.get("sales_channel", "both")
+                channels = ["bot", "tn_site"] if channel == "both" else [channel]
+                tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
+                emoji_val = form.get("custom_emoji_id", form.get("emoji", "")).strip()
                 db.update_offer(
                     oid,
                     service_id=target_service_id,
