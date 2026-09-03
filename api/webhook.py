@@ -1383,7 +1383,10 @@ class handler(BaseHTTPRequestHandler):
                 channels = ["bot", "tn_site"] if channel == "both" else [channel]
                 tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
                 tn_price_millimes = round(float(tn_price_raw) * 1000) if tn_price_raw else None
-                emoji_val = form.get("custom_emoji_id", form.get("emoji", "")).strip()
+                warranty_days = int(form.get("warranty_days", "0").strip() or 0)
+                note = form.get("note", "").strip()[:250]
+                if not note or note.isdigit() or note == "0":
+                    note = "NW" if warranty_days == 0 else f"{warranty_days} days"
                 oid = db.add_offer(
                     sid,
                     name,
@@ -1408,6 +1411,7 @@ class handler(BaseHTTPRequestHandler):
                     site_badge_ar=form.get("site_badge_ar", "").strip(),
                     site_featured=form.get("site_featured", "") == "on",
                     period_days=int(form.get("period_days", "30").strip()),
+                    warranty_days=warranty_days,
                 )
                 if emoji_val and sid:
                     db.update_service(sid, emoji=emoji_val)
@@ -1448,17 +1452,17 @@ class handler(BaseHTTPRequestHandler):
                 target_service_id = int(form.get("service_id") or previous_offer["service_id"])
                 name = form["name"].strip()[:120]
                 price = None if form.get("price", "") == "" else float(form["price"])
-                note = form.get("note", "")[:250]
-                channel = form.get("sales_channel", "both")
-                channels = ["bot", "tn_site"] if channel == "both" else [channel]
-                tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
-                emoji_val = form.get("custom_emoji_id", form.get("emoji", "")).strip()
+                warranty_days_raw = form.get("warranty_days")
+                warranty_days = int(warranty_days_raw.strip()) if warranty_days_raw and warranty_days_raw.strip().isdigit() else None
+                note = form.get("note", "").strip()[:250]
+                if warranty_days is not None and (not note or note.isdigit() or note == "0"):
+                    note = "NW" if warranty_days == 0 else f"{warranty_days} days"
                 db.update_offer(
                     oid,
                     service_id=target_service_id,
                     price=price,
                     name=name,
-                    note=note,
+                    note=note if note else None,
                     description=form.get("description", "").strip()[:1000],
                     sort_order=max(0, int(form.get("sort_order", 0))),
                     auto_delivery=form.get("auto_delivery", "") == "on",
@@ -1478,6 +1482,7 @@ class handler(BaseHTTPRequestHandler):
                     site_badge_ar=form.get("site_badge_ar", "").strip(),
                     site_featured=form.get("site_featured", "") == "on",
                     period_days=int(form.get("period_days", "30").strip()),
+                    warranty_days=warranty_days,
                 )
                 existing_offer = db.get_offer(oid)
                 if emoji_val and existing_offer and existing_offer.get("service_id"):

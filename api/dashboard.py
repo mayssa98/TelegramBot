@@ -3037,7 +3037,7 @@ def render_dashboard(
                     <input type="number" name="price" step="0.01" min="0" required>
                 </div>
                 <div class="form-group"><label>Période (jours)</label><input type="number" name="period_days" min="1" max="3650" value="30" required></div>
-                <div class="form-group"><label>Garantie (texte affiché)</label><input type="text" name="note" maxlength="250" placeholder="Ex: Remplacement sous 24h"></div>
+                <div class="form-group"><label>Garantie (jours, 0 = NW)</label><input type="number" name="warranty_days" min="0" max="3650" value="0" required></div>
                 <div class="form-group"><label>Description détaillée</label><textarea name="description"></textarea></div>
                 <div class="form-group"><label>Comptes initiaux — stock automatique (# = 1 produit)</label><textarea name="initial_inventory" placeholder="#1&#10;Email: compte1@example.com&#10;Password: secret&#10;&#10;#2&#10;Code: produit-2"></textarea></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" value="Instantané après confirmation"></div>
@@ -3056,7 +3056,7 @@ def render_dashboard(
                 <div class="form-group"><label>Nom</label><input name="name" id="edit-offer-name" required></div>
                 <div class="form-group"><label>Description du produit</label><textarea name="description" id="edit-offer-description"></textarea></div>
                 <div class="form-group"><label>Période (jours)</label><input type="number" name="period_days" id="edit-offer-period-days" min="1" max="3650" required></div>
-                <div class="form-group"><label>Garantie (texte affiché)</label><input type="text" name="note" id="edit-offer-note" maxlength="250"></div>
+                <div class="form-group"><label>Garantie (jours, 0 = NW)</label><input type="number" name="warranty_days" id="edit-offer-warranty-days" min="0" max="3650" required></div>
                 <div class="form-group"><label>Prix</label><input type="number" step="0.01" min="0" name="price" id="edit-offer-price" required></div>
                 <div class="form-group"><label>Ordre</label><input type="number" min="0" name="sort_order" id="edit-offer-sort"></div>
                 <div class="form-group"><label>Délai de livraison</label><input name="delivery_delay" id="edit-offer-delay"></div>
@@ -4679,7 +4679,7 @@ def render_dashboard(
             document.getElementById("edit-offer-name").value = offer.name || "";
             document.getElementById("edit-offer-description").value = offer.description || "";
             document.getElementById("edit-offer-period-days").value = offer.period_days || 30;
-            document.getElementById("edit-offer-note").value = offer.note || "";
+            document.getElementById("edit-offer-warranty-days").value = offer.warranty_days ?? (offer.note === "NW" ? 0 : (Number((offer.note || "").match(/\\d+/)?.[0]) || 0));
             document.getElementById("edit-offer-price").value = offer.price ?? 0;
             document.getElementById("edit-offer-sort").value = offer.sort_order ?? 0;
             document.getElementById("edit-offer-delay").value = offer.delivery_delay || "";

@@ -425,7 +425,7 @@ def compact_offer_text(offer: dict, lang: str) -> str:
     }
     price_label, stock_label, sold_label, warranty_label, description_label = labels.get(lang, labels["en"])
     description = (offer.get("description") or "").strip() or "—"
-    warranty = warranty_service.offer_warranty_label(offer) or "—"
+    warranty = warranty_service.offer_warranty_label(offer, lang=lang) or "NW"
     price = "—" if offer.get("price") is None else f"{offer['price']:.2f}"
     sold = db.offer_sold_count(offer.get("id", 0))
     return (
@@ -3058,7 +3058,22 @@ async def handle_pending_input(update, context, lang):
             )
             return
         elif kind == "adm_offnote":
-            db.update_offer(ref, note=text.strip()[:250])
+            try:
+                raw_text = text.strip().upper()
+                if raw_text == "NW":
+                    wdays = 0
+                else:
+                    wdays = int(text.strip())
+                    if wdays < 0:
+                        raise ValueError
+            except (TypeError, ValueError):
+                await update.message.reply_text("⚠️ Envoyez un nombre de jours (0 pour NW).")
+                return
+            db.update_offer(
+                ref,
+                warranty_days=wdays,
+                note="NW" if wdays == 0 else f"{wdays} days",
+            )
         elif kind == "adm_offperiod":
             try:
                 period_days = int(text.strip())
@@ -4725,8 +4740,8 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🧩 *{off['name']}*\n💵 Prix : {price}\n"
             f"📦 Stock : {'♾ Illimité' if off.get('unlimited_stock') else off['stock']}\n"
             f"🚚 Livraison : {'Admin' if off.get('manual_stock') else 'Automatique'}\n"
-            f"🛡 {str(off.get('note') or '').strip() or '—'}\n"
-            f"📅 Période : {int(off.get('period_days') or 0)} j",
+            f"🛡 Garantie : {warranty_service.offer_warranty_label(off, lang='fr') or 'NW'}\n"
+            f"📅 Période : {int(off.get('period_days') or 30)} j",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid))
         return
@@ -4736,7 +4751,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompts = {
             "adm_offname": "✏️ Envoyez le nouveau nom :",
             "adm_offemoji": "🎨 Envoyez un emoji Telegram Premium animé :",
-            "adm_offnote": "🛡 Envoyez le texte de garantie à afficher :",
+            "adm_offnote": "🛡 Envoyez la garantie en jours (0 pour NW) :",
             "adm_offperiod": "📅 Envoyez la période en jours (minimum 1) :",
             "adm_offdesc": "📄 Envoyez la description complète :",
             "adm_offdelay": "🚚 Envoyez le délai de livraison affiché :",

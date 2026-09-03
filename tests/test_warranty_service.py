@@ -5,15 +5,20 @@ from app.domain import warranty_service
 
 
 def test_offer_warranty_label():
-    assert warranty_service.offer_warranty_label({"note": "Remplacement 24h"}) == "Remplacement 24h"
-    assert warranty_service.offer_warranty_label({}) == ""
-    assert warranty_service.offer_warranty_label(None) == ""
+    assert warranty_service.offer_warranty_label({"warranty_days": 0}) == "NW"
+    assert warranty_service.offer_warranty_label({"warranty_days": 30}) == "30 days"
+    assert warranty_service.offer_warranty_label({"warranty_days": 30}, lang="fr") == "30 j"
+    assert warranty_service.offer_warranty_label({"note": "NW"}) == "NW"
+    assert warranty_service.offer_warranty_label({}) == "NW"
+    assert warranty_service.offer_warranty_label(None) == "NW"
 
 
 def test_order_warranty_label():
-    assert warranty_service.order_warranty_label({"warranty": "Garantie 30j"}) == "Garantie 30j"
-    assert warranty_service.order_warranty_label({}) == ""
-    assert warranty_service.order_warranty_label(None) == ""
+    assert warranty_service.order_warranty_label({"warranty_days": 0}) == "NW"
+    assert warranty_service.order_warranty_label({"warranty_days": 15}) == "15 days"
+    assert warranty_service.order_warranty_label({"warranty": "NW"}) == "NW"
+    assert warranty_service.order_warranty_label({}) == "NW"
+    assert warranty_service.order_warranty_label(None) == "NW"
 
 
 def test_offer_and_order_store_period_and_warranty(mock_mongodb):
@@ -23,8 +28,8 @@ def test_offer_and_order_store_period_and_warranty(mock_mongodb):
         "Protected account",
         5.0,
         2,
-        note="Garantie complète 30 jours",
         period_days=45,
+        warranty_days=30,
     )
 
     offer = db.get_offer(offer_id)
@@ -32,9 +37,10 @@ def test_offer_and_order_store_period_and_warranty(mock_mongodb):
     order = db.get_order(order_id)
 
     assert offer["period_days"] == 45
-    assert offer["note"] == "Garantie complète 30 jours"
-    assert order["warranty"] == "Garantie complète 30 jours"
+    assert offer["warranty_days"] == 30
     assert order["period_days"] == 45
+    assert order["warranty_days"] == 30
+    assert order["warranty"] == "30 days"
 
 
 def test_legacy_warranty_migration_backfills_period_days(mock_mongodb):

@@ -754,6 +754,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
     description: offer?.description || "",
     note: offer?.note || "",
     period_days: offer?.period_days ?? 30,
+    warranty_days: offer?.warranty_days ?? (offer?.note === "NW" ? 0 : (Number((offer?.note || "").match(/\d+/)?.[0]) || 0)),
     delivery_delay: offer?.delivery_delay || "Instantané après confirmation",
     low_stock_threshold: offer?.low_stock_threshold ?? 5,
     auto_delivery: offer?.auto_delivery !== false,
@@ -782,8 +783,11 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
   const submit = async (event) => {
     event.preventDefault();
     const action = offer ? "update_offer" : "add_offer";
+    const wdays = Number(form.warranty_days || 0);
     const payload = {
       ...form,
+      warranty_days: wdays,
+      note: wdays === 0 ? "NW" : `${wdays} days`,
       action,
       custom_emoji_id: form.emoji,
       ...(offer
@@ -932,12 +936,15 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
               required
             />
           </Field>
-          <Field label="Garantie (texte affiché)">
+          <Field label="Garantie (jours, 0 = NW)">
             <input
-              value={form.note}
-              onChange={(event) => set("note", event.target.value)}
-              placeholder="Ex: Remplacement sous 24h"
-              maxLength={250}
+              type="number"
+              min="0"
+              max="3650"
+              value={form.warranty_days}
+              onChange={(event) => set("warranty_days", event.target.value)}
+              placeholder="0 = NW"
+              required
             />
           </Field>
           {!offer && (
@@ -2010,6 +2017,7 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
     description: product.description || "",
     warranty: product.warranty || "",
     period_days: product.period_days ?? 30,
+    warranty_days: product.warranty_days ?? (product.warranty === "NW" ? 0 : (Number((product.warranty || "").match(/\d+/)?.[0]) || 0)),
     delivery_delay: product.delivery_delay || "Instantané après confirmation",
     low_stock_threshold: product.low_stock_threshold || 5,
   });
@@ -2048,12 +2056,15 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
       }
       setCreatingSvc(false);
     }
+    const wdays = Number(form.warranty_days || 0);
     if (
       await onAction({
         action: "save_reseller_product",
         provider,
         product_id: product.id,
         ...form,
+        warranty_days: wdays,
+        warranty: wdays === 0 ? "NW" : `${wdays} days`,
         service_id: serviceId,
         service_emoji: activeEmoji,
         custom_emoji_id: activeEmoji,
@@ -2171,12 +2182,15 @@ function ApiProductEditor({ product, provider, services, onAction, onClose }) {
             required
           />
         </Field>
-        <Field label="Garantie (texte affiché)">
+        <Field label="Garantie (jours, 0 = NW)">
           <input
-            value={form.warranty}
-            onChange={(event) => set("warranty", event.target.value)}
-            placeholder="Ex: Remplacement sous 24h"
-            maxLength={250}
+            type="number"
+            min="0"
+            max="3650"
+            value={form.warranty_days}
+            onChange={(event) => set("warranty_days", event.target.value)}
+            placeholder="0 = NW"
+            required
           />
         </Field>
         <Field label="Délai de livraison">

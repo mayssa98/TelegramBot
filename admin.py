@@ -425,7 +425,7 @@ def offer_admin_keyboard(offer_id):
         [InlineKeyboardButton("📂 Déplacer vers un autre service", callback_data=f"adm_offmove:{offer_id}")],
         [InlineKeyboardButton("🎨 Emoji animé", callback_data=f"adm_offemoji:{offer_id}")],
         [InlineKeyboardButton("📄 Description", callback_data=f"adm_offdesc:{offer_id}")],
-        [InlineKeyboardButton("🛡 Garantie", callback_data=f"adm_offnote:{offer_id}")],
+        [InlineKeyboardButton("🛡 Garantie (jours)", callback_data=f"adm_offnote:{offer_id}")],
         [InlineKeyboardButton("📅 Période (jours)", callback_data=f"adm_offperiod:{offer_id}")],
         [InlineKeyboardButton("⏸ Désactiver" if off["active"] else "▶️ Activer",
                               callback_data=f"adm_offtoggle:{offer_id}"),
