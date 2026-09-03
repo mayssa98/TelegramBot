@@ -255,10 +255,12 @@ def _vex_request_json(
             "dans les variables d’environnement."
         )
     payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    endpoint = path if path.startswith(("?", "/")) else f"/{path}"
     request = Request(
-        f"{VEX_API_BASE}{path}",
+        f"{VEX_API_BASE}{endpoint}",
         headers={
             "Authorization": f"Bearer {VEX_API_KEY}",
+            "x-api-key": VEX_API_KEY,
             "Accept": "application/json",
             **({"Content-Type": "application/json"} if body is not None else {}),
             "User-Agent": "BlackMarket-Reseller/1.0",
@@ -285,7 +287,7 @@ def _vex_request_json(
         payload = {"ok": True, "products": payload}
     if not isinstance(payload, dict):
         raise ResellerApiError("Réponse VEX invalide.")
-    if payload.get("success") is False or payload.get("ok") is False:
+    if payload.get("success") is False or payload.get("ok") is False or (payload.get("error") and not payload.get("products") and "balance" not in payload):
         raise ResellerApiError(str(payload.get("error") or "Requête VEX refusée.")[:300])
     return payload
 

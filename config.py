@@ -150,7 +150,7 @@ KAKAO_API_BASE: str = os.environ.get(
 VEX_API_KEY: str = os.environ.get("HP_VEX_API_KEY", "").strip()
 VEX_API_BASE: str = os.environ.get(
     "HP_VEX_API_BASE",
-    "https://eismrrkygprctnwxmkbw.supabase.co/functions/v1/reseller-api",
+    "https://api.vexoran.app",
 ).rstrip("/")
 
 # ---------------------------------------------------------------------------
