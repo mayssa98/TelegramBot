@@ -26,6 +26,8 @@ from config import (
     KAKAO_API_KEY,
     MAILREADER_API_BASE,
     MAILREADER_API_KEY,
+    NASTELE_API_BASE,
+    NASTELE_API_KEY,
     SHAMEKH_API_BASE,
     SHAMEKH_API_KEY,
     SHOP_CRON_API_KEY,
@@ -39,6 +41,7 @@ PROVIDER = "mailreader"
 SHAMEKH_PROVIDER = "shamekh"
 KAKAO_PROVIDER = "kakao"
 VEX_PROVIDER = "vex"
+NASTELE_PROVIDER = "nastele"
 CANBOSO_PROVIDER = "canboso"
 GPT_CHEAP_PROVIDER = "gpt_cheap"
 SHOP_CRON_PROVIDER = "shop_cron"
@@ -47,9 +50,10 @@ CGPT_ACTIVE_PROVIDER = "cgpt_active"
 CGPT_ACTIVE_DISPLAY_NAME = "Rich AI Store"
 PROVIDER_DISPLAY_NAMES = {
     PROVIDER: "MailReader",
-    SHAMEKH_PROVIDER: "Shamekh’s bot",
+    SHAMEKH_PROVIDER: "Shamekh's bot",
     KAKAO_PROVIDER: "Kakao Shop",
     VEX_PROVIDER: "VEX Reseller",
+    NASTELE_PROVIDER: "NasTele",
     CANBOSO_PROVIDER: "Piggy AI",
     GPT_CHEAP_PROVIDER: "GPT Cheap",
     SHOP_CRON_PROVIDER: "Shop Cron",
@@ -61,6 +65,7 @@ PROVIDER_BOT_USERNAMES = {
     SHAMEKH_PROVIDER: "Shamekhstock_bot",
     KAKAO_PROVIDER: "Shop_KOKORO_BOT",
     VEX_PROVIDER: "VexoranShoppieBot",
+    NASTELE_PROVIDER: "BolemT",
     CANBOSO_PROVIDER: "PiggyAi799_Bot",
     GPT_CHEAP_PROVIDER: "GPTCheapChat_bot",
     SHOP_CRON_PROVIDER: "shop_cron191_en_bot",
@@ -72,6 +77,7 @@ SUPPORTED_PROVIDERS = {
     SHAMEKH_PROVIDER,
     KAKAO_PROVIDER,
     VEX_PROVIDER,
+    NASTELE_PROVIDER,
     CANBOSO_PROVIDER,
     GPT_CHEAP_PROVIDER,
     SHOP_CRON_PROVIDER,
@@ -292,6 +298,64 @@ def _vex_request_json(
     return payload
 
 
+def _nastele_request_json(
+    path: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Call NasTele Partner API without exposing its key in logs or errors."""
+    if not NASTELE_API_KEY:
+        raise ResellerApiError(
+            "NasTele n'est pas configuré. Ajoutez HP_NASTELE_API_KEY "
+            "dans les variables d'environnement."
+        )
+    payload_bytes = json.dumps(body).encode("utf-8") if body is not None else None
+    request = Request(
+        f"{NASTELE_API_BASE}{path}",
+        headers={
+            "X-API-Key": NASTELE_API_KEY,
+            "Accept": "application/json",
+            **({
+                "Content-Type": "application/json"
+            } if body is not None else {}),
+            "User-Agent": "BlackMarket-Reseller/1.0",
+        },
+        data=payload_bytes,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        messages = {
+            401: "Clé API NasTele refusée. Remplacez-la par une clé active.",
+            402: "Solde NasTele insuffisant pour cette commande.",
+            403: "Compte NasTele suspendu.",
+            404: "Produit NasTele introuvable.",
+            409: "Stock NasTele insuffisant ou prix modifié.",
+            422: "Requête NasTele invalide (productId / qty).",
+            429: "Limite NasTele atteinte. Réessayez dans une minute.",
+        }
+        error_type = (
+            ResellerOrderNotCreatedError
+            if exc.code in {402, 404, 409}
+            else ResellerApiError
+        )
+        raise error_type(
+            messages.get(exc.code, f"NasTele a répondu avec l'erreur HTTP {exc.code}.")
+        ) from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ResellerApiError("NasTele est temporairement indisponible.") from exc
+    if not isinstance(payload, dict):
+        raise ResellerApiError("Réponse NasTele invalide.")
+    if payload.get("success") is False:
+        raise ResellerApiError(
+            str(payload.get("message") or payload.get("error") or "Requête NasTele refusée.")[:300]
+        )
+    return payload
+
+
 def _canboso_request_json(
     path: str,
     *,
@@ -504,6 +568,12 @@ def provider_summaries() -> list[dict[str, Any]]:
             "documentation_url": "",
         },
         {
+            "id": NASTELE_PROVIDER,
+            "name": "NasTele",
+            "configured": bool(NASTELE_API_KEY),
+            "documentation_url": "https://nastele.online/api/partner/docs",
+        },
+        {
             "id": CANBOSO_PROVIDER,
             "name": "Piggy AI",
             "configured": bool(CANBOSO_API_KEY),
@@ -566,6 +636,16 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         )
         reseller = {"balance": balance_data.get("balance", 0)}
         supplier_name = "VEX Reseller"
+    elif provider == NASTELE_PROVIDER:
+        payload = _nastele_request_json("/api/partner/products")
+        balance_payload = _nastele_request_json("/api/partner/balance")
+        balance_data = (
+            balance_payload.get("data")
+            if isinstance(balance_payload.get("data"), dict)
+            else balance_payload
+        )
+        reseller = {"balance": balance_data.get("balance", 0)}
+        supplier_name = "NasTele"
     elif provider in CANBOSO_PROVIDERS:
         provider_name = {
             CANBOSO_PROVIDER: "Piggy AI",
@@ -597,7 +677,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
         supplier_name = str(reseller.get("name") or "MailReader")
     raw_products = payload.get("products")
-    if provider in {KAKAO_PROVIDER, VEX_PROVIDER} and not isinstance(raw_products, list):
+    if provider in {KAKAO_PROVIDER, VEX_PROVIDER, NASTELE_PROVIDER} and not isinstance(raw_products, list):
         raw_products = payload.get("data")
     if not isinstance(raw_products, list):
         raise ResellerApiError("Le fournisseur ne contient aucune liste de produits.")
@@ -632,7 +712,7 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                 if provider in CANBOSO_PROVIDERS
                 else (
                     raw.get("price")
-                    if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER}
+                    if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER, NASTELE_PROVIDER}
                     else raw.get("sell_price")
                     if provider == UPIBOT_PROVIDER
                     else raw.get("your_unit_price")
@@ -707,6 +787,8 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                     else (raw.get("price") or {}).get("currency", "USDT")
                 )
                 if provider in CANBOSO_PROVIDERS
+                else "VND"
+                if provider == NASTELE_PROVIDER
                 else raw.get("currency") or "USDT"
             )[:12],
             "stock": stock,
@@ -772,6 +854,8 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         "currency": (
             ("USDT" if wallet_currency == "USD" else wallet_currency)
             if provider in CANBOSO_PROVIDERS
+            else "VND"
+            if provider == NASTELE_PROVIDER
             else "USDT"
         ),
         "providers": provider_summaries(),
@@ -791,6 +875,7 @@ def detect_restock_events() -> dict[str, Any]:
         SHAMEKH_PROVIDER: bool(SHAMEKH_API_KEY),
         KAKAO_PROVIDER: bool(KAKAO_API_KEY),
         VEX_PROVIDER: bool(VEX_API_KEY),
+        NASTELE_PROVIDER: bool(NASTELE_API_KEY),
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
@@ -844,6 +929,7 @@ def detect_supplier_price_changes() -> dict[str, Any]:
         SHAMEKH_PROVIDER: bool(SHAMEKH_API_KEY),
         KAKAO_PROVIDER: bool(KAKAO_API_KEY),
         VEX_PROVIDER: bool(VEX_API_KEY),
+        NASTELE_PROVIDER: bool(NASTELE_API_KEY),
         CANBOSO_PROVIDER: bool(CANBOSO_API_KEY),
         GPT_CHEAP_PROVIDER: bool(GPT_CHEAP_API_KEY),
         SHOP_CRON_PROVIDER: bool(SHOP_CRON_API_KEY),
@@ -949,6 +1035,7 @@ def save_catalog_product(
         SHAMEKH_PROVIDER: "Produit API Shamekh’s bot",
         KAKAO_PROVIDER: "Produit API Kakao Shop",
         VEX_PROVIDER: "Produit API VEX Reseller",
+        NASTELE_PROVIDER: "Produit API NasTele",
         CANBOSO_PROVIDER: "Produit API Piggy AI",
         GPT_CHEAP_PROVIDER: "Produit API GPT Cheap",
         SHOP_CRON_PROVIDER: "Produit API Shop Cron",
@@ -1118,6 +1205,17 @@ def _delivery_items(payload: dict[str, Any]) -> list[str]:
         if isinstance(item, str):
             value = item.strip()
         elif isinstance(item, dict):
+            if isinstance(item.get("accounts"), list):
+                for acc in item["accounts"]:
+                    if isinstance(acc, str) and acc.strip():
+                        items.append(acc.strip())
+                    elif isinstance(acc, dict):
+                        acc_val = acc.get("content") or acc.get("value") or acc.get("account") or ""
+                        if acc_val:
+                            items.append(str(acc_val).strip())
+                        else:
+                            items.append(json.dumps(acc, ensure_ascii=False, separators=(",", ":")))
+                continue
             direct = (
                 item.get("content")
                 or item.get("value")
@@ -1231,6 +1329,19 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                     "external_order_id": external_order_id,
                 },
             )
+        elif provider == NASTELE_PROVIDER:
+            response = _nastele_request_json(
+                "/api/partner/orders",
+                method="POST",
+                body={
+                    "productId": (
+                        int(str(offer["supplier_product_id"]))
+                        if str(offer["supplier_product_id"]).isdigit()
+                        else str(offer["supplier_product_id"])
+                    ),
+                    "qty": int(order.get("qty") or 1),
+                },
+            )
         elif provider in CANBOSO_PROVIDERS:
             response = _canboso_request_json(
                 "/purchase",
@@ -1286,11 +1397,15 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
         )
         raise
     order_payload = response.get("order")
+    data_payload = response.get("data") if isinstance(response.get("data"), dict) else {}
     supplier_order_id = (
         response.get("transaction_id")
         or response.get("orderCode")
         or response.get("order_id")
+        or response.get("orderId")
         or response.get("id")
+        or (data_payload.get("orderId") if isinstance(data_payload, dict) else "")
+        or (data_payload.get("id") if isinstance(data_payload, dict) else "")
         or (order_payload.get("orderCode") if isinstance(order_payload, dict) else "")
         or (order_payload.get("id") if isinstance(order_payload, dict) else "")
         or ""

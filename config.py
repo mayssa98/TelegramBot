@@ -154,6 +154,19 @@ VEX_API_BASE: str = os.environ.get(
 ).rstrip("/")
 
 # ---------------------------------------------------------------------------
+# Fournisseur revendeur NasTele
+# ---------------------------------------------------------------------------
+NASTELE_API_KEY: str = first_env_value(
+    "HP_NASTELE_API_KEY",
+    "NASTELE_API_KEY",
+)
+NASTELE_API_BASE: str = first_env_value(
+    "HP_NASTELE_API_BASE",
+    "NASTELE_API_BASE",
+    default="https://nastele.online",
+).rstrip("/")
+
+# ---------------------------------------------------------------------------
 # Fournisseur revendeur Canboso
 # ---------------------------------------------------------------------------
 CANBOSO_API_KEY: str = os.environ.get("HP_CANBOSO_API_KEY", "").strip()

@@ -63,6 +63,12 @@ def _supplier_payload():
         }]}}, [
             "canboso-current@example.com:current-secret:verify@example.com:30 days:keep this",
         ]),
+        ({"data": {"items": [{
+            "productName": "SLOT CANVA EDU 1 NĂM",
+            "accounts": ["account|password|2fa...."],
+        }]}}, [
+            "account|password|2fa....",
+        ]),
     ],
 )
 def test_delivery_extractor_supports_every_supplier_response_shape(payload, expected):
@@ -1047,6 +1053,7 @@ def test_restock_detection_baselines_then_reports_only_increases(monkeypatch, mo
     monkeypatch.setattr(reseller_service, "SHAMEKH_API_KEY", "")
     monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "NASTELE_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
@@ -1093,6 +1100,7 @@ def test_supplier_price_drop_preserves_markup_and_creates_flash_event(
     monkeypatch.setattr(reseller_service, "SHAMEKH_API_KEY", "")
     monkeypatch.setattr(reseller_service, "KAKAO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "VEX_API_KEY", "")
+    monkeypatch.setattr(reseller_service, "NASTELE_API_KEY", "")
     monkeypatch.setattr(reseller_service, "CANBOSO_API_KEY", "")
     monkeypatch.setattr(reseller_service, "GPT_CHEAP_API_KEY", "")
     monkeypatch.setattr(reseller_service, "SHOP_CRON_API_KEY", "")
@@ -1128,9 +1136,101 @@ def test_all_supplier_bot_usernames_are_registered():
         "shamekh": "Shamekhstock_bot",
         "kakao": "Shop_KOKORO_BOT",
         "vex": "VexoranShoppieBot",
+        "nastele": "BolemT",
         "canboso": "PiggyAi799_Bot",
         "gpt_cheap": "GPTCheapChat_bot",
         "shop_cron": "shop_cron191_en_bot",
         "upibot": "scanupigptbot",
         "cgpt_active": "RichAIStoreBot",
     }
+
+
+def test_nastele_catalog_and_fulfillment(monkeypatch, mock_mongodb):
+    def fake_request(path, *, method="GET", body=None):
+        if path == "/api/partner/products":
+            return {
+                "success": True,
+                "data": [
+                    {
+                        "id": 43,
+                        "name": "SLOT CANVA EDU 1 NĂM",
+                        "price": 30000,
+                        "description": "Canva Edu slot",
+                        "stock": 40,
+                    }
+                ],
+            }
+        if path == "/api/partner/balance":
+            return {
+                "success": True,
+                "data": {
+                    "balance": 78992,
+                    "currency": "VND",
+                },
+            }
+        if path == "/api/partner/orders":
+            assert method == "POST"
+            assert body == {"productId": 43, "qty": 1}
+            return {
+                "success": True,
+                "data": {
+                    "orderId": 2244,
+                    "totalAmount": 30000,
+                    "items": [
+                        {
+                            "productName": "SLOT CANVA EDU 1 NĂM",
+                            "quantity": 1,
+                            "unitPrice": 30000,
+                            "accounts": ["canva_user:canva_pass"],
+                        }
+                    ],
+                },
+            }
+        raise AssertionError(f"Unexpected path: {path}")
+
+    monkeypatch.setattr(reseller_service, "_nastele_request_json", fake_request)
+
+    cat = reseller_service.catalog("nastele")
+    assert cat["ok"] is True
+    assert cat["supplier_name"] == "NasTele"
+    assert cat["balance"] == 78992.0
+    assert cat["currency"] == "VND"
+    assert len(cat["products"]) == 1
+    assert cat["products"][0]["id"] == "43"
+    assert cat["products"][0]["wholesale_price"] == 30000.0
+    assert cat["products"][0]["currency"] == "VND"
+    assert cat["products"][0]["stock"] == 40
+
+    service_id = db.add_service("Canva", "🎨")
+    saved = reseller_service.save_catalog_product(
+        "43",
+        provider="nastele",
+        retail_price=35000.0,
+        enabled=True,
+        service_id=service_id,
+        display_name="Canva Edu 1 An",
+    )
+
+    offer = db.get_offer(saved["local_offer_id"])
+    assert offer is not None
+    assert offer["supplier_provider"] == "nastele"
+    assert offer["supplier_product_id"] == "43"
+
+    mock_mongodb.orders.insert_one({
+        "id": 99,
+        "user_id": 12345,
+        "offer_id": offer["id"],
+        "qty": 1,
+        "status": "payment_confirmed",
+    })
+
+    delivered = reseller_service.fulfill_paid_order(99)
+    assert delivered == ["canva_user:canva_pass"]
+
+    order = db.get_order(99)
+    assert order["status"] == "delivered"
+    assert order["supplier_external_order_id"] == "BM-99"
+
+    fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 99})
+    assert fulfillment["supplier_order_id"] == "2244"
+
