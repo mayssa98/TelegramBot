@@ -682,7 +682,12 @@ def list_catalog_offers():
     ))
     return offers
 def get_offer(offer_id):
-    offer = _resolve_flash_sale(_public(get_conn().offers.find_one({"id": offer_id})))
+    try:
+        numeric_id = int(offer_id)
+    except (TypeError, ValueError):
+        numeric_id = offer_id
+    query = {"$or": [{"id": numeric_id}, {"id": str(offer_id)}]}
+    offer = _resolve_flash_sale(_public(get_conn().offers.find_one(query)))
     if not offer:
         return None
     service = get_service(offer.get("service_id"))

@@ -426,14 +426,20 @@ def compact_offer_text(offer: dict, lang: str) -> str:
     price_label, stock_label, sold_label, warranty_label, description_label = labels.get(lang, labels["en"])
     description = (offer.get("description") or "").strip() or "—"
     warranty = warranty_service.offer_warranty_label(offer, lang=lang) or "NW"
-    price = "—" if offer.get("price") is None else f"{offer['price']:.2f}"
+    try:
+        raw_price = offer.get("price")
+        price = "—" if raw_price is None or str(raw_price).strip() == "" else f"{float(raw_price):.2f}"
+    except (TypeError, ValueError):
+        price = str(offer.get("price") or "—")
     sold = db.offer_sold_count(offer.get("id", 0))
+    currency = str(offer.get("currency") or CURRENCY)
+    stock_val = "∞" if offer.get("unlimited_stock") else int(offer.get("stock") or 0)
     return (
         f"🏷 <b>{html.escape(str(offer.get('name') or ''))}</b>\n\n"
-        f"💎 <b>{price_label}:</b> {price} {html.escape(offer.get('currency', CURRENCY))}\n"
-        f"📦 <b>{stock_label}:</b> {'∞' if offer.get('unlimited_stock') else int(offer.get('stock') or 0)}\n"
+        f"💎 <b>{price_label}:</b> {price} {html.escape(currency)}\n"
+        f"📦 <b>{stock_label}:</b> {stock_val}\n"
         f"🛒 <b>{sold_label}:</b> {sold}\n"
-        f"🛡 <b>{warranty_label}:</b> {html.escape(warranty[:120])}\n\n"
+        f"🛡 <b>{warranty_label}:</b> {html.escape(str(warranty)[:120])}\n\n"
         f"💬 <b>{description_label}:</b>\n{render_stored_rich_text(description, parse_legacy_markdown=False)}"
     )
 
@@ -1702,22 +1708,49 @@ async def show_callback_screen(
     options = {}
     if link_preview_options is not None:
         options["link_preview_options"] = link_preview_options
-    if getattr(query.message, "text", None):
-        await query.edit_message_text(
+    try:
+        if getattr(query.message, "text", None):
+            await query.edit_message_text(
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+                **options,
+            )
+            return
+        await query.message.reply_text(
             text,
             parse_mode=parse_mode,
             reply_markup=reply_markup,
             **options,
         )
-        return
-    await query.message.reply_text(
-        text,
-        parse_mode=parse_mode,
-        reply_markup=reply_markup,
-        **options,
-    )
-    with contextlib.suppress(Exception):
-        await query.edit_message_reply_markup(reply_markup=None)
+        with contextlib.suppress(Exception):
+            await query.edit_message_reply_markup(reply_markup=None)
+    except Exception as exc:
+        log.warning("show_callback_screen error with parse_mode=%s: %s. Retrying with plain text fallback.", parse_mode, exc)
+        clean_text = re.sub(r"<[^>]+>", "", str(text or ""))
+        try:
+            if getattr(query.message, "text", None):
+                await query.edit_message_text(
+                    clean_text,
+                    parse_mode=None,
+                    reply_markup=reply_markup,
+                    **options,
+                )
+                return
+            await query.message.reply_text(
+                clean_text,
+                parse_mode=None,
+                reply_markup=reply_markup,
+                **options,
+            )
+        except Exception:
+            with contextlib.suppress(Exception):
+                await query.message.reply_text(
+                    clean_text,
+                    parse_mode=None,
+                    reply_markup=reply_markup,
+                    **options,
+                )
 
 
 async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1725,7 +1758,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = q.from_user.id
     lang = lang_of(uid)
     data = q.data
-    await q.answer()
+    with contextlib.suppress(Exception):
+        await q.answer()
 
     if data.startswith("codex_number_agree:"):
         order_id = int(data.split(":", 1)[1])
@@ -2139,8 +2173,12 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     if data.startswith("off:"):
-        oid = int(data.split(":")[1])
-        off = db.get_offer(oid)
+        raw_oid = data.split(":")[1]
+        try:
+            oid = int(raw_oid)
+        except (ValueError, TypeError):
+            oid = raw_oid
+        off = db.get_offer(oid) or db.get_offer(str(raw_oid))
         if not off or not db.offer_has_stock(off):
             await q.message.reply_text(
                 premium_customer_text(lang, "out_of_stock"),
@@ -2148,44 +2186,62 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=kb.out_of_stock_keyboard(lang),
             )
             return
-        detail_text = compact_offer_text(off, lang)
+        try:
+            detail_text = compact_offer_text(off, lang)
+        except Exception as exc:
+            log.warning("compact_offer_text failed: %s", exc)
+            detail_text = (
+                f"🏷 <b>{html.escape(str(off.get('name') or 'Offre'))}</b>\n\n"
+                f"💎 <b>Prix :</b> {off.get('price')} {html.escape(str(off.get('currency', CURRENCY)))}\n"
+                f"📦 <b>Stock :</b> {off.get('stock') or 0}"
+            )
+
         photo_file_id = off.get("photo_file_id")
         if photo_file_id:
-            if len(detail_text) <= 900:
+            try:
+                if len(detail_text) <= 900:
+                    await q.message.reply_photo(
+                        photo=photo_file_id,
+                        caption=detail_text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=kb.offer_detail_keyboard(lang, off),
+                    )
+                else:
+                    await q.message.reply_photo(photo=photo_file_id)
+                    await q.message.reply_text(
+                        detail_text,
+                        parse_mode=ParseMode.HTML,
+                        link_preview_options=LinkPreviewOptions(is_disabled=True),
+                        reply_markup=kb.offer_detail_keyboard(lang, off),
+                    )
+                with contextlib.suppress(Exception):
+                    await q.message.delete()
+                return
+            except Exception as e:
+                log.warning("Failed to reply with offer photo %s: %s", photo_file_id, e)
+
+        off_name = str(off.get("name") or "").lower()
+        is_chatgpt_offer = "chat" in off_name and "gpt" in off_name
+        if is_chatgpt_offer:
+            try:
+                base_url = public_base_url_from_environment()
                 await q.message.reply_photo(
-                    photo=photo_file_id,
-                    caption=detail_text,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=kb.offer_detail_keyboard(lang, off),
+                    photo=f"{base_url}/assets/chatgpt-plus-benefits.png",
+                    caption="\U0001f525 *ChatGPT Plus Benefits*",
+                    parse_mode=ParseMode.MARKDOWN,
                 )
-            else:
-                await q.message.reply_photo(photo=photo_file_id)
                 await q.message.reply_text(
                     detail_text,
                     parse_mode=ParseMode.HTML,
                     link_preview_options=LinkPreviewOptions(is_disabled=True),
                     reply_markup=kb.offer_detail_keyboard(lang, off),
                 )
-            with contextlib.suppress(Exception):
-                await q.message.delete()
-        off_name = str(off.get("name") or "").lower()
-        is_chatgpt_offer = "chat" in off_name and "gpt" in off_name
-        if is_chatgpt_offer:
-            base_url = public_base_url_from_environment()
-            await q.message.reply_photo(
-                photo=f"{base_url}/assets/chatgpt-plus-benefits.png",
-                caption="\U0001f525 *ChatGPT Plus Benefits*",
-                parse_mode=ParseMode.MARKDOWN,
-            )
-            await q.message.reply_text(
-                detail_text,
-                parse_mode=ParseMode.HTML,
-                link_preview_options=LinkPreviewOptions(is_disabled=True),
-                reply_markup=kb.offer_detail_keyboard(lang, off),
-            )
-            with contextlib.suppress(Exception):
-                await q.message.delete()
-            return
+                with contextlib.suppress(Exception):
+                    await q.message.delete()
+                return
+            except Exception as e:
+                log.warning("Failed to send ChatGPT photo: %s", e)
+
         await show_callback_screen(
             q,
             detail_text,
