@@ -165,6 +165,9 @@ NASTELE_API_BASE: str = first_env_value(
     "NASTELE_API_BASE",
     default="https://nastele.online",
 ).rstrip("/")
+NASTELE_VND_PER_USDT: float = float(
+    os.environ.get("HP_NASTELE_VND_PER_USDT", "25500")
+)
 
 # ---------------------------------------------------------------------------
 # Fournisseur revendeur Canboso

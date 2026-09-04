@@ -28,6 +28,7 @@ from config import (
     MAILREADER_API_KEY,
     NASTELE_API_BASE,
     NASTELE_API_KEY,
+    NASTELE_VND_PER_USDT,
     SHAMEKH_API_BASE,
     SHAMEKH_API_KEY,
     SHOP_CRON_API_KEY,
@@ -109,6 +110,19 @@ def provider_display_name(provider: str) -> str:
 def provider_bot_username(provider: str) -> str:
     """Return the supplier's public Telegram bot username, without @."""
     return PROVIDER_BOT_USERNAMES.get(str(provider or "").strip().lower(), "")
+
+
+def get_nastele_vnd_rate() -> float:
+    """Return VND per USDT exchange rate from DB settings or config."""
+    setting = db.get_setting("nastele_vnd_per_usdt")
+    if setting is not None:
+        try:
+            val = float(setting)
+            if val > 0:
+                return val
+        except (ValueError, TypeError):
+            pass
+    return float(NASTELE_VND_PER_USDT or 25500.0)
 
 
 def _request_json(
@@ -644,7 +658,9 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             if isinstance(balance_payload.get("data"), dict)
             else balance_payload
         )
-        reseller = {"balance": balance_data.get("balance", 0)}
+        rate = get_nastele_vnd_rate()
+        raw_balance = float(balance_data.get("balance", 0))
+        reseller = {"balance": round(raw_balance / rate, 2)}
         supplier_name = "NasTele"
     elif provider in CANBOSO_PROVIDERS:
         provider_name = {
@@ -707,19 +723,24 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
             canboso_price = raw.get("price")
             if isinstance(canboso_price, dict):
                 canboso_price = canboso_price.get("amount", 0)
-            wholesale = float(Decimal(str(
-                raw.get("usdPricing", canboso_price or 0)
-                if provider in CANBOSO_PROVIDERS
-                else (
-                    raw.get("price")
-                    if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER, NASTELE_PROVIDER}
-                    else raw.get("sell_price")
-                    if provider == UPIBOT_PROVIDER
-                    else raw.get("your_unit_price")
-                    if provider == CGPT_ACTIVE_PROVIDER
-                    else raw.get("wholesale_price", "0")
-                )
-            )))
+            if provider == NASTELE_PROVIDER:
+                rate = get_nastele_vnd_rate()
+                vnd_price = float(Decimal(str(raw.get("price") or 0)))
+                wholesale = round(vnd_price / rate, 2)
+            else:
+                wholesale = float(Decimal(str(
+                    raw.get("usdPricing", canboso_price or 0)
+                    if provider in CANBOSO_PROVIDERS
+                    else (
+                        raw.get("price")
+                        if provider in {SHAMEKH_PROVIDER, KAKAO_PROVIDER, VEX_PROVIDER}
+                        else raw.get("sell_price")
+                        if provider == UPIBOT_PROVIDER
+                        else raw.get("your_unit_price")
+                        if provider == CGPT_ACTIVE_PROVIDER
+                        else raw.get("wholesale_price", "0")
+                    )
+                )))
         except (InvalidOperation, ValueError):
             wholesale = 0.0
         stats = raw.get("stats") if isinstance(raw.get("stats"), dict) else {}
@@ -787,8 +808,6 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
                     else (raw.get("price") or {}).get("currency", "USDT")
                 )
                 if provider in CANBOSO_PROVIDERS
-                else "VND"
-                if provider == NASTELE_PROVIDER
                 else raw.get("currency") or "USDT"
             )[:12],
             "stock": stock,
@@ -854,8 +873,6 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         "currency": (
             ("USDT" if wallet_currency == "USD" else wallet_currency)
             if provider in CANBOSO_PROVIDERS
-            else "VND"
-            if provider == NASTELE_PROVIDER
             else "USDT"
         ),
         "providers": provider_summaries(),

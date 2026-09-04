@@ -1189,23 +1189,24 @@ def test_nastele_catalog_and_fulfillment(monkeypatch, mock_mongodb):
         raise AssertionError(f"Unexpected path: {path}")
 
     monkeypatch.setattr(reseller_service, "_nastele_request_json", fake_request)
+    monkeypatch.setattr(reseller_service, "get_nastele_vnd_rate", lambda: 25000.0)
 
     cat = reseller_service.catalog("nastele")
     assert cat["ok"] is True
     assert cat["supplier_name"] == "NasTele"
-    assert cat["balance"] == 78992.0
-    assert cat["currency"] == "VND"
+    assert cat["balance"] == 3.16
+    assert cat["currency"] == "USDT"
     assert len(cat["products"]) == 1
     assert cat["products"][0]["id"] == "43"
-    assert cat["products"][0]["wholesale_price"] == 30000.0
-    assert cat["products"][0]["currency"] == "VND"
+    assert cat["products"][0]["wholesale_price"] == 1.2
+    assert cat["products"][0]["currency"] == "USDT"
     assert cat["products"][0]["stock"] == 40
 
     service_id = db.add_service("Canva", "🎨")
     saved = reseller_service.save_catalog_product(
         "43",
         provider="nastele",
-        retail_price=35000.0,
+        retail_price=2.5,
         enabled=True,
         service_id=service_id,
         display_name="Canva Edu 1 An",
