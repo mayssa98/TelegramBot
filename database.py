@@ -273,6 +273,8 @@ def init_db():
     db.wallet_topups.create_index("id", unique=True, sparse=True)
     db.withdrawals.create_index("id", unique=True)
     db.withdrawals.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+    db.warranty_requests.create_index("id", unique=True)
+    db.warranty_requests.create_index([("user_id", ASCENDING), ("order_id", ASCENDING)], unique=True)
     db.onchain_transactions.create_index("txid", unique=True)
     db.bulk_wallet_credits.create_index("operation_id", unique=True)
     db.buyer_api_keys.create_index("id", unique=True)
@@ -616,6 +618,16 @@ def update_withdrawal(withdrawal_id, status, admin_note=""):
         return_document=ReturnDocument.AFTER,
     )
     return _public(row) if row else None
+
+
+def create_warranty_request(user_id, order_id, days_used, refund_amount):
+    row = {
+        "id": _next_id("warranty_requests"), "user_id": int(user_id), "order_id": int(order_id),
+        "days_used": int(days_used), "refund_amount": round(float(refund_amount), 2),
+        "status": "pending_admin_check", "created_at": datetime.now(UTC), "updated_at": datetime.now(UTC),
+    }
+    get_conn().warranty_requests.insert_one(row)
+    return _public(row)
 
 
 def _sanitize_service_emoji(service):

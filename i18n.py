@@ -97,6 +97,7 @@ TRANSLATIONS = {
     "menu_affiliate": {"fr": "🎁 Affiliation", "en": "🎁 Affiliate", "ar": "🎁 الإحالة"},
     "menu_account": {"fr": "👤 Mon compte", "en": "👤 My account", "ar": "👤 حسابي"},
     "menu_support": {"fr": "🛎️ Support", "en": "🛎️ Support", "ar": "🛎️ Support"},
+    "menu_warranty": {"fr": "🛡️ Garantie", "en": "🛡️ Warranty", "ar": "🛡️ الضمان"},
     "menu_reseller_api": {"fr": "🔗 API Revendeur", "en": "🔗 Reseller API", "ar": "🔗 Reseller API"},
     "reseller_api_create": {"fr": "🔑 Créer ma clé API", "en": "🔑 Create my API key", "ar": "🔑 Create my API key"},
     "reseller_api_regenerate": {"fr": "🔄 Régénérer la clé", "en": "🔄 Regenerate key", "ar": "🔄 Regenerate key"},

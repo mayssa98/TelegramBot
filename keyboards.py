@@ -291,6 +291,7 @@ def home_keyboard(lang, user_id):
         [translated_button(lang, "menu_account", callback_data="account", style="success")],
         [translated_button(lang, "menu_support", callback_data="support", style="success")],
         [translated_button(lang, "profile_notifications", callback_data="profile_notifications")],
+        [translated_button(lang, "menu_warranty", callback_data="warranty", style="success")],
         [
             translated_button(lang, "menu_lang", callback_data="language", style="success"),
         ],
@@ -683,6 +684,13 @@ def withdrawal_methods_keyboard(lang):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(label, callback_data=f"withdraw_method:{method}")]
         for label, method in labels.get(lang, labels["en"])
+    ] + [[translated_button(lang, "profile_main_menu", callback_data="home")]])
+
+
+def warranty_orders_keyboard(lang, orders):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"🛡️ #{int(order['id'])} · {str(order.get('offer_name') or order.get('service_name') or 'Product')[:40]}", callback_data=f"warranty_order:{int(order['id'])}")]
+        for order in orders
     ] + [[translated_button(lang, "profile_main_menu", callback_data="home")]])
 
 

@@ -1988,6 +1988,33 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if balance >= 10:
             PENDING[uid] = ("await_withdraw_amount", None)
         return
+    if data == "warranty":
+        orders = [o for o in db.list_user_orders(uid, limit=30) if o.get("status") == "delivered" and int(o.get("warranty_days") or 0) > 0]
+        if not orders:
+            await show_callback_screen(q, "🛡️ No delivered order currently has an active warranty.", reply_markup=kb.home_keyboard(lang, uid))
+            return
+        await show_callback_screen(q, "Select the delivered product with a problem:", reply_markup=kb.warranty_orders_keyboard(lang, orders))
+        return
+    if data.startswith("warranty_order:"):
+        order_id = int(data.split(":", 1)[1])
+        order = db.get_order(order_id)
+        if not order or int(order.get("user_id") or 0) != uid or order.get("status") != "delivered":
+            await q.answer(t(lang, "not_for_you"), show_alert=True)
+            return
+        delivered_at = int(order.get("delivered_at") or order.get("created_at") or time.time())
+        days_used = max(0, (int(time.time()) - delivered_at) // 86400)
+        period = max(1, int(order.get("period_days") or 1))
+        warranty_days = int(order.get("warranty_days") or 0)
+        if days_used > warranty_days:
+            await q.answer("Warranty period expired.", show_alert=True)
+            return
+        original = float(order.get("unit_price") or order.get("total_price") or 0)
+        refund = round(max(0, original - (original / period) * days_used), 2)
+        request = db.create_warranty_request(uid, order_id, days_used, refund)
+        await q.message.reply_text("✅ Warranty request sent. The admin will test the account and then offer replacement or refund.", reply_markup=kb.home_keyboard(lang, uid))
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(ADMIN_ID, f"🛡️ <b>Warranty request #{request['id']}</b>\nUser: <code>{uid}</code>\nOrder: <code>#{order_id}</code>\nDays used: <b>{days_used}</b>\nCalculated refund: <b>{refund:.2f} {CURRENCY}</b>\nChoose replacement or refund after testing.", parse_mode=ParseMode.HTML)
+        return
     if data.startswith("withdraw_method:"):
         method = data.split(":", 1)[1]
         if method not in {"binance", "bybit", "bep20"}:
