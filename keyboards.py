@@ -286,7 +286,6 @@ def home_keyboard(lang, user_id):
         ],
         [
             translated_button(lang, "profile_orders", callback_data="orders"),
-            translated_button(lang, "profile_referral", callback_data="affiliate", style="primary"),
         ],
         [translated_button(lang, "menu_account", callback_data="account", style="success")],
         [translated_button(lang, "menu_support", callback_data="support", style="success")],
