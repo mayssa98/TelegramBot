@@ -1175,17 +1175,6 @@ async def _execute_broadcast_job(job):
         else:
             raise ValueError(f"Unknown broadcast job: {kind}")
 
-        if ADMIN_ID and kind != "delete_broadcast":
-            with contextlib.suppress(Exception):
-                await bot_client.send_message(
-                    chat_id=ADMIN_ID,
-                    text=(
-                        f"📢 <b>Diffusion terminée</b> (Job #{job['id']})\n\n"
-                        f"• Type : <code>{kind}</code>\n"
-                        f"• Messages envoyés : <b>{sent}</b>"
-                    ),
-                    parse_mode=ParseMode.HTML,
-                )
         return sent
     finally:
         await bot_client.shutdown()
