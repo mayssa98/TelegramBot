@@ -1686,7 +1686,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_catalog(update, context, lang)
     elif text == t(lang, "menu_lovable"):
         clear_support_pending()
-        await show_lovable(update, context, lang)
+        await show_catalog(update, context, lang)
     elif text == t(lang, "menu_orders"):
         clear_support_pending()
         await show_my_orders(update, context, lang)
@@ -1985,62 +1985,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=kb.profile_back_keyboard(lang),
         )
         return
-    if data == "lovable":
-        await show_callback_screen(
-            q,
-            t(lang, "lovable_title"),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.lovable_home_keyboard(lang, is_admin=uid == ADMIN_ID),
-        )
-        return
-    if data == "lovable_howto":
-        await show_callback_screen(
-            q,
-            t(lang, "lovable_how_to"),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.lovable_back_keyboard(lang),
-        )
-        return
-    if data == "lovable_buy":
-        await show_callback_screen(
-            q,
-            "💗 <b>CHOOSE YOUR ACCESS PERIOD</b>\n\n"
-            "Every paid plan includes a manually verified license and full warranty.",
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.lovable_plans_keyboard(lang),
-        )
-        return
-    if data == "lovable_trial":
-        _request, created = await asyncio.to_thread(lovable_service.request_trial, uid)
-        if not created:
-            await q.message.reply_text(
-                t(lang, "lovable_trial_used"),
-                reply_markup=kb.lovable_plans_keyboard(lang),
-            )
-            return
-        await context.bot.send_message(
-            ADMIN_ID,
-            "🎁 <b>Nouvelle demande d’essai Lovable</b>\n\n"
-            f"Client : <code>{uid}</code>\n"
-            "Durée : <b>1 heure</b>\n\n"
-            "Envoyez manuellement la licence d’essai au client.",
-            parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(
-                    "🔑 Envoyer la licence d’essai",
-                    callback_data=f"adm_lovable_trial:{uid}",
-                    style="success",
-                ),
-            ]]),
-        )
-        await q.message.reply_text(
-            t(lang, "lovable_trial_requested"),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb.lovable_back_keyboard(lang),
-        )
-        return
-    if data == "lovable_download":
-        await send_lovable_extension(context.bot, uid, lang)
+    if data in {"lovable", "lovable_howto", "lovable_buy", "lovable_trial", "lovable_download"}:
+        await q.answer("Ce catalogue n'est plus disponible.", show_alert=True)
         return
     if data == "reseller_api":
         await show_reseller_api(update, context)

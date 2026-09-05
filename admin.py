@@ -97,7 +97,6 @@ def admin_panel_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Commandes payées", callback_data="adm_list:paid")],
         [InlineKeyboardButton("📦 Catalogue", callback_data="adm_catalog")],
-        [InlineKeyboardButton("💗 Lovable Extension", callback_data="adm_lovable")],
         [InlineKeyboardButton("📢 Créer une annonce", callback_data="adm_broadcast_message")],
         [InlineKeyboardButton("🧹 Annonces envoyées", callback_data="adm_broadcast_history")],
         [InlineKeyboardButton("🎫 Tickets support", callback_data="adm_tickets")],
@@ -247,7 +246,7 @@ def text_navigator_keyboard(index):
 def buttons_editor_keyboard():
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     standard = [
-        ("catalog", "Catalogue"), ("lovable", "Lovable Unlimited"),
+        ("catalog", "Catalogue"),
         ("topup", "Recharge"), ("orders", "Commandes"),
         ("account", "Compte"), ("affiliate", "Affiliation"),
         ("support", "Support"), ("language", "Langue"),

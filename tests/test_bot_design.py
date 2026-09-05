@@ -998,8 +998,8 @@ def test_main_menu_is_compact_and_actions_match_labels():
     labels = [[button.text for button in row] for row in keyboard.keyboard[:3]]
     assert labels == [
         [t("fr", "menu_catalog"), t("fr", "menu_orders")],
-        [t("fr", "menu_lovable")],
         [t("fr", "menu_topup")],
+        [t("fr", "menu_account"), t("fr", "menu_affiliate")],
     ]
     assert "compte" in t("fr", "menu_account").lower()
 

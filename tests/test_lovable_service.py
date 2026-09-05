@@ -13,19 +13,14 @@ from tests.test_webhook_http import running_server
 
 
 def test_dedicated_lovable_plans_have_fixed_prices_and_stay_out_of_catalog(mock_mongodb):
-    db.ensure_lovable_unlimited_feature()
-
-    plans = list(mock_mongodb.offers.find({
-        "feature_key": "lovable_unlimited",
-    }).sort("duration_days", 1))
-
-    assert [(row["duration_days"], row["price"]) for row in plans] == [
-        (1, 1.0), (7, 4.0), (30, 8.0),
-    ]
-    assert all(row["unlimited_stock"] for row in plans)
+    db._delete_lovable_catalog(mock_mongodb)
     assert not any(
         offer.get("feature_key") == "lovable_unlimited"
         for offer in db.list_catalog_offers()
+    )
+    assert not any(
+        s.get("feature_key") == "lovable_unlimited"
+        for s in db.list_services(active_only=False)
     )
 
 
@@ -35,12 +30,7 @@ def test_lovable_moves_from_home_into_shop_and_keeps_dedicated_buy_buttons(mock_
     shop = kb.catalog_offers_keyboard("en")
     shop_callbacks = [button.callback_data for row in shop.inline_keyboard for button in row]
     assert "lovable" not in home_callbacks
-    assert "lovable" in shop_callbacks
-
-    plans = kb.lovable_plans_keyboard("en")
-    plan_callbacks = [button.callback_data for row in plans.inline_keyboard for button in row]
-    assert plan_callbacks[0] == "lovable_trial"
-    assert len([value for value in plan_callbacks if value.startswith("buyq:")]) == 3
+    assert "lovable" not in shop_callbacks
 
 
 def test_free_trial_is_limited_to_one_manual_request_per_user(mock_mongodb):
@@ -56,14 +46,18 @@ def test_free_trial_is_limited_to_one_manual_request_per_user(mock_mongodb):
 def test_paid_lovable_order_waits_for_admin_then_registers_manual_license(
     monkeypatch, mock_mongodb,
 ):
-    db.ensure_lovable_unlimited_feature()
-    offer = mock_mongodb.offers.find_one({"duration_days": 7})
+    mock_mongodb.offers.insert_one({
+        "id": 888,
+        "name": "7 Days Access",
+        "duration_days": 7,
+        "feature_key": "lovable_unlimited",
+    })
     mock_mongodb.orders.insert_one({
         "id": 801,
         "user_id": 42,
-        "offer_id": offer["id"],
+        "offer_id": 888,
         "service_name": "Lovable Unlimited Credit",
-        "offer_name": offer["name"],
+        "offer_name": "7 Days Access",
         "status": "payment_confirmed",
     })
     notify_manual = AsyncMock()

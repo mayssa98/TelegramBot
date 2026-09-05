@@ -265,7 +265,6 @@ def main_menu_keyboard(lang, user_id):
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     candidates = [
         [("catalog", t(lang, "menu_catalog")), ("orders", t(lang, "menu_orders"))],
-        [("lovable", t(lang, "menu_lovable"))],
         [("topup", t(lang, "menu_topup"))],
         [("account", t(lang, "menu_account")), ("affiliate", t(lang, "menu_affiliate"))],
         [("support", t(lang, "menu_support")), ("language", t(lang, "menu_lang"))],
@@ -400,7 +399,6 @@ def catalog_offers_keyboard(lang, catalog_notifications_enabled=True):
             "stock_label", "price_tbd", "catalog_request_button",
             "catalog_preorder_button", "catalog_notifications_on",
             "catalog_notifications_off", "btn_refresh_short", "btn_main_menu_short",
-            "menu_lovable",
         ),
         lang,
     )
@@ -502,11 +500,6 @@ def catalog_offers_keyboard(lang, catalog_notifications_enabled=True):
 
     # 2. Add individual offer buttons below
     buttons.extend(regular_offer_buttons)
-
-    # Lovable Unlimited keeps its dedicated purchase flow but now lives in Shop.
-    buttons.append([translated_button(
-        lang, "menu_lovable", callback_data="lovable", style="success",
-    )])
 
     buttons.append([
         translated_button(

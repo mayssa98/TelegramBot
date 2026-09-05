@@ -18,7 +18,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
@@ -164,64 +164,8 @@ def _enforce_otp_catalog_rules(conn):
 
 
 def ensure_lovable_unlimited_feature(conn=None):
-    """Create the dedicated Lovable plans once and keep their promised prices."""
-    conn = conn or get_conn()
-    service = conn.services.find_one({"feature_key": "lovable_unlimited"})
-    if not service:
-        last = conn.services.find_one(sort=[("sort_order", DESCENDING)]) or {}
-        service = {
-            "id": _next_id("services"),
-            "feature_key": "lovable_unlimited",
-            "name": "Lovable Unlimited Credit",
-            "emoji": "💗",
-            "suffix_emoji": "",
-            "sort_order": int(last.get("sort_order") or 0) + 1,
-            "active": 1,
-            "dedicated_home": True,
-            "sales_channels": ["bot"],
-        }
-        conn.services.insert_one(service)
-    else:
-        conn.services.update_one(
-            {"_id": service["_id"]},
-            {"$set": {
-                "name": "Lovable Unlimited Credit",
-                "active": 1,
-                "dedicated_home": True,
-                "sales_channels": ["bot"],
-            }},
-        )
-
-    plans = (
-        ("lovable_1_day", "1 Day Access", 1.0, 1),
-        ("lovable_7_days", "7 Days Access", 4.0, 7),
-        ("lovable_30_days", "30 Days Access", 8.0, 30),
-    )
-    for order, (feature_key, name, price, duration_days) in enumerate(plans, 1):
-        existing = conn.offers.find_one({"plan_key": feature_key})
-        values = {
-            "service_id": int(service["id"]),
-            "feature_key": "lovable_unlimited",
-            "plan_key": feature_key,
-            "name": name,
-            "description": "Unlimited Lovable credits through our browser extension.",
-            "price": price,
-            "currency": "USDT",
-            "stock": 0,
-            "note": "Full warranty while the extension is operational.",
-            "auto_delivery": False,
-            "manual_stock": True,
-            "unlimited_stock": True,
-            "delivery_delay": "Manual license delivery after payment confirmation",
-            "duration_days": duration_days,
-            "sort_order": order,
-            "active": 1,
-            "sales_channels": ["bot"],
-        }
-        if existing:
-            conn.offers.update_one({"_id": existing["_id"]}, {"$set": values})
-        else:
-            conn.offers.insert_one({"id": _next_id("offers"), **values})
+    """The Lovable Unlimited Credit catalog has been deleted."""
+    return None
 
 
 def get_conn():
@@ -392,6 +336,8 @@ def init_db():
         _backfill_structured_warranties(db)
     if not schema or int(schema.get("version") or 0) < 20:
         _sanitize_corrupted_emojis_and_offers(db)
+    if not schema or int(schema.get("version") or 0) < 21:
+        _delete_lovable_catalog(db)
     if os.environ.get("HP_SEED_DEFAULT_CATALOG", "").strip().lower() in {"1", "true", "yes"}:
         _seed_catalog()
     db.schema_meta.update_one(
@@ -467,6 +413,23 @@ def _sanitize_corrupted_emojis_and_offers(conn):
         {"active": 1, "archived": 1},
         {"$set": {"archived": 0}, "$unset": {"archived_at": ""}},
     )
+
+
+def _delete_lovable_catalog(conn):
+    """Permanently delete Lovable Unlimited Credit from services and offers."""
+    conn.services.delete_many({
+        "$or": [
+            {"feature_key": "lovable_unlimited"},
+            {"name": {"$regex": r"^lovable\s+unlimited", "$options": "i"}},
+        ]
+    })
+    conn.offers.delete_many({
+        "$or": [
+            {"feature_key": "lovable_unlimited"},
+            {"plan_key": {"$regex": r"^lovable_", "$options": "i"}},
+            {"name": {"$regex": r"^lovable", "$options": "i"}},
+        ]
+    })
 
 
 def _backfill_inventory_ids(conn):

@@ -754,11 +754,11 @@ def test_home_uses_blue_shop_and_green_remaining_actions(mock_mongodb):
     assert "lovable" not in actions
 
     shop = kb.catalog_offers_keyboard("en")
-    lovable = next(
-        button for row in shop.inline_keyboard for button in row
-        if button.callback_data == "lovable"
-    )
-    assert lovable.style == "success"
+    shop_callbacks = [
+        button.callback_data for row in shop.inline_keyboard for button in row
+        if button.callback_data
+    ]
+    assert "lovable" not in shop_callbacks
 
 
 def test_reseller_api_stays_in_profile_and_dashboard(mock_mongodb):
