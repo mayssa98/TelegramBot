@@ -752,6 +752,9 @@ def catalog(provider: str = PROVIDER) -> dict[str, Any]:
         unlimited_stock = (
             (provider == CGPT_ACTIVE_PROVIDER and raw.get("stock") is None)
             or (provider == UPIBOT_PROVIDER and raw.get("stock_count") is None)
+            or (provider == PROVIDER and raw.get("stock") is None)
+            or raw.get("stock") == -1
+            or bool(raw.get("unlimited_stock") or raw.get("unlimited"))
         )
         stock = max(0, int(
             (stats.get("available") or availability.get("available") or 0)

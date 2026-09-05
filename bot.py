@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 from telegram import Bot, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, LinkPreviewOptions, Update
 from telegram.constants import ParseMode
-from telegram.error import NetworkError, RetryAfter, TimedOut
+from telegram.error import BadRequest, NetworkError, RetryAfter, TimedOut
 from telegram.ext import (
     Application,
     ApplicationHandlerStop,
