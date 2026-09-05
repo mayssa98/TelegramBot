@@ -1822,6 +1822,18 @@ async def show_callback_screen(
                 )
 
 
+def warranty_days_used(order):
+    delivered_at = order.get("delivered_at") or order.get("created_at") or time.time()
+    if isinstance(delivered_at, datetime):
+        delivered_timestamp = delivered_at.timestamp()
+    else:
+        try:
+            delivered_timestamp = float(delivered_at)
+        except (TypeError, ValueError, OverflowError):
+            delivered_timestamp = time.time()
+    return max(0, int((time.time() - delivered_timestamp) // 86400))
+
+
 async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
@@ -1996,7 +2008,12 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # A warranty flow starts a fresh callback route; discard any stale
         # text-entry state left by another customer action.
         PENDING.pop(uid, None)
-        orders = [o for o in db.list_user_orders(uid, limit=30) if o.get("status") == "delivered" and int(o.get("warranty_days") or 0) > 0]
+        orders = [
+            o for o in db.list_user_orders(uid, limit=100)
+            if o.get("status") == "delivered"
+            and int(o.get("warranty_days") or 0) > 0
+            and warranty_days_used(o) <= int(o.get("warranty_days") or 0)
+        ]
         if not orders:
             await show_callback_screen(q, "🛡️ No delivered order currently has an active warranty.", reply_markup=kb.home_keyboard(lang, uid))
             return
@@ -2014,8 +2031,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ):
             await q.answer(t(lang, "not_for_you"), show_alert=True)
             return
-        delivered_at = int(order.get("delivered_at") or order.get("created_at") or time.time())
-        days_used = max(0, (int(time.time()) - delivered_at) // 86400)
+        days_used = warranty_days_used(order)
         period = max(1, int(order.get("period_days") or 1))
         warranty_days = int(order.get("warranty_days") or 0)
         if days_used > warranty_days:
