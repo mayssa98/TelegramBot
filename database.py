@@ -589,9 +589,10 @@ def create_withdrawal(user_id, amount, method, destination):
     if amount_cents < 1000:
         raise ValueError("Minimum withdrawal is 10 USDT.")
     conn = get_conn()
-    wallet = conn.wallets.find_one(
+    wallet = conn.wallets.find_one_and_update(
         {"user_id": int(user_id), "balance_cents": {"$gte": amount_cents}},
-        {"_id": 1},
+        {"$inc": {"balance_cents": -amount_cents}},
+        return_document=ReturnDocument.AFTER,
     )
     if not wallet:
         raise ValueError("Insufficient wallet balance.")
@@ -611,26 +612,11 @@ def list_withdrawals(status="pending", limit=100):
 
 
 def update_withdrawal(withdrawal_id, status, admin_note=""):
-    conn = get_conn()
-    withdrawal = conn.withdrawals.find_one({"id": int(withdrawal_id), "status": "pending"})
-    if not withdrawal:
-        return None
-    amount_cents = int(withdrawal.get("amount_cents") or 0)
-    if str(status) == "completed":
-        wallet = conn.wallets.find_one_and_update(
-            {"user_id": int(withdrawal["user_id"]), "balance_cents": {"$gte": amount_cents}},
-            {"$inc": {"balance_cents": -amount_cents}},
-            return_document=ReturnDocument.AFTER,
-        )
-        if not wallet:
-            return None
-    row = conn.withdrawals.find_one_and_update(
+    row = get_conn().withdrawals.find_one_and_update(
         {"id": int(withdrawal_id), "status": "pending"},
         {"$set": {"status": str(status), "admin_note": str(admin_note), "updated_at": datetime.now(UTC)}},
         return_document=ReturnDocument.AFTER,
     )
-    if not row and str(status) == "completed":
-        conn.wallets.update_one({"user_id": int(withdrawal["user_id"])}, {"$inc": {"balance_cents": amount_cents}})
     return _public(row) if row else None
 
 
