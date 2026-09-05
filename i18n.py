@@ -114,14 +114,14 @@ TRANSLATIONS = {
     "topup_verify_bybit": {"fr": "🟠 Bybit Pay", "en": "🟠 Bybit Pay", "ar": "🟠 Bybit Pay"},
     "topup_onchain": {"fr": "⛓️ Onchain", "en": "⛓️ Onchain", "ar": "⛓️ Onchain"},
     "topup_bsc": {
-        "fr": "🟨 Recharger via USDT BSC",
-        "en": "🟨 Top up via USDT BSC",
-        "ar": "🟨 Top up via USDT BSC",
+        "fr": "🟨 USDT - BEP20",
+        "en": "🟨 USDT - BEP20",
+        "ar": "🟨 USDT - BEP20",
     },
     "topup_polygon": {
-        "fr": "🟪 Recharger via USDT Polygon",
-        "en": "🟪 Top up via USDT Polygon",
-        "ar": "🟪 Top up via USDT Polygon",
+        "fr": "🟪 USDT - POLY",
+        "en": "🟪 USDT - POLY",
+        "ar": "🟪 USDT - POLY",
     },
     "topup_onchain_amount": {
         "fr": "💰 Entrez le montant à ajouter à votre portefeuille via USDT {network} (minimum 1 USDT) :",
