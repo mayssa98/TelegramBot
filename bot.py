@@ -1646,6 +1646,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_withdraw_amount",
         "await_withdraw_method",
         "await_withdraw_destination",
+        "warranty_reason",
         "manual_order_reply",
         "await_quantity",
         "await_preorder_quantity",
@@ -2029,10 +2030,14 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if existing_request:
             await q.message.reply_text("⚠️ A warranty request for this order has already been submitted.")
             return
-        request = db.create_warranty_request(uid, order_id, days_used, refund)
-        await q.message.reply_text("✅ Warranty request sent. The admin will test the account and then offer replacement or refund.", reply_markup=kb.home_keyboard(lang, uid))
-        with contextlib.suppress(Exception):
-            await context.bot.send_message(ADMIN_ID, f"🛡️ <b>Warranty request #{request['id']}</b>\nUser: <code>{uid}</code>\nOrder: <code>#{order_id}</code>\nDays used: <b>{days_used}</b>\nCalculated refund: <b>{refund:.2f} {CURRENCY}</b>\nChoose replacement or refund after testing.", parse_mode=ParseMode.HTML)
+        PENDING[uid] = ("warranty_reason", {
+            "order_id": order_id,
+            "days_used": days_used,
+            "refund": refund,
+        })
+        await q.message.reply_text(
+            "Please describe the problem with this product, then send your message."
+        )
         return
     if data.startswith("withdraw_method:"):
         method = data.split(":", 1)[1]
@@ -2992,6 +2997,38 @@ async def handle_pending_input(update, context, lang):
             return
         PENDING[uid] = ("await_withdraw_method", amount)
         await update.message.reply_text("Choose your withdrawal method:", reply_markup=kb.withdrawal_methods_keyboard(lang))
+        return
+
+    if kind == "warranty_reason":
+        reason = rich_text_from_message(update.message).strip()
+        if not reason:
+            await update.message.reply_text("Please describe the problem before sending the request.")
+            return
+        if len(reason) > 2000:
+            await update.message.reply_text("Please keep the description under 2000 characters.")
+            return
+        order_id = int(ref["order_id"])
+        request = db.create_warranty_request(
+            uid, order_id, int(ref["days_used"]), float(ref["refund"]),
+        )
+        PENDING.pop(uid, None)
+        await update.message.reply_text(
+            "✅ Warranty request sent. The admin will test the account and then offer replacement or refund.",
+            reply_markup=kb.home_keyboard(lang, uid),
+        )
+        with contextlib.suppress(Exception):
+            user = update.effective_user
+            customer_name = html.escape(str(getattr(user, "full_name", "") or "—"))
+            await context.bot.send_message(
+                ADMIN_ID,
+                f"🛡️ <b>Warranty request #{request['id']}</b>\n"
+                f"Name: <b>{customer_name}</b>\nUser: <code>{uid}</code>\n"
+                f"Order: <code>#{order_id}</code>\nDays used: <b>{int(ref['days_used'])}</b>\n"
+                f"Calculated refund: <b>{float(ref['refund']):.2f} {CURRENCY}</b>\n"
+                f"Customer message: <blockquote>{html.escape(reason)}</blockquote>\n"
+                "Choose replacement or refund after testing.",
+                parse_mode=ParseMode.HTML,
+            )
         return
 
     if kind == "await_withdraw_destination":
