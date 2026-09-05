@@ -1822,16 +1822,18 @@ async def show_callback_screen(
                 )
 
 
-def warranty_days_used(order):
+def order_delivery_timestamp(order):
     delivered_at = order.get("delivered_at") or order.get("created_at") or time.time()
     if isinstance(delivered_at, datetime):
-        delivered_timestamp = delivered_at.timestamp()
-    else:
-        try:
-            delivered_timestamp = float(delivered_at)
-        except (TypeError, ValueError, OverflowError):
-            delivered_timestamp = time.time()
-    return max(0, int((time.time() - delivered_timestamp) // 86400))
+        return delivered_at.timestamp()
+    try:
+        return float(delivered_at)
+    except (TypeError, ValueError, OverflowError):
+        return time.time()
+
+
+def warranty_days_used(order):
+    return max(0, int((time.time() - order_delivery_timestamp(order)) // 86400))
 
 
 async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2011,11 +2013,15 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         orders = [
             o for o in db.list_user_orders(uid, limit=100)
             if o.get("status") == "delivered"
-            and int(o.get("warranty_days") or 0) > 0
-            and warranty_days_used(o) <= int(o.get("warranty_days") or 0)
+            and int(o.get("period_days") or 0) > 0
+            and warranty_days_used(o) < int(o.get("period_days") or 0)
         ]
         if not orders:
-            await show_callback_screen(q, "🛡️ No delivered order currently has an active warranty.", reply_markup=kb.home_keyboard(lang, uid))
+            await show_callback_screen(
+                q,
+                "🛡️ No delivered product currently has an active product period.",
+                reply_markup=kb.home_keyboard(lang, uid),
+            )
             return
         await show_callback_screen(q, "Select the delivered product with a problem:", reply_markup=kb.warranty_orders_keyboard(lang, orders))
         return
@@ -2027,15 +2033,36 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             not order
             or int(order.get("user_id") or 0) != uid
             or order.get("status") != "delivered"
-            or int(order.get("warranty_days") or 0) <= 0
         ):
             await q.answer(t(lang, "not_for_you"), show_alert=True)
             return
         days_used = warranty_days_used(order)
         period = max(1, int(order.get("period_days") or 1))
         warranty_days = int(order.get("warranty_days") or 0)
-        if days_used > warranty_days:
-            await q.answer("Warranty period expired.", show_alert=True)
+        if days_used >= period:
+            await q.message.reply_text(
+                "⚠️ This product period has already expired.",
+                reply_markup=kb.home_keyboard(lang, uid),
+            )
+            return
+        if warranty_days <= 0 or days_used >= warranty_days:
+            delivered_timestamp = order_delivery_timestamp(order)
+            delivered_text = datetime.fromtimestamp(delivered_timestamp, UTC).strftime("%Y-%m-%d %H:%M UTC")
+            product_expires = datetime.fromtimestamp(delivered_timestamp + period * 86400, UTC).strftime("%Y-%m-%d %H:%M UTC")
+            product_name = html.escape(str(order.get("offer_name") or order.get("service_name") or "Product"))
+            await q.message.reply_text(
+                "🛡️ <b>Product out of warranty</b>\n\n"
+                f"Product: <b>{product_name}</b>\n"
+                f"Order: <code>#{order_id}</code>\n"
+                f"Delivered: <b>{delivered_text}</b>\n"
+                f"Product period: <b>{period} days</b>\n"
+                f"Product expires: <b>{product_expires}</b>\n"
+                f"Warranty period: <b>{max(0, warranty_days)} days</b>\n"
+                f"Days used: <b>{days_used}</b>\n\n"
+                "The product period is still active, but warranty support has expired.",
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.home_keyboard(lang, uid),
+            )
             return
         original = float(order.get("unit_price") or order.get("total_price") or 0)
         refund = round(max(0, original - (original / period) * days_used), 2)

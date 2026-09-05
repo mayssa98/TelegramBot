@@ -1,6 +1,7 @@
 """Regression tests for the customer-facing Telegram navigation."""
 
 import asyncio
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -88,6 +89,57 @@ def test_profile_uses_quote_panels_and_dedicated_navigation(mock_mongodb):
         for button in row
     }
     assert {"topup", "orders", "affiliate", "catalog", "reseller_api", "home"} <= callbacks
+
+
+def test_warranty_route_lists_active_products_and_explains_expired_warranty(mock_mongodb):
+    now = int(time.time())
+    mock_mongodb.orders.insert_many([
+        {
+            "id": 71, "user_id": 42, "status": "delivered",
+            "offer_name": "Active subscription", "period_days": 30,
+            "warranty_days": 3, "delivered_at": now - 5 * 86400,
+        },
+        {
+            "id": 72, "user_id": 42, "status": "delivered",
+            "offer_name": "Expired subscription", "period_days": 3,
+            "warranty_days": 3, "delivered_at": now - 5 * 86400,
+        },
+    ])
+    menu_query = SimpleNamespace(
+        data="warranty", from_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(text="Menu", reply_text=AsyncMock()),
+        answer=AsyncMock(), edit_message_text=AsyncMock(),
+    )
+
+    asyncio.run(cb_navigation(
+        SimpleNamespace(callback_query=menu_query),
+        SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock())),
+    ))
+
+    markup = menu_query.edit_message_text.await_args.kwargs["reply_markup"]
+    callbacks = {
+        button.callback_data
+        for row in markup.inline_keyboard
+        for button in row
+    }
+    assert "warranty_order:71" in callbacks
+    assert "warranty_order:72" not in callbacks
+
+    product_message = SimpleNamespace(reply_text=AsyncMock())
+    product_query = SimpleNamespace(
+        data="warranty_order:71", from_user=SimpleNamespace(id=42),
+        message=product_message, answer=AsyncMock(),
+    )
+    asyncio.run(cb_navigation(
+        SimpleNamespace(callback_query=product_query),
+        SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock())),
+    ))
+
+    notice = product_message.reply_text.await_args.args[0]
+    assert "Product out of warranty" in notice
+    assert "Active subscription" in notice
+    assert "Product period: <b>30 days</b>" in notice
+    assert PENDING.get(42) is None
 
 
 def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb):
