@@ -280,9 +280,17 @@ def home_keyboard(lang, user_id):
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     candidate_rows = [
         [translated_button(lang, "menu_catalog", callback_data="catalog", style="primary")],
-        [translated_button(lang, "menu_topup", callback_data="topup", style="success")],
+        [
+            translated_button(lang, "profile_deposit", callback_data="topup", style="success"),
+            translated_button(lang, "profile_withdraw", callback_data="profile_withdraw"),
+        ],
+        [
+            translated_button(lang, "profile_orders", callback_data="orders"),
+            translated_button(lang, "profile_referral", callback_data="affiliate", style="primary"),
+        ],
         [translated_button(lang, "menu_account", callback_data="account", style="success")],
         [translated_button(lang, "menu_support", callback_data="support", style="success")],
+        [translated_button(lang, "profile_notifications", callback_data="profile_notifications")],
         [
             translated_button(lang, "menu_lang", callback_data="language", style="success"),
         ],
@@ -655,14 +663,12 @@ def profile_keyboard(lang):
     return InlineKeyboardMarkup([
         [
             translated_button(lang, "profile_deposit", callback_data="topup", style="success"),
-            translated_button(lang, "profile_withdraw", callback_data="profile_withdraw"),
         ],
         [
             translated_button(lang, "profile_orders", callback_data="orders"),
             translated_button(lang, "profile_referral", callback_data="affiliate", style="primary"),
         ],
         [translated_button(lang, "profile_shop", callback_data="catalog", style="success")],
-        [translated_button(lang, "profile_notifications", callback_data="profile_notifications")],
         [translated_button(lang, "profile_reseller_api", callback_data="reseller_api", style="primary")],
         [translated_button(lang, "profile_main_menu", callback_data="home", style="danger")],
     ])

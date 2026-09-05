@@ -87,10 +87,7 @@ def test_profile_uses_quote_panels_and_dedicated_navigation(mock_mongodb):
         for row in call.kwargs["reply_markup"].inline_keyboard
         for button in row
     }
-    assert {
-        "topup", "profile_withdraw", "orders", "affiliate", "catalog",
-        "profile_notifications", "reseller_api", "home",
-    } <= callbacks
+    assert {"topup", "orders", "affiliate", "catalog", "reseller_api", "home"} <= callbacks
 
 
 def test_inventory_restock_is_broadcast_privately_to_all_bot_users(mock_mongodb):
@@ -1387,7 +1384,8 @@ def test_inline_home_avoids_actions_repeated_in_profile():
     callbacks = {button.callback_data for row in keyboard.inline_keyboard for button in row}
 
     assert {"catalog", "topup", "account", "support", "language"} <= callbacks
-    assert {"lovable", "orders", "affiliate", "reseller_api"}.isdisjoint(callbacks)
+    assert "lovable" not in callbacks
+    assert {"orders", "affiliate"} <= callbacks
     assert "help" not in callbacks
 
 

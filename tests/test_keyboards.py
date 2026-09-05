@@ -35,10 +35,9 @@ def test_profile_keyboard_matches_customer_profile_navigation():
         for row in keyboard.inline_keyboard
     ]
     assert callbacks == [
-        ["topup", "profile_withdraw"],
+        ["topup"],
         ["orders", "affiliate"],
         ["catalog"],
-        ["profile_notifications"],
         ["reseller_api"],
         ["home"],
     ]
