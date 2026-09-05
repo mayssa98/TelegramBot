@@ -284,9 +284,6 @@ def home_keyboard(lang, user_id):
             translated_button(lang, "profile_deposit", callback_data="topup", style="success"),
             translated_button(lang, "profile_withdraw", callback_data="profile_withdraw"),
         ],
-        [
-            translated_button(lang, "profile_orders", callback_data="orders"),
-        ],
         [translated_button(lang, "menu_account", callback_data="account", style="success")],
         [translated_button(lang, "menu_support", callback_data="support", style="success")],
         [translated_button(lang, "profile_notifications", callback_data="profile_notifications")],
