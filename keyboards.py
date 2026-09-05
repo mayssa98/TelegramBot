@@ -675,9 +675,9 @@ def profile_keyboard(lang):
 
 def withdrawal_methods_keyboard(lang):
     labels = {
-        "fr": [("Binance ID", "binance"), ("Bybit ID", "bybit")],
-        "en": [("Binance ID", "binance"), ("Bybit ID", "bybit")],
-        "ar": [("Binance ID", "binance"), ("Bybit ID", "bybit")],
+        "fr": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("Adresse USDT BEP20", "bep20")],
+        "en": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("USDT BEP20 address", "bep20")],
+        "ar": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("عنوان USDT BEP20", "bep20")],
     }
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(label, callback_data=f"withdraw_method:{method}")]
