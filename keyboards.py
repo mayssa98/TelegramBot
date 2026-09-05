@@ -279,18 +279,20 @@ def main_menu_keyboard(lang, user_id):
 def home_keyboard(lang, user_id):
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     candidate_rows = [
-        [translated_button(lang, "menu_catalog", callback_data="catalog", style="primary")],
+        [translated_button(lang, "menu_catalog", callback_data="catalog", style="success")],
         [
-            translated_button(lang, "profile_deposit", callback_data="topup", style="success"),
-            translated_button(lang, "profile_withdraw", callback_data="profile_withdraw"),
+            translated_button(lang, "profile_deposit", callback_data="topup", style="primary"),
+            translated_button(lang, "profile_withdraw", callback_data="profile_withdraw", style="primary"),
         ],
-        [translated_button(lang, "menu_account", callback_data="account", style="success")],
-        [translated_button(lang, "menu_support", callback_data="support", style="success")],
-        [translated_button(lang, "profile_notifications", callback_data="profile_notifications")],
-        [translated_button(lang, "menu_warranty", callback_data="warranty", style="success")],
         [
-            translated_button(lang, "menu_lang", callback_data="language", style="success"),
+            translated_button(lang, "menu_account", callback_data="account", style="primary"),
+            translated_button(lang, "profile_notifications", callback_data="profile_notifications", style="primary"),
         ],
+        [
+            translated_button(lang, "menu_warranty", callback_data="warranty", style="primary"),
+            translated_button(lang, "menu_lang", callback_data="language", style="primary"),
+        ],
+        [translated_button(lang, "menu_support", callback_data="support", style="danger")],
     ]
     rows = []
     for row in candidate_rows:
