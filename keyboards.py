@@ -675,14 +675,24 @@ def profile_keyboard(lang):
 
 def withdrawal_methods_keyboard(lang):
     labels = {
-        "fr": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("Adresse USDT BEP20", "bep20")],
-        "en": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("USDT BEP20 address", "bep20")],
-        "ar": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("عنوان USDT BEP20", "bep20")],
+        "fr": [("Binance ID", "binance"), ("Bybit ID", "bybit")],
+        "en": [("Binance ID", "binance"), ("Bybit ID", "bybit")],
+        "ar": [("Binance ID", "binance"), ("Bybit ID", "bybit")],
     }
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(label, callback_data=f"withdraw_method:{method}")]
         for label, method in labels.get(lang, labels["en"])
     ] + [[translated_button(lang, "profile_main_menu", callback_data="home")]])
+
+
+def withdrawal_admin_keyboard(withdrawal_id):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "✅ Done",
+            callback_data=f"adm_withdraw_done:{int(withdrawal_id)}",
+            style="success",
+        ),
+    ]])
 
 
 def warranty_orders_keyboard(lang, orders):

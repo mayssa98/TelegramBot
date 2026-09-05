@@ -3018,6 +3018,7 @@ async def handle_pending_input(update, context, lang):
                       f"Method: <b>{html.escape(method)}</b>\nDestination: <code>{html.escape(destination)}</code>\n"
                       f"Requested: <b>{requested_at}</b>"),
                 parse_mode=ParseMode.HTML,
+                reply_markup=kb.withdrawal_admin_keyboard(request["id"]),
             )
         return
 
@@ -4250,6 +4251,26 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🛠️ *Panneau Admin*",
             reply_markup=admin.admin_panel_keyboard(),
         )
+        return
+
+    if data.startswith("adm_withdraw_done:"):
+        withdrawal_id = int(data.split(":", 1)[1])
+        withdrawal = db.update_withdrawal(withdrawal_id, "completed")
+        if not withdrawal:
+            await q.message.reply_text("⚠️ This withdrawal is already processed.")
+            return
+        customer_id = int(withdrawal["user_id"])
+        amount = float(withdrawal.get("amount") or 0)
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                customer_id,
+                f"✅ <b>Withdrawal completed</b>\n\nYour withdrawal request <b>#{withdrawal_id}</b> "
+                f"for <b>{amount:.2f} {CURRENCY}</b> has been processed successfully.",
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.home_keyboard(lang_of(customer_id), customer_id),
+            )
+        await q.edit_message_reply_markup(reply_markup=None)
+        await q.message.reply_text(f"✅ Withdrawal #{withdrawal_id} marked as completed.")
         return
 
     if data == "adm_lovable":
