@@ -2993,6 +2993,11 @@ async def handle_pending_input(update, context, lang):
             await update.message.reply_text("⚠️ Please send a valid destination.")
             return
         amount = float(ref.get("amount") if isinstance(ref, dict) else 0)
+        customer = update.effective_user
+        customer_name = html.escape(str(getattr(customer, "full_name", "") or "—"))
+        customer_username = str(getattr(customer, "username", "") or "").strip()
+        customer_username = html.escape(f"@{customer_username}" if customer_username else "—")
+        requested_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         try:
             request = await asyncio.to_thread(db.create_withdrawal, uid, amount, method, destination)
         except ValueError as exc:
@@ -3008,8 +3013,10 @@ async def handle_pending_input(update, context, lang):
             await context.bot.send_message(
                 chat_id=ADMIN_ID,
                 text=(f"💸 <b>New withdrawal request #{request['id']}</b>\n\n"
-                      f"User: <code>{uid}</code>\nAmount: <b>{amount:.2f} {CURRENCY}</b>\n"
-                      f"Method: <b>{html.escape(method)}</b>\nDestination: <code>{html.escape(destination)}</code>"),
+                      f"Name: <b>{customer_name}</b>\nUsername: <b>{customer_username}</b>\n"
+                      f"User ID: <code>{uid}</code>\nAmount: <b>{amount:.2f} {CURRENCY}</b>\n"
+                      f"Method: <b>{html.escape(method)}</b>\nDestination: <code>{html.escape(destination)}</code>\n"
+                      f"Requested: <b>{requested_at}</b>"),
                 parse_mode=ParseMode.HTML,
             )
         return
