@@ -1643,6 +1643,9 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_topup_txid",
         "await_onchain_topup_amount",
         "await_onchain_topup_txid",
+        "await_withdraw_amount",
+        "await_withdraw_method",
+        "await_withdraw_destination",
         "manual_order_reply",
         "await_quantity",
         "await_preorder_quantity",
@@ -1989,6 +1992,9 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             PENDING[uid] = ("await_withdraw_amount", None)
         return
     if data == "warranty":
+        # A warranty flow starts a fresh callback route; discard any stale
+        # text-entry state left by another customer action.
+        PENDING.pop(uid, None)
         orders = [o for o in db.list_user_orders(uid, limit=30) if o.get("status") == "delivered" and int(o.get("warranty_days") or 0) > 0]
         if not orders:
             await show_callback_screen(q, "🛡️ No delivered order currently has an active warranty.", reply_markup=kb.home_keyboard(lang, uid))
@@ -1998,7 +2004,12 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("warranty_order:"):
         order_id = int(data.split(":", 1)[1])
         order = db.get_order(order_id)
-        if not order or int(order.get("user_id") or 0) != uid or order.get("status") != "delivered":
+        if (
+            not order
+            or int(order.get("user_id") or 0) != uid
+            or order.get("status") != "delivered"
+            or int(order.get("warranty_days") or 0) <= 0
+        ):
             await q.answer(t(lang, "not_for_you"), show_alert=True)
             return
         delivered_at = int(order.get("delivered_at") or order.get("created_at") or time.time())

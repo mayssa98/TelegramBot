@@ -1385,7 +1385,7 @@ def test_inline_home_avoids_actions_repeated_in_profile():
 
     assert {"catalog", "topup", "account", "support", "language"} <= callbacks
     assert "lovable" not in callbacks
-    assert {"orders", "affiliate"} <= callbacks
+    assert {"orders", "affiliate"}.isdisjoint(callbacks)
     assert "help" not in callbacks
 
 
