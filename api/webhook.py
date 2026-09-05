@@ -885,6 +885,14 @@ class handler(BaseHTTPRequestHandler):
             self._reply(200, dashboard_api.list_wallet_topups(parse_qs(url.query)))
             return
 
+        elif path == "/admin/api/withdrawals":
+            if not self._dashboard_authorized():
+                self._reply(401, {"ok": False, "error": "Unauthorized"})
+                return
+            status = parse_qs(url.query).get("status", ["pending"])[0]
+            self._reply(200, {"ok": True, "items": db.list_withdrawals(status)})
+            return
+
         elif path == "/admin/api/storefront-orders":
             if not self._dashboard_authorized():
                 self._reply(401, {"ok": False, "error": "Unauthorized"})

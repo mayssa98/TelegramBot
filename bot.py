@@ -1978,12 +1978,24 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     if data == "profile_withdraw":
+        balance = wallet_service.balance_cents(uid) / 100
         await show_callback_screen(
             q,
-            t(lang, "profile_withdraw_unavailable"),
+            f"💸 <b>Withdraw</b>\n\nAvailable wallet balance: <b>{balance:.2f} {CURRENCY}</b>\nMinimum withdrawal: <b>10.00 {CURRENCY}</b>\nProcessing time: <b>1 to 24 hours</b>\n\nHow much would you like to withdraw?",
             parse_mode=ParseMode.HTML,
             reply_markup=kb.profile_back_keyboard(lang),
         )
+        if balance >= 10:
+            PENDING[uid] = ("await_withdraw_amount", None)
+        return
+    if data.startswith("withdraw_method:"):
+        method = data.split(":", 1)[1]
+        if method not in {"binance", "bybit", "bep20"}:
+            return
+        pending_withdraw = PENDING.get(uid)
+        amount = pending_withdraw[1] if pending_withdraw and pending_withdraw[0] == "await_withdraw_method" else 0
+        PENDING[uid] = ("await_withdraw_destination", {"method": method, "amount": amount})
+        await q.message.reply_text("Send your Binance ID, Bybit ID, or USDT BEP20 address:")
         return
     if data in {"lovable", "lovable_howto", "lovable_buy", "lovable_trial", "lovable_download"}:
         await q.answer("Ce catalogue n'est plus disponible.", show_alert=True)
@@ -2919,6 +2931,52 @@ async def handle_pending_input(update, context, lang):
             "Ajoutez maintenant les comptes pour alimenter le stock.",
             reply_markup=admin.offer_admin_keyboard(offer_id),
         )
+        return
+
+    if kind == "await_withdraw_amount":
+        try:
+            amount = round(float(text.replace(",", ".")), 2)
+            balance = wallet_service.balance_cents(uid) / 100
+            if amount < 10 or amount > balance:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text(
+                f"⚠️ Enter an amount between 10.00 and {wallet_service.balance_cents(uid) / 100:.2f} {CURRENCY}."
+            )
+            return
+        PENDING[uid] = ("await_withdraw_method", amount)
+        await update.message.reply_text("Choose your withdrawal method:", reply_markup=kb.withdrawal_methods_keyboard(lang))
+        return
+
+    if kind == "await_withdraw_destination":
+        destination = text.strip()
+        method = str(ref.get("method") if isinstance(ref, dict) else ref)
+        if not destination or len(destination) > 180:
+            await update.message.reply_text("⚠️ Please send a valid destination.")
+            return
+        amount = float(ref.get("amount") if isinstance(ref, dict) else 0)
+        try:
+            request = await asyncio.to_thread(db.create_withdrawal, uid, amount, method, destination)
+        except ValueError as exc:
+            await update.message.reply_text(f"⚠️ {exc}")
+            PENDING.pop(uid, None)
+            return
+        PENDING.pop(uid, None)
+        await update.message.reply_text(
+            f"✅ Withdrawal request #{request['id']} submitted for <b>{amount:.2f} {CURRENCY}</b>.\n\nProcessing time: 1 to 24 hours.",
+            parse_mode=ParseMode.HTML, reply_markup=kb.home_keyboard(lang, uid),
+        )
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=(f"💸 <b>New withdrawal request #{request['id']}</b>\n\n"
+                      f"User: <code>{uid}</code>\nAmount: <b>{amount:.2f} {CURRENCY}</b>\n"
+                      f"Method: <b>{html.escape(method)}</b>\nDestination: <code>{html.escape(destination)}</code>"),
+                parse_mode=ParseMode.HTML,
+            )
+        return
+
+    if kind == "await_withdraw_method":
         return
 
     if kind == "await_txid":

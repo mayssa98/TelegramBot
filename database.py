@@ -271,6 +271,8 @@ def init_db():
     db.wallets.create_index("user_id", unique=True)
     db.wallet_topups.create_index("txid", unique=True)
     db.wallet_topups.create_index("id", unique=True, sparse=True)
+    db.withdrawals.create_index("id", unique=True)
+    db.withdrawals.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
     db.onchain_transactions.create_index("txid", unique=True)
     db.bulk_wallet_credits.create_index("operation_id", unique=True)
     db.buyer_api_keys.create_index("id", unique=True)
@@ -578,6 +580,42 @@ def affiliate_stats(user_id, target=10):
     count = db.referrals.count_documents({"referrer_id": user_id})
     wallet = db.wallets.find_one({"user_id": user_id})
     return {"referrals": count, "balance_cents": wallet.get("balance_cents", 0) if wallet else 0, "progress": count % target, "remaining": target - (count % target) if count % target else target}
+
+
+def create_withdrawal(user_id, amount, method, destination):
+    amount_cents = int(round(float(amount) * 100))
+    if amount_cents < 1000:
+        raise ValueError("Minimum withdrawal is 10 USDT.")
+    conn = get_conn()
+    wallet = conn.wallets.find_one_and_update(
+        {"user_id": int(user_id), "balance_cents": {"$gte": amount_cents}},
+        {"$inc": {"balance_cents": -amount_cents}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not wallet:
+        raise ValueError("Insufficient wallet balance.")
+    row = {
+        "id": _next_id("withdrawals"), "user_id": int(user_id),
+        "amount_cents": amount_cents, "method": str(method),
+        "destination": str(destination).strip(), "status": "pending",
+        "created_at": datetime.now(UTC), "updated_at": datetime.now(UTC),
+    }
+    conn.withdrawals.insert_one(row)
+    return _public(row)
+
+
+def list_withdrawals(status="pending", limit=100):
+    query = {} if status in {"all", ""} else {"status": status}
+    return [_public(row) for row in get_conn().withdrawals.find(query).sort("created_at", DESCENDING).limit(limit)]
+
+
+def update_withdrawal(withdrawal_id, status, admin_note=""):
+    row = get_conn().withdrawals.find_one_and_update(
+        {"id": int(withdrawal_id), "status": "pending"},
+        {"$set": {"status": str(status), "admin_note": str(admin_note), "updated_at": datetime.now(UTC)}},
+        return_document=ReturnDocument.AFTER,
+    )
+    return _public(row) if row else None
 
 
 def _sanitize_service_emoji(service):

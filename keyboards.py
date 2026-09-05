@@ -674,6 +674,18 @@ def profile_keyboard(lang):
     ])
 
 
+def withdrawal_methods_keyboard(lang):
+    labels = {
+        "fr": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("Adresse USDT BEP20", "bep20")],
+        "en": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("USDT BEP20 address", "bep20")],
+        "ar": [("Binance ID", "binance"), ("Bybit ID", "bybit"), ("عنوان USDT BEP20", "bep20")],
+    }
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(label, callback_data=f"withdraw_method:{method}")]
+        for label, method in labels.get(lang, labels["en"])
+    ] + [[translated_button(lang, "profile_main_menu", callback_data="home")]])
+
+
 def profile_notifications_keyboard(lang, user_id, enabled, page=0, page_size=8):
     """Show a master switch plus paginated notification switches per product."""
     notification_key = "catalog_notifications_on" if enabled else "catalog_notifications_off"
