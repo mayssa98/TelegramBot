@@ -1843,23 +1843,22 @@ def test_catalog_request_is_saved_and_sent_to_support_channel(monkeypatch, mock_
     assert "Request sent" in message.reply_text.await_args.args[0]
     message.delete.assert_awaited_once()
 
-def test_topup_keyboard_offers_binance_bybit_bsc_and_polygon(mock_mongodb):
+def test_topup_keyboard_offers_three_deposit_methods(mock_mongodb):
     callbacks = [
         button.callback_data
         for row in kb.topup_keyboard("en").inline_keyboard
         for button in row
     ]
 
-    assert callbacks == ["topup_txid", "topup_bybit", "topup_bsc", "topup_polygon", "home"]
+    assert callbacks == ["topup_bybit", "topup_txid", "topup_onchain", "home"]
 
 
 def test_topup_instructions_are_txid_only(mock_mongodb):
     message = t("en", "topup_message", binance_id="123", bybit_uid="456")
 
     assert "Memo" not in message
-    assert "Binance Pay" in message
-    assert "Bybit Pay" in message
-    assert "`456`" in message
+    assert "DEPOSIT" in message
+    assert "456" not in message
 
 def test_every_topup_button_supports_exact_premium_emoji(mock_mongodb):
     overrides = {

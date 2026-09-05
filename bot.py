@@ -1476,6 +1476,31 @@ async def show_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def topup_provider_screen(lang, provider):
+    is_bybit = provider == "bybit"
+    provider_name = "Bybit Transfer (UID)" if is_bybit else "Binance Pay (ID)"
+    pay_label = "Pay UID" if is_bybit else "Pay ID"
+    pay_id = BYBIT_UID if is_bybit else BINANCE_PAY_ID
+    txid_note = (
+        "⚠️ <b>Bybit:</b> the Transaction ID is the code with dashes — not the long order/receipt number."
+        if is_bybit else
+        "⚠️ <b>Binance:</b> send the blockchain/payment Transaction ID (TXID), not the order number."
+    )
+    return (
+        f"<b>{provider_name}</b>\n\n"
+        f"<b>{pay_label}</b>\n<code>{html.escape(str(pay_id))}</code>\n"
+        "👇 <i>Tap the button below to copy</i>\n\n"
+        "<b>How to deposit</b>\n"
+        "<blockquote>1️⃣ Copy the ID above\n"
+        "2️⃣ Send any USDT amount from your wallet/exchange\n"
+        "3️⃣ Copy the Transaction ID (TXID)\n"
+        "4️⃣ Paste the TXID here in this chat\n"
+        "5️⃣ Auto-verify and instant credit ⚡</blockquote>\n\n"
+        f"<blockquote>{txid_note}</blockquote>\n\n"
+        "<blockquote>⏰ Complete payment within 30 minutes of opening this screen for auto-credit.</blockquote>"
+    )
+
+
 async def cmd_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_my_orders(update, context, lang_of(update.effective_user.id))
 
@@ -2161,6 +2186,14 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "topup":
         await show_topup(update, context)
         return
+    if data == "topup_onchain":
+        await show_callback_screen(
+            q,
+            "⛓️ <b>Onchain USDT deposit</b>\n\nChoose the network you will use:",
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.topup_onchain_keyboard(lang),
+        )
+        return
     if data in {"topup_bsc", "topup_polygon"}:
         network = "bsc" if data == "topup_bsc" else "polygon"
         network_label = "BSC (BEP20)" if network == "bsc" else "Polygon"
@@ -2175,12 +2208,12 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Keep them useful by routing directly to TXID entry.
         provider = "bybit" if data == "topup_bybit" else "binance"
         PENDING[uid] = ("await_topup_txid", provider)
-        await q.message.reply_text(
-            premium_customer_text(
-                lang,
-                "topup_ask_bybit_txid" if provider == "bybit" else "topup_ask_txid",
-            ),
+        pay_id = BYBIT_UID if provider == "bybit" else BINANCE_PAY_ID
+        await show_callback_screen(
+            q,
+            topup_provider_screen(lang, provider),
             parse_mode=ParseMode.HTML,
+            reply_markup=kb.topup_provider_keyboard(lang, provider, pay_id),
         )
         return
     if data.startswith("manual_reply:"):

@@ -2,7 +2,7 @@
 import html
 import re
 
-from telegram import InlineKeyboardButton as _InlineKeyboardButton
+from telegram import CopyTextButton, InlineKeyboardButton as _InlineKeyboardButton
 from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 
@@ -38,7 +38,7 @@ BUTTON_TEXT_KEYS = {
     "catalog_notifications_on", "catalog_notifications_off",
     "profile_deposit", "profile_withdraw", "profile_orders", "profile_referral",
     "profile_shop", "profile_notifications", "profile_reseller_api", "profile_main_menu",
-    "topup_verify_txid", "topup_verify_bybit", "topup_bsc", "topup_polygon",
+    "topup_verify_txid", "topup_verify_bybit", "topup_onchain", "topup_bsc", "topup_polygon",
     "topup_home_button",
     "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
     "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
@@ -311,11 +311,31 @@ def home_keyboard(lang, user_id):
 
 def topup_keyboard(lang):
     return InlineKeyboardMarkup([
-        [translated_button(lang, "topup_verify_txid", callback_data="topup_txid", style="success")],
         [translated_button(lang, "topup_verify_bybit", callback_data="topup_bybit", style="success")],
-        [translated_button(lang, "topup_bsc", callback_data="topup_bsc")],
-        [translated_button(lang, "topup_polygon", callback_data="topup_polygon")],
-        [translated_button(lang, "topup_home_button", callback_data="home")],
+        [translated_button(lang, "topup_verify_txid", callback_data="topup_txid", style="success")],
+        [translated_button(lang, "topup_onchain", callback_data="topup_onchain", style="success")],
+        [translated_button(lang, "topup_home_button", callback_data="home", style="danger")],
+    ])
+
+
+def topup_provider_keyboard(lang, provider, pay_id):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            "📋 Copy UID" if provider == "bybit" else "📋 Copy ID",
+            copy_text=CopyTextButton(str(pay_id)),
+            style="primary",
+        )],
+        [InlineKeyboardButton("🔄 Change Method", callback_data="topup", style="primary")],
+        [translated_button(lang, "topup_home_button", callback_data="home", style="danger")],
+    ])
+
+
+def topup_onchain_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [translated_button(lang, "topup_bsc", callback_data="topup_bsc", style="primary")],
+        [translated_button(lang, "topup_polygon", callback_data="topup_polygon", style="primary")],
+        [InlineKeyboardButton("🔄 Change Method", callback_data="topup", style="primary")],
+        [translated_button(lang, "topup_home_button", callback_data="home", style="danger")],
     ])
 
 

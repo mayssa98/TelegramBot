@@ -106,12 +106,13 @@ TRANSLATIONS = {
     "reseller_api_refresh": {"fr": "🔄 Actualiser", "en": "🔄 Refresh", "ar": "🔄 Refresh"},
     "reseller_api_cancel": {"fr": "Annuler", "en": "Cancel", "ar": "Cancel"},
     "topup_message": {
-        "fr": "✍️ *Envoyez le montant souhaité — minimum 1 USDT*\nLe même montant sera ajouté à votre portefeuille.\n\n🟡 *Binance Pay*\nID : `{binance_id}`\n\n🟠 *Bybit Pay*\nUID : `{bybit_uid}`\n\nAprès le transfert, choisissez ci-dessous le fournisseur utilisé et envoyez le TXID affiché sur votre reçu.",
-        "en": "✍️ *Send any amount — minimum 1 USDT*\nThe same amount will be added to your wallet.\n\n🟡 *Binance Pay*\nID: `{binance_id}`\n\n🟠 *Bybit Pay*\nUID: `{bybit_uid}`\n\nAfter transferring, choose the provider used below and send the TXID shown on your receipt.",
-        "ar": "✍️ *أرسل أي مبلغ — الحد الأدنى 1 USDT*\nسيتم إضافة نفس المبلغ إلى محفظتك.\n\n🟡 *Binance Pay*\nID: `{binance_id}`\n\n🟠 *Bybit Pay*\nUID: `{bybit_uid}`\n\nبعد التحويل، اختر مزود الدفع المستخدم وأرسل TXID الظاهر في الإيصال.",
+        "fr": "💳 *DÉPÔT*\n\nChoisissez votre méthode de dépôt :",
+        "en": "💳 *DEPOSIT*\n\nChoose your deposit method:",
+        "ar": "💳 *إيداع*\n\nاختر طريقة الإيداع:",
     },
-    "topup_verify_txid": {"fr": "🟡 Vérifier Binance TXID", "en": "🟡 Verify Binance TXID", "ar": "🟡 Verify Binance TXID"},
-    "topup_verify_bybit": {"fr": "🟠 Vérifier Bybit TXID", "en": "🟠 Verify Bybit TXID", "ar": "🟠 Verify Bybit TXID"},
+    "topup_verify_txid": {"fr": "🟡 Binance Pay", "en": "🟡 Binance Pay", "ar": "🟡 Binance Pay"},
+    "topup_verify_bybit": {"fr": "🟠 Bybit Pay", "en": "🟠 Bybit Pay", "ar": "🟠 Bybit Pay"},
+    "topup_onchain": {"fr": "⛓️ Onchain", "en": "⛓️ Onchain", "ar": "⛓️ Onchain"},
     "topup_bsc": {
         "fr": "🟨 Recharger via USDT BSC",
         "en": "🟨 Top up via USDT BSC",
