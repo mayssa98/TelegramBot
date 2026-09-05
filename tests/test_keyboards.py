@@ -41,6 +41,15 @@ def test_profile_keyboard_matches_customer_profile_navigation():
         ["reseller_api"],
         ["home"],
     ]
+    styles = {
+        button.callback_data: button.style
+        for row in keyboard.inline_keyboard
+        for button in row
+    }
+    assert styles["topup"] == "success"
+    assert styles["reseller_api"] == "success"
+    assert styles["home"] == "danger"
+    assert {styles[action] for action in ("orders", "affiliate", "catalog")} == {"primary"}
 
 
 def test_notification_manager_lists_every_product_with_pagination(monkeypatch):

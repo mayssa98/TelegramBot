@@ -664,11 +664,11 @@ def profile_keyboard(lang):
             translated_button(lang, "profile_deposit", callback_data="topup", style="success"),
         ],
         [
-            translated_button(lang, "profile_orders", callback_data="orders"),
+            translated_button(lang, "profile_orders", callback_data="orders", style="primary"),
             translated_button(lang, "profile_referral", callback_data="affiliate", style="primary"),
         ],
-        [translated_button(lang, "profile_shop", callback_data="catalog", style="success")],
-        [translated_button(lang, "profile_reseller_api", callback_data="reseller_api", style="primary")],
+        [translated_button(lang, "profile_shop", callback_data="catalog", style="primary")],
+        [translated_button(lang, "profile_reseller_api", callback_data="reseller_api", style="success")],
         [translated_button(lang, "profile_main_menu", callback_data="home", style="danger")],
     ])
 
