@@ -2002,6 +2002,7 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_callback_screen(q, "Select the delivered product with a problem:", reply_markup=kb.warranty_orders_keyboard(lang, orders))
         return
     if data.startswith("warranty_order:"):
+        PENDING.pop(uid, None)
         order_id = int(data.split(":", 1)[1])
         order = db.get_order(order_id)
         if (
@@ -2021,6 +2022,13 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         original = float(order.get("unit_price") or order.get("total_price") or 0)
         refund = round(max(0, original - (original / period) * days_used), 2)
+        existing_request = db.get_conn().warranty_requests.find_one(
+            {"user_id": uid, "order_id": order_id},
+            {"_id": 1},
+        )
+        if existing_request:
+            await q.message.reply_text("⚠️ A warranty request for this order has already been submitted.")
+            return
         request = db.create_warranty_request(uid, order_id, days_used, refund)
         await q.message.reply_text("✅ Warranty request sent. The admin will test the account and then offer replacement or refund.", reply_markup=kb.home_keyboard(lang, uid))
         with contextlib.suppress(Exception):
