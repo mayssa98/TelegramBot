@@ -531,6 +531,18 @@ def rich_text_from_message(message):
     return text_with_custom_emoji_tokens(message)
 
 
+def _is_single_emoji(value):
+    """Check if a string contains an emoji character rather than text or digits."""
+    if not value or not isinstance(value, str):
+        return False
+    s = value.strip()
+    if not s:
+        return False
+    if any(c.isascii() and (c.isalnum() or c in "_-/:;=+,.<>?[]{}()!@#$%^&*`~|\\\"'") for c in s):
+        return False
+    return len(s) <= 8
+
+
 def render_stored_rich_text(value, *, parse_legacy_markdown=True):
     """Render trusted admin HTML or legacy Markdown/token text as Telegram HTML."""
     raw_value = str(value or "")
@@ -556,6 +568,8 @@ def render_stored_rich_text(value, *, parse_legacy_markdown=True):
         emoji_id, fallback_hex = match.groups()
         with contextlib.suppress(ValueError, UnicodeDecodeError):
             fallback = bytes.fromhex(fallback_hex).decode("utf-8")
+            if not _is_single_emoji(fallback):
+                fallback = "📦"
             return f'<tg-emoji emoji-id="{emoji_id}">{html.escape(fallback)}</tg-emoji>'
         return ""
 
@@ -772,7 +786,8 @@ async def _broadcast_in_batches(
 def _announcement_service_emoji(service, fallback="📦"):
     """Render a service's Unicode or Premium emoji inside announcement text."""
     service = service or {}
-    emoji = str(service.get("emoji") or fallback).strip() or fallback
+    raw_emoji = str(service.get("emoji") or "").strip()
+    emoji = raw_emoji if _is_single_emoji(raw_emoji) else fallback
     emoji_id = str(service.get("custom_emoji_id") or "").strip()
     if emoji_id and emoji_id.isascii():
         return f"[[TGEMOJI:{emoji_id}:{emoji.encode('utf-8').hex()}]]"
@@ -801,6 +816,30 @@ def _track_broadcast_message(context, sent_message, chat_id):
             # history tracking had a transient database failure.
             log.warning("Could not track broadcast message %s/%s: %s", chat_id, message_id, exc)
     return sent_message
+
+
+async def _send_broadcast_message_safe(context, chat_id, text, reply_markup=None):
+    """Send an HTML announcement message with automatic fallback to unformatted text."""
+    try:
+        sent_message = await context.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=reply_markup,
+        )
+        return _track_broadcast_message(context, sent_message, chat_id)
+    except BadRequest as exc:
+        err_msg = str(exc).lower()
+        if any(term in err_msg for term in ("entity", "parse", "html", "tag", "can't parse")):
+            log.warning("Broadcast HTML parse failure for user %s (%s). Falling back to plain text.", chat_id, exc)
+            plain_text = re.sub(r"<[^>]+>", "", text)
+            sent_message = await context.bot.send_message(
+                chat_id=chat_id,
+                text=plain_text,
+                reply_markup=reply_markup,
+            )
+            return _track_broadcast_message(context, sent_message, chat_id)
+        raise
 
 
 async def announce_supplier_change_admin(context, event, change_type):
@@ -852,13 +891,12 @@ async def announce_supplier_change_admin(context, event, change_type):
                     else max(0, int(offer.get("stock") or 0))
                 ),
             })
-    sent_message = await context.bot.send_message(
+    await _send_broadcast_message_safe(
+        context,
         chat_id=ADMIN_ID,
         text=premium_customer_text(lang, key, **values),
-        parse_mode=ParseMode.HTML,
         reply_markup=kb.offer_detail_keyboard(lang, offer),
     )
-    _track_broadcast_message(context, sent_message, ADMIN_ID)
     return 1
 
 
@@ -898,13 +936,12 @@ async def announce_channel_restock(
         }
         if added is not None:
             values["added"] = int(added)
-        sent_message = await context.bot.send_message(
+        await _send_broadcast_message_safe(
+            context,
             chat_id=user_id,
             text=premium_customer_text(lang, message_key, **values),
-            parse_mode=ParseMode.HTML,
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
-        _track_broadcast_message(context, sent_message, user_id)
     return await _broadcast_in_batches(
         send_one,
         label="New-stock broadcast",
@@ -934,7 +971,8 @@ async def announce_flash_sale(context, offer_id):
     async def send_one(user):
         user_id = int(user["telegram_id"])
         lang = user.get("lang") or DEFAULT_LANG
-        sent_message = await context.bot.send_message(
+        await _send_broadcast_message_safe(
+            context,
             chat_id=user_id,
             text=premium_customer_text(
                 lang,
@@ -950,10 +988,8 @@ async def announce_flash_sale(context, offer_id):
                 discount=discount_percent,
                 remaining=remaining,
             ),
-            parse_mode=ParseMode.HTML,
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
-        _track_broadcast_message(context, sent_message, user_id)
     return await _broadcast_in_batches(
         send_one,
         label="Flash-sale broadcast",
@@ -978,7 +1014,8 @@ async def announce_api_flash_sale(context, event):
             "fr": "Disponibilité limitée",
             "ar": "متاح لفترة محدودة",
         }.get(lang, "Limited availability")
-        sent_message = await context.bot.send_message(
+        await _send_broadcast_message_safe(
+            context,
             chat_id=user_id,
             text=premium_customer_text(
                 lang,
@@ -994,10 +1031,8 @@ async def announce_api_flash_sale(context, event):
                 discount=discount_percent,
                 remaining=remaining,
             ),
-            parse_mode=ParseMode.HTML,
             reply_markup=kb.offer_detail_keyboard(lang, offer),
         )
-        _track_broadcast_message(context, sent_message, user_id)
     return await _broadcast_in_batches(
         send_one,
         label="Automatic flash-sale broadcast",
@@ -1112,31 +1147,46 @@ async def _execute_broadcast_job(job):
         )
         payload = job.get("payload") or {}
         kind = job.get("kind")
+        sent = 0
         if kind == "stock":
-            return await announce_channel_restock(
+            sent = await announce_channel_restock(
                 context,
                 payload["offer_id"],
                 payload.get("added"),
                 payload.get("stock"),
                 payload.get("supplier_event"),
             )
-        if kind == "restock_digest":
-            return await announce_restock_digest(context, payload.get("events") or [])
-        if kind == "flash_sale":
-            return await announce_flash_sale(context, payload["offer_id"])
-        if kind == "api_flash_sale":
-            return await announce_api_flash_sale(context, payload["event"])
-        if kind == "supplier_price_update":
-            return await announce_supplier_price_update(context, payload["event"])
-        if kind == "admin_message":
-            return await broadcast_admin_message(context, payload["source_chat_id"], payload["message_id"])
-        if kind == "delete_broadcast":
-            return await delete_broadcast_messages(context, payload["target_job_id"])
-        if kind == "maintenance":
-            return await broadcast_maintenance_notice(context, payload["message"])
-        if kind == "affiliate_update":
-            return await broadcast_affiliate_program_update(context)
-        raise ValueError(f"Unknown broadcast job: {kind}")
+        elif kind == "restock_digest":
+            sent = await announce_restock_digest(context, payload.get("events") or [])
+        elif kind == "flash_sale":
+            sent = await announce_flash_sale(context, payload["offer_id"])
+        elif kind == "api_flash_sale":
+            sent = await announce_api_flash_sale(context, payload["event"])
+        elif kind == "supplier_price_update":
+            sent = await announce_supplier_price_update(context, payload["event"])
+        elif kind == "admin_message":
+            sent = await broadcast_admin_message(context, payload["source_chat_id"], payload["message_id"])
+        elif kind == "delete_broadcast":
+            sent = await delete_broadcast_messages(context, payload["target_job_id"])
+        elif kind == "maintenance":
+            sent = await broadcast_maintenance_notice(context, payload["message"])
+        elif kind == "affiliate_update":
+            sent = await broadcast_affiliate_program_update(context)
+        else:
+            raise ValueError(f"Unknown broadcast job: {kind}")
+
+        if ADMIN_ID and kind != "delete_broadcast":
+            with contextlib.suppress(Exception):
+                await bot_client.send_message(
+                    chat_id=ADMIN_ID,
+                    text=(
+                        f"📢 <b>Diffusion terminée</b> (Job #{job['id']})\n\n"
+                        f"• Type : <code>{kind}</code>\n"
+                        f"• Messages envoyés : <b>{sent}</b>"
+                    ),
+                    parse_mode=ParseMode.HTML,
+                )
+        return sent
     finally:
         await bot_client.shutdown()
 
@@ -1153,6 +1203,21 @@ def _run_broadcast_job(job_id):
     except Exception as exc:
         log.exception("Broadcast job %s failed", job_id)
         retry = db.fail_broadcast_job(job_id, exc) == "retry"
+        if ADMIN_ID:
+            def _notify_admin_fail():
+                from telegram.request import HTTPXRequest
+                req = HTTPXRequest(connect_timeout=10, read_timeout=10)
+                b = Bot(token=BOT_TOKEN, request=req)
+                async def _send():
+                    async with b:
+                        await b.send_message(
+                            chat_id=ADMIN_ID,
+                            text=f"⚠️ <b>Échec de la diffusion</b> (Job #{job_id})\n\nErreur : <code>{html.escape(str(exc)[:200])}</code>",
+                            parse_mode=ParseMode.HTML,
+                        )
+                asyncio.run(_send())
+            with contextlib.suppress(Exception):
+                _notify_admin_fail()
     finally:
         with _broadcast_jobs_lock:
             _submitted_broadcast_jobs.discard(int(job_id))
@@ -4870,9 +4935,16 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm_broadcast_offer:"):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
-        if not off or not off.get("active", 1):
-            await q.answer("Offre indisponible.", show_alert=True)
+        if not off:
+            await q.answer("Offre introuvable.", show_alert=True)
             return
+        if off.get("archived") == 1:
+            db.unarchive_offer(oid)
+            off["archived"] = 0
+            off["active"] = 1
+        elif not off.get("active", 1):
+            db.update_offer(oid, active=1)
+            off["active"] = 1
         stock = int(off.get("stock") or 0)
         if stock <= 0 and not off.get("unlimited_stock"):
             await q.answer("Aucun stock disponible à annoncer.", show_alert=True)

@@ -1,4 +1,5 @@
 """MongoDB persistence for users, catalogue, orders, and affiliate data."""
+import contextlib
 import base64
 import hashlib
 import os
@@ -17,7 +18,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
@@ -389,6 +390,8 @@ def init_db():
         _retire_ventebot_provider(db)
     if not schema or int(schema.get("version") or 0) < 18:
         _backfill_structured_warranties(db)
+    if not schema or int(schema.get("version") or 0) < 20:
+        _sanitize_corrupted_emojis_and_offers(db)
     if os.environ.get("HP_SEED_DEFAULT_CATALOG", "").strip().lower() in {"1", "true", "yes"}:
         _seed_catalog()
     db.schema_meta.update_one(
@@ -446,6 +449,24 @@ def _backfill_structured_warranties(conn):
         {"$set": {"period_days": 30}},
     )
     return result.modified_count
+
+
+def _sanitize_corrupted_emojis_and_offers(conn):
+    """Sanitize corrupted service emoji values and unarchive active offers."""
+    for service in conn.services.find():
+        emoji = service.get("emoji")
+        custom_id = service.get("custom_emoji_id")
+        if emoji:
+            emoji_str = str(emoji).strip()
+            if emoji_str.isdigit() or (emoji_str.isascii() and len(emoji_str) > 4):
+                updates = {"emoji": "📦"}
+                if not custom_id:
+                    updates["custom_emoji_id"] = emoji_str
+                conn.services.update_one({"id": service["id"]}, {"$set": updates})
+    conn.offers.update_many(
+        {"active": 1, "archived": 1},
+        {"$set": {"archived": 0}, "$unset": {"archived_at": ""}},
+    )
 
 
 def _backfill_inventory_ids(conn):
@@ -596,9 +617,23 @@ def affiliate_stats(user_id, target=10):
     return {"referrals": count, "balance_cents": wallet.get("balance_cents", 0) if wallet else 0, "progress": count % target, "remaining": target - (count % target) if count % target else target}
 
 
+def _sanitize_service_emoji(service):
+    """Ensure service emojis are valid unicode emoji characters rather than numeric IDs."""
+    if not service or not isinstance(service, dict):
+        return service
+    emoji = service.get("emoji")
+    if emoji:
+        emoji_str = str(emoji).strip()
+        if emoji_str.isdigit() or (emoji_str.isascii() and len(emoji_str) > 4):
+            if not service.get("custom_emoji_id"):
+                service["custom_emoji_id"] = emoji_str
+            service["emoji"] = "📦"
+    return service
+
+
 def list_services(active_only=True):
     query = {"active": 1} if active_only else {}
-    services = [_public(x) for x in get_conn().services.find(query)]
+    services = [_sanitize_service_emoji(_public(x)) for x in get_conn().services.find(query)]
     return sorted(services, key=_service_sort_key)
 
 
@@ -606,7 +641,7 @@ def list_services_with_stock(active_only=True):
     """Return services and stock totals with two queries instead of one per service."""
     conn = get_conn()
     services = sorted(
-        [_public(item) for item in conn.services.find({"active": 1} if active_only else {})],
+        [_sanitize_service_emoji(_public(item)) for item in conn.services.find({"active": 1} if active_only else {})],
         key=_service_sort_key,
     )
     totals = {
@@ -626,7 +661,7 @@ def list_services_with_stock(active_only=True):
 
 
 def get_service(service_id):
-    return _public(get_conn().services.find_one({"id": service_id}))
+    return _sanitize_service_emoji(_public(get_conn().services.find_one({"id": service_id})))
 
 
 def list_offers(service_id, active_only=True):
@@ -736,6 +771,8 @@ def start_flash_sale(offer_id, sale_price, duration_minutes):
     get_conn().offers.update_one(
         {"id": int(offer_id)},
         {"$set": {
+            "active": 1,
+            "archived": 0,
             "flash_sale_active": True,
             "flash_sale_original_price": float(offer["price"]),
             "flash_sale_price": sale_price,
@@ -866,6 +903,8 @@ def update_offer(
     service = get_service(effective_service_id) if existing else None
     if service and is_otp_service_name(service.get("name")):
         values.update(_otp_offer_values())
+    if values.get("active") == 1:
+        values["archived"] = 0
     if values:
         get_conn().offers.update_one({"id": offer_id}, {"$set": values})
         if service_id is not None:
@@ -954,6 +993,25 @@ def archive_offer(offer_id):
         {"id": offer_id},
         {"$set": {"active": 0, "archived": 1, "archived_at": int(time.time())}},
     ).matched_count)
+
+
+def unarchive_offer(offer_id):
+    return bool(get_conn().offers.update_one(
+        {"id": int(offer_id)},
+        {"$set": {"active": 1, "archived": 0}, "$unset": {"archived_at": ""}},
+    ).matched_count)
+
+
+def unarchive_service(service_id):
+    db = get_conn()
+    db.services.update_one(
+        {"id": int(service_id)},
+        {"$set": {"active": 1, "archived": 0}, "$unset": {"archived_at": ""}},
+    )
+    db.offers.update_many(
+        {"service_id": int(service_id)},
+        {"$set": {"active": 1, "archived": 0}, "$unset": {"archived_at": ""}},
+    )
 
 
 def add_offer(

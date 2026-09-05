@@ -2613,3 +2613,73 @@ def test_attachment_can_create_the_first_ticket_message(mock_mongodb):
     message.reply_text.assert_awaited_once()
     message.delete.assert_awaited_once()
     bot_client.copy_message.assert_awaited_once()
+
+
+def test_is_single_emoji_validation():
+    from bot import _is_single_emoji
+    assert _is_single_emoji("📦") is True
+    assert _is_single_emoji("🎁") is True
+    assert _is_single_emoji("🔥") is True
+    assert _is_single_emoji("🎓") is True
+    assert _is_single_emoji("630745097360") is False
+    assert _is_single_emoji("6307450973606389056") is False
+    assert _is_single_emoji("coursera") is False
+    assert _is_single_emoji("") is False
+    assert _is_single_emoji(None) is False
+
+
+def test_announcement_service_emoji_sanitizes_corrupted_emoji():
+    from bot import _announcement_service_emoji
+    service = {"id": 40, "emoji": "630745097360", "custom_emoji_id": "6307450973606389056"}
+    token = _announcement_service_emoji(service, fallback="📦")
+    expected_hex = "📦".encode("utf-8").hex()
+    assert f"[[TGEMOJI:6307450973606389056:{expected_hex}]]" == token
+
+
+def test_render_custom_emoji_sanitizes_non_emoji_fallback():
+    from bot import render_stored_rich_text
+    corrupted_token = f"[[TGEMOJI:6307450973606389056:{'630745097360'.encode('utf-8').hex()}]]"
+    rendered = render_stored_rich_text(corrupted_token)
+    assert '<tg-emoji emoji-id="6307450973606389056">📦</tg-emoji>' in rendered
+
+
+def test_send_broadcast_message_safe_falls_back_on_entity_error():
+    from telegram.error import BadRequest
+    from bot import _send_broadcast_message_safe
+
+    mock_bot = Mock()
+    mock_bot.send_message = AsyncMock(side_effect=[
+        BadRequest("Entity_text_invalid"),
+        SimpleNamespace(message_id=999),
+    ])
+    context = SimpleNamespace(bot=mock_bot)
+
+    msg = asyncio.run(_send_broadcast_message_safe(
+        context,
+        chat_id=123,
+        text="<b>Bold text</b> with <tg-emoji emoji-id='123'>invalid</tg-emoji>",
+    ))
+    assert msg.message_id == 999
+    assert mock_bot.send_message.await_count == 2
+    fallback_call = mock_bot.send_message.await_args_list[1]
+    assert "Bold text with invalid" in fallback_call.kwargs["text"]
+    assert "<" not in fallback_call.kwargs["text"]
+
+
+def test_unarchive_offer_and_service_sanitizer(mock_mongodb):
+    s_id = db.add_service("Coursera", emoji="630745097360", custom_emoji_id="6307450973606389056")
+    off_id = db.add_offer(s_id, "Coursera 1 Month", 2.0, 3)
+    db.archive_offer(off_id)
+    off = db.get_offer(off_id)
+    assert off["archived"] == 1
+    assert off["active"] == 0
+
+    db.unarchive_offer(off_id)
+    off = db.get_offer(off_id)
+    assert off["archived"] == 0
+    assert off["active"] == 1
+
+    svc = db.get_service(s_id)
+    assert svc["emoji"] == "📦"
+    assert svc["custom_emoji_id"] == "6307450973606389056"
+
