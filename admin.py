@@ -22,17 +22,14 @@ def _service_button_text(service):
 
 
 TEXT_CATEGORIES = [
-    ("menus", "🏠 Menus et boutons"),
-    ("payments", "💳 Paiements et Binance Pay"),
-    ("catalog", "🛍 Catalogue et offres"),
-    ("alerts", "✨ Alertes stocks et ventes flash"),
-    ("channel", "📣 Telegram Channel"),
-    ("orders", "📦 Commandes et livraison"),
+    ("menus", "🏠 Menus et navigation"),
+    ("payments", "💳 Dépôts, paiements et portefeuille"),
+    ("catalog", "🛍 Catalogue et produits"),
+    ("orders", "📦 Commandes, livraison et garantie"),
+    ("alerts", "📢 Annonces, chaîne et notifications"),
     ("support", "🎫 Support et avis"),
-    ("affiliate", "🎁 Affiliation et fidélité"),
-    ("account", "👤 Compte et informations"),
-    ("admin", "🛠 Administration"),
-    ("other", "📝 Autres textes"),
+    ("account", "👤 Compte, fidélité et langues"),
+    ("admin", "🛠 Administration et système"),
 ]
 
 
@@ -44,19 +41,18 @@ def text_category_for_key(key):
         return "alerts"
     rules = [
         ("admin", ("admin_",)),
-        ("channel", ("channel_", "btn_channel_", "btn_join_channel", "btn_verify_join")),
+        ("alerts", ("channel_", "btn_channel_", "btn_join_channel", "btn_verify_join")),
         ("payments", ("payment_", "topup_", "wallet_", "ask_txid", "verifying", "copy_", "order_created", "btn_paid", "btn_pay_")),
         ("catalog", ("catalog_", "service_", "offer_", "stock_", "choose_quantity", "quantity_", "confirm_purchase", "price_", "out_of_stock", "cat_")),
-        ("orders", ("orders_", "order_", "delivery_", "status_", "otp_", "duplicate_order", "already_paid", "cancelled_")),
+        ("orders", ("orders_", "order_", "delivery_", "warranty_", "status_", "otp_", "duplicate_order", "already_paid", "cancelled_")),
         ("support", ("support_", "ticket_", "rating_")),
-        ("affiliate", ("affiliate_", "loyalty_")),
-        ("account", ("profile_", "terms_", "privacy_", "help_", "welcome", "onboarding_", "lang_", "channel_")),
+        ("account", ("affiliate_", "loyalty_", "profile_", "terms_", "privacy_", "help_", "welcome", "onboarding_", "lang_")),
         ("menus", ("menu_", "btn_")),
     ]
     for category, prefixes in rules:
         if key.startswith(prefixes) or key in prefixes:
             return category
-    return "other"
+    return "admin"
 
 
 def text_categories_keyboard():
