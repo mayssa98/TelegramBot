@@ -521,14 +521,15 @@ def onchain_payment_review_keyboard(order_id):
 
 
 def catalog_admin_keyboard():
-    rows = [[InlineKeyboardButton(
+    service_buttons = [InlineKeyboardButton(
         _service_button_text(s),
         callback_data=f"adm_svc:{s['id']}",
         icon_custom_emoji_id=_safe_custom_emoji_id(s.get("custom_emoji_id")),
         style=None if db.is_official_subscriptions_service(s) else (
             "success" if s["active"] else "danger"
         ),
-    )] for s in db.list_services(active_only=False)]
+    ) for s in db.list_services(active_only=False)]
+    rows = [service_buttons[index:index + 2] for index in range(0, len(service_buttons), 2)]
     rows.append([InlineKeyboardButton("➕ Ajouter un service", callback_data="adm_addsvc")])
     rows.append([InlineKeyboardButton("⬅️ Retour", callback_data="adm_panel")])
     return InlineKeyboardMarkup(rows)
