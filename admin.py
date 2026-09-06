@@ -95,15 +95,19 @@ def admin_panel_keyboard():
         else "🟢 Full maintenance lock: OFF"
     )
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Commandes payées", callback_data="adm_list:paid")],
-        [InlineKeyboardButton("💸 Retraits en attente", callback_data="adm_withdrawals")],
-        [InlineKeyboardButton("📦 Catalogue", callback_data="adm_catalog")],
-        [InlineKeyboardButton("📢 Créer une annonce", callback_data="adm_broadcast_message")],
-        [InlineKeyboardButton("🧹 Annonces envoyées", callback_data="adm_broadcast_history")],
-        [InlineKeyboardButton("🎫 Tickets support", callback_data="adm_tickets")],
-        [InlineKeyboardButton("👥 Activité utilisateurs", callback_data="adm_user_activity")],
-        [InlineKeyboardButton(maintenance_label, callback_data="adm_maintenance_toggle")],
-        [InlineKeyboardButton("🎛 Personnaliser le bot", callback_data="adm_customize")],
+        [InlineKeyboardButton("💸 Retraits en attente", callback_data="adm_withdrawals", style="danger")],
+        [InlineKeyboardButton("✅ Commandes payées", callback_data="adm_list:paid", style="success")],
+        [InlineKeyboardButton("🎫 Tickets support", callback_data="adm_tickets", style="primary")],
+        [InlineKeyboardButton("📦 Catalogue", callback_data="adm_catalog", style="primary")],
+        [InlineKeyboardButton("👥 Activité utilisateurs", callback_data="adm_user_activity", style="primary")],
+        [
+            InlineKeyboardButton("📢 Créer une annonce", callback_data="adm_broadcast_message", style="primary"),
+            InlineKeyboardButton("🧹 Historique annonces", callback_data="adm_broadcast_history", style="primary"),
+        ],
+        [
+            InlineKeyboardButton(maintenance_label, callback_data="adm_maintenance_toggle", style="danger" if maintenance_enabled else "success"),
+            InlineKeyboardButton("🎛 Personnaliser", callback_data="adm_customize", style="primary"),
+        ],
     ])
 
 
