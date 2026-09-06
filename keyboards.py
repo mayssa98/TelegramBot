@@ -722,6 +722,20 @@ def warranty_orders_keyboard(lang, orders):
     ] + [[translated_button(lang, "profile_main_menu", callback_data="home")]])
 
 
+def warranty_review_keyboard(request_id):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Accept", callback_data=f"adm_warranty_accept:{int(request_id)}", style="success"),
+        InlineKeyboardButton("❌ Refuse", callback_data=f"adm_warranty_refuse:{int(request_id)}", style="danger"),
+    ]])
+
+
+def warranty_resolution_keyboard(request_id):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔁 Replacement", callback_data=f"adm_warranty_resolve:replacement:{int(request_id)}", style="primary"),
+        InlineKeyboardButton("💰 Refund", callback_data=f"adm_warranty_resolve:refund:{int(request_id)}", style="success"),
+    ]])
+
+
 def profile_notifications_keyboard(lang, user_id, enabled, page=0, page_size=8):
     """Show a master switch plus paginated notification switches per product."""
     notification_key = "catalog_notifications_on" if enabled else "catalog_notifications_off"

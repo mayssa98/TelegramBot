@@ -630,6 +630,47 @@ def create_warranty_request(user_id, order_id, days_used, refund_amount):
     return _public(row)
 
 
+def resolve_warranty_request(request_id, resolution, admin_note=""):
+    """Resolve an accepted warranty request and optionally credit a refund."""
+    conn = get_conn()
+    request = conn.warranty_requests.find_one(
+        {"id": int(request_id), "status": "accepted"}
+    )
+    if not request or resolution not in {"replacement", "refund"}:
+        return None
+    status = "refunded" if resolution == "refund" else "replacement_pending"
+    row = conn.warranty_requests.find_one_and_update(
+        {"id": int(request_id), "status": "accepted"},
+        {"$set": {
+            "status": status,
+            "resolution": resolution,
+            "admin_note": str(admin_note),
+            "updated_at": datetime.now(UTC),
+        }},
+        return_document=ReturnDocument.AFTER,
+    )
+    if row and resolution == "refund":
+        conn.wallets.update_one(
+            {"user_id": int(request["user_id"])},
+            {"$inc": {"balance_cents": int(round(float(request.get("refund_amount") or 0) * 100))}},
+            upsert=True,
+        )
+    return _public(row) if row else None
+
+
+def refuse_warranty_request(request_id, admin_note):
+    row = get_conn().warranty_requests.find_one_and_update(
+        {"id": int(request_id), "status": "pending_admin_check"},
+        {"$set": {
+            "status": "refused",
+            "admin_note": str(admin_note),
+            "updated_at": datetime.now(UTC),
+        }},
+        return_document=ReturnDocument.AFTER,
+    )
+    return _public(row) if row else None
+
+
 def _sanitize_service_emoji(service):
     """Ensure service emojis are valid unicode emoji characters rather than numeric IDs."""
     if not service or not isinstance(service, dict):

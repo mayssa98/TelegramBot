@@ -28,6 +28,7 @@ from telegram.ext import (
     filters,
 )
 from telegram.helpers import escape_markdown
+from pymongo import ReturnDocument
 
 import admin
 import database as db
@@ -1661,6 +1662,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_withdraw_method",
         "await_withdraw_destination",
         "warranty_reason",
+        "adm_warranty_refuse_reason",
         "manual_order_reply",
         "await_quantity",
         "await_preorder_quantity",
@@ -3083,6 +3085,30 @@ async def handle_pending_input(update, context, lang):
         await update.message.reply_text("Choose your withdrawal method:", reply_markup=kb.withdrawal_methods_keyboard(lang))
         return
 
+    if kind == "adm_warranty_refuse_reason" and uid == ADMIN_ID:
+        reason = rich_text_from_message(update.message).strip()
+        if not reason:
+            await update.message.reply_text("Please provide a reason for refusing this warranty request.")
+            return
+        request = db.refuse_warranty_request(int(ref), reason)
+        if not request:
+            PENDING.pop(uid, None)
+            await update.message.reply_text("⚠️ This warranty request has already been processed.")
+            return
+        PENDING.pop(uid, None)
+        customer_id = int(request["user_id"])
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(
+                customer_id,
+                "❌ <b>Warranty request refused</b>\n\n"
+                f"Request <b>#{int(ref)}</b> was refused.\n"
+                f"Reason: {html.escape(reason)}",
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb.home_keyboard(lang_of(customer_id), customer_id),
+            )
+        await update.message.reply_text(f"✅ Warranty request #{int(ref)} refused and customer notified.")
+        return
+
     if kind == "warranty_reason":
         reason = rich_text_from_message(update.message).strip()
         if not reason:
@@ -3112,6 +3138,7 @@ async def handle_pending_input(update, context, lang):
                 f"Customer message: <blockquote>{html.escape(reason)}</blockquote>\n"
                 "Choose replacement or refund after testing.",
                 parse_mode=ParseMode.HTML,
+                reply_markup=kb.warranty_review_keyboard(request["id"]),
             )
         return
 
@@ -4390,6 +4417,49 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML,
             reply_markup=admin.withdrawals_keyboard(withdrawals),
         )
+        return
+
+    if data.startswith("adm_warranty_accept:"):
+        request_id = int(data.split(":", 1)[1])
+        changed = db.get_conn().warranty_requests.find_one_and_update(
+            {"id": request_id, "status": "pending_admin_check"},
+            {"$set": {"status": "accepted", "updated_at": datetime.now(UTC)}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if not changed:
+            await q.message.reply_text("⚠️ This warranty request has already been processed.")
+            return
+        await q.edit_message_reply_markup(reply_markup=kb.warranty_resolution_keyboard(request_id))
+        await q.message.reply_text("✅ Accepted. Choose replacement or refund:")
+        return
+
+    if data.startswith("adm_warranty_refuse:"):
+        request_id = int(data.split(":", 1)[1])
+        request = db.get_conn().warranty_requests.find_one({"id": request_id, "status": "pending_admin_check"})
+        if not request:
+            await q.message.reply_text("⚠️ This warranty request has already been processed.")
+            return
+        PENDING[uid] = ("adm_warranty_refuse_reason", request_id)
+        await q.message.reply_text("Send the reason for refusing this warranty request:")
+        return
+
+    if data.startswith("adm_warranty_resolve:"):
+        _, resolution, raw_id = data.split(":", 2)
+        request_id = int(raw_id)
+        request = db.resolve_warranty_request(request_id, resolution)
+        if not request:
+            await q.message.reply_text("⚠️ This warranty request has already been processed.")
+            return
+        customer_id = int(request["user_id"])
+        refund = float(request.get("refund_amount") or 0)
+        if resolution == "refund":
+            customer_text = f"💰 <b>Refund approved</b>\n\n<b>{refund:.2f} {CURRENCY}</b> was added to your wallet for warranty request <b>#{request_id}</b>."
+        else:
+            customer_text = f"🔁 <b>Replacement approved</b>\n\nYour replacement for warranty request <b>#{request_id}</b> will be prepared by the admin."
+        with contextlib.suppress(Exception):
+            await context.bot.send_message(customer_id, customer_text, parse_mode=ParseMode.HTML, reply_markup=kb.home_keyboard(lang_of(customer_id), customer_id))
+        await q.edit_message_reply_markup(reply_markup=None)
+        await q.message.reply_text(f"✅ Warranty request #{request_id} resolved: {resolution}.")
         return
 
     if data.startswith("adm_withdraw_done:"):
