@@ -1850,6 +1850,25 @@ def warranty_days_used(order):
     return max(0, int((time.time() - order_delivery_timestamp(order)) // 86400))
 
 
+def product_warranty_days(order):
+    """Resolve the warranty duration from the product, with order snapshot fallback."""
+    offer_id = order.get("offer_id")
+    if offer_id:
+        offer = db.get_offer(int(offer_id))
+        if offer and offer.get("warranty_days") is not None:
+            return max(0, int(offer.get("warranty_days") or 0))
+    return max(0, int(order.get("warranty_days") or 0))
+
+
+def product_period_days(order):
+    offer_id = order.get("offer_id")
+    if offer_id:
+        offer = db.get_offer(int(offer_id))
+        if offer and offer.get("period_days") is not None:
+            return max(0, int(offer.get("period_days") or 0))
+    return max(0, int(order.get("period_days") or 0))
+
+
 async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
@@ -2027,8 +2046,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         orders = [
             o for o in db.list_user_orders(uid, limit=100)
             if o.get("status") == "delivered"
-            and int(o.get("period_days") or 0) > 0
-            and warranty_days_used(o) < int(o.get("period_days") or 0)
+            and product_period_days(o) > 0
+            and warranty_days_used(o) < product_period_days(o)
         ]
         if not orders:
             await show_callback_screen(
@@ -2051,8 +2070,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer(t(lang, "not_for_you"), show_alert=True)
             return
         days_used = warranty_days_used(order)
-        period = max(1, int(order.get("period_days") or 1))
-        warranty_days = int(order.get("warranty_days") or 0)
+        period = max(1, product_period_days(order))
+        warranty_days = product_warranty_days(order)
         if days_used >= period:
             await q.message.reply_text(
                 "⚠️ This product period has already expired.",
