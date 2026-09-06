@@ -4363,6 +4363,16 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    if data == "adm_withdrawals":
+        withdrawals = db.list_withdrawals(status="pending", limit=50)
+        await show_callback_screen(
+            q,
+            "💸 <b>Pending withdrawals</b>\n\nSelect a request after sending the funds to the customer:",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.withdrawals_keyboard(withdrawals),
+        )
+        return
+
     if data.startswith("adm_withdraw_done:"):
         withdrawal_id = int(data.split(":", 1)[1])
         withdrawal = db.update_withdrawal(withdrawal_id, "completed")
@@ -4370,7 +4380,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_text("⚠️ This withdrawal is already processed.")
             return
         customer_id = int(withdrawal["user_id"])
-        amount = float(withdrawal.get("amount") or 0)
+        amount = int(withdrawal.get("amount_cents") or 0) / 100
         with contextlib.suppress(Exception):
             await context.bot.send_message(
                 customer_id,

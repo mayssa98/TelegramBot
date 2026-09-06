@@ -96,6 +96,7 @@ def admin_panel_keyboard():
     )
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Commandes payées", callback_data="adm_list:paid")],
+        [InlineKeyboardButton("💸 Retraits en attente", callback_data="adm_withdrawals")],
         [InlineKeyboardButton("📦 Catalogue", callback_data="adm_catalog")],
         [InlineKeyboardButton("📢 Créer une annonce", callback_data="adm_broadcast_message")],
         [InlineKeyboardButton("🧹 Annonces envoyées", callback_data="adm_broadcast_history")],
@@ -104,6 +105,25 @@ def admin_panel_keyboard():
         [InlineKeyboardButton(maintenance_label, callback_data="adm_maintenance_toggle")],
         [InlineKeyboardButton("🎛 Personnaliser le bot", callback_data="adm_customize")],
     ])
+
+
+def withdrawals_keyboard(withdrawals):
+    rows = []
+    for withdrawal in withdrawals:
+        amount = int(withdrawal.get("amount_cents") or 0) / 100
+        destination = str(withdrawal.get("destination") or "")[:24]
+        rows.append([InlineKeyboardButton(
+            f"#{withdrawal['id']} · {amount:.2f} USDT · {withdrawal.get('method')} · {destination}",
+            callback_data=f"adm_withdraw_done:{withdrawal['id']}",
+            style="success",
+        )])
+    if not rows:
+        rows.append([InlineKeyboardButton("✅ Aucun retrait en attente", callback_data="adm_text_noop")])
+    rows.extend([
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="adm_withdrawals")],
+        [InlineKeyboardButton("⬅️ Administration", callback_data="adm_panel")],
+    ])
+    return InlineKeyboardMarkup(rows)
 
 
 def broadcast_kind_label(kind):
@@ -246,10 +266,11 @@ def text_navigator_keyboard(index):
 def buttons_editor_keyboard():
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     standard = [
-        ("catalog", "Catalogue"),
-        ("topup", "Recharge"), ("orders", "Commandes"),
-        ("account", "Compte"), ("affiliate", "Affiliation"),
-        ("support", "Support"), ("language", "Langue"),
+        ("catalog", "Shop"),
+        ("topup", "Deposit"), ("profile_withdraw", "Withdraw"),
+        ("account", "My account"), ("profile_notifications", "Notifications"),
+        ("warranty", "Warranty"), ("support", "Support"),
+        ("language", "Language"),
     ]
     rows = [[InlineKeyboardButton(
         f"{'❌ Masqué' if action in hidden else '✅ Visible'} — {label}",
