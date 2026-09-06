@@ -66,12 +66,48 @@ def text_categories_keyboard():
     return InlineKeyboardMarkup(rows)
 
 
+def text_entry_label(key):
+    """Return a quick-to-scan button name and purpose for the text editor."""
+    names = {
+        "menu_catalog": "Shop",
+        "menu_topup": "Deposit",
+        "menu_account": "My account",
+        "menu_support": "Support",
+        "menu_lang": "Language",
+        "profile_deposit": "Deposit",
+        "profile_withdraw": "Withdraw",
+        "profile_orders": "My orders",
+        "profile_referral": "Refer & Earn",
+        "profile_shop": "Shop",
+        "profile_reseller_api": "Reseller API",
+        "profile_main_menu": "Main menu",
+        "topup_verify_bybit": "Bybit Pay",
+        "topup_verify_txid": "Binance Pay",
+        "topup_onchain": "Onchain",
+        "topup_bsc": "USDT - BEP20",
+        "topup_polygon": "USDT - POLY",
+    }
+    descriptions = {
+        "menus": "Menu button",
+        "payments": "Payment or wallet message",
+        "catalog": "Catalog or product text",
+        "orders": "Order, delivery or warranty text",
+        "alerts": "Announcement or notification",
+        "support": "Support or ticket message",
+        "account": "Account, language or loyalty text",
+        "admin": "Administration or system text",
+    }
+    name = names.get(key) or " ".join(part.capitalize() for part in key.split("_"))
+    description = descriptions.get(text_category_for_key(key), "Bot message")
+    return f"{name} — {description}"[:64]
+
+
 def texts_category_keyboard(category, page=0, page_size=8):
     keys = sorted(key for key in TRANSLATIONS if text_category_for_key(key) == category)
     total_pages = max(1, (len(keys) + page_size - 1) // page_size)
     page = max(0, min(int(page), total_pages - 1))
     visible = keys[page * page_size:(page + 1) * page_size]
-    rows = [[InlineKeyboardButton(f"✏️ {key}", callback_data=f"adm_text_key:{key}")] for key in visible]
+    rows = [[InlineKeyboardButton(f"✏️ {text_entry_label(key)}", callback_data=f"adm_text_key:{key}")] for key in visible]
     nav = []
     if page > 0:
         nav.append(InlineKeyboardButton("⬅️", callback_data=f"adm_text_cat:{category}:{page - 1}"))
@@ -222,7 +258,7 @@ def texts_editor_keyboard(page=0, page_size=8):
     total_pages = max(1, (len(keys) + page_size - 1) // page_size)
     page = max(0, min(int(page), total_pages - 1))
     visible = keys[page * page_size:(page + 1) * page_size]
-    rows = [[InlineKeyboardButton(f"✏️ {key}", callback_data=f"adm_text_key:{key}")] for key in visible]
+    rows = [[InlineKeyboardButton(f"✏️ {text_entry_label(key)}", callback_data=f"adm_text_key:{key}")] for key in visible]
     nav = []
     if page > 0:
         nav.append(InlineKeyboardButton("⬅️", callback_data=f"adm_text_page:{page - 1}"))
