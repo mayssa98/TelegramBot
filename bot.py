@@ -1704,6 +1704,9 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == t(lang, "menu_catalog"):
         clear_support_pending()
         await show_catalog(update, context, lang)
+    elif text == t(lang, "menu_methods"):
+        clear_support_pending()
+        await show_methods(update, context, lang)
     elif text == t(lang, "menu_lovable"):
         clear_support_pending()
         await show_catalog(update, context, lang)
@@ -1743,6 +1746,24 @@ async def show_catalog(update, context, lang):
         text,
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=kb.catalog_offers_keyboard(lang, notifications_enabled),
+    )
+
+
+async def show_methods(update, context, lang):
+    service_id = db.ensure_methods_service()
+    offers = db.list_offers(service_id)
+    message = update.message or update.callback_query.message
+    if not offers:
+        await message.reply_text(
+            "🧠 <b>Methods</b>\n\nNo methods are available yet.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb.home_keyboard(lang, update.effective_user.id),
+        )
+        return
+    await message.reply_text(
+        "🧠 <b>Methods</b>\n\nChoose a method to view its description and price:",
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb.offers_keyboard(lang, service_id),
     )
 
 
@@ -2206,6 +2227,9 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data == "topup":
         await show_topup(update, context)
+        return
+    if data == "methods":
+        await show_methods(update, context, lang)
         return
     if data == "topup_onchain":
         await show_callback_screen(

@@ -1003,6 +1003,14 @@ def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar
     return sid
 
 
+def ensure_methods_service():
+    """Return the dedicated digital-methods service, creating it once if needed."""
+    existing = get_conn().services.find_one({"name": {"$regex": r"^methods$", "$options": "i"}})
+    if existing:
+        return int(existing["id"])
+    return add_service("Methods", "🧠")
+
+
 def update_service(
     service_id, name=None, emoji=None, active=None, custom_emoji_id=None,
     sales_channels=None, name_ar=None, suffix_emoji=None,

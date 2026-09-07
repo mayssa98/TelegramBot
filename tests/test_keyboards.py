@@ -760,7 +760,7 @@ def test_home_uses_green_shop_blue_actions_and_red_support(mock_mongodb):
         actions[action].style for action in ("topup", "profile_withdraw", "account", "profile_notifications", "warranty", "language")
     } == {"primary"}
     assert actions["support"].style == "danger"
-    assert [len(row) for row in keyboard.inline_keyboard[:5]] == [1, 2, 2, 2, 1]
+    assert [len(row) for row in keyboard.inline_keyboard[:5]] == [1, 1, 2, 2, 2]
     assert "lovable" not in actions
 
     shop = kb.catalog_offers_keyboard("en")
