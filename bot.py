@@ -3030,11 +3030,20 @@ async def handle_pending_input(update, context, lang):
             return
         data = dict(ref)
         data["name"] = clean_name
-        PENDING[uid] = ("adm_addoff_period", data)
-        await update.message.reply_text(
-            "📅 *Étape 3/5* — envoyez la période en jours (ex: 30) :",
-            parse_mode=ParseMode.MARKDOWN,
-        )
+        service = db.get_service(int(data["service_id"])) or {}
+        if str(service.get("name") or "").strip().lower() == "methods":
+            data.update({"period_days": 0, "warranty_days": 0, "warranty_type": "days"})
+            PENDING[uid] = ("adm_addoff_description", data)
+            await update.message.reply_text(
+                "📝 *Étape 3/4* — envoyez la description de la méthode :",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        else:
+            PENDING[uid] = ("adm_addoff_period", data)
+            await update.message.reply_text(
+                "📅 *Étape 3/5* — envoyez la période en jours (ex: 30) :",
+                parse_mode=ParseMode.MARKDOWN,
+            )
         return
 
     if kind == "adm_addoff_period" and uid == ADMIN_ID:
@@ -5280,13 +5289,17 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm_off:") or data.startswith("adm_off_back:"):
         oid = int(data.split(":")[1])
         off = db.get_offer(oid)
+        service = db.get_service(off.get("service_id")) or {}
         price = "—" if off["price"] is None else f"{off['price']:.2f} {CURRENCY}"
+        method_details = "" if str(service.get("name") or "").strip().lower() == "methods" else (
+            f"🛡 Garantie : {warranty_service.offer_warranty_label(off, lang='fr') or 'NW'}\n"
+            f"📅 Période : {int(off.get('period_days') or 30)} j\n"
+        )
         await q.edit_message_text(
             f"🧩 *{off['name']}*\n💵 Prix : {price}\n"
             f"📦 Stock : {'♾ Illimité' if off.get('unlimited_stock') else off['stock']}\n"
             f"🚚 Livraison : {'Admin' if off.get('manual_stock') else 'Automatique'}\n"
-            f"🛡 Garantie : {warranty_service.offer_warranty_label(off, lang='fr') or 'NW'}\n"
-            f"📅 Période : {int(off.get('period_days') or 30)} j",
+            f"{method_details}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=admin.offer_admin_keyboard(oid))
         return

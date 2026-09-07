@@ -566,6 +566,10 @@ def offer_admin_keyboard(offer_id):
         callback_data=f"adm_method_media:{offer_id}",
         style="primary",
     )] if is_method else []
+    method_settings_rows = [] if is_method else [
+        [InlineKeyboardButton("🛡 Garantie (jours)", callback_data=f"adm_offnote:{offer_id}")],
+        [InlineKeyboardButton("📅 Période (jours)", callback_data=f"adm_offperiod:{offer_id}")],
+    ]
     return InlineKeyboardMarkup([
         *([method_row] if method_row else []),
         *([] if is_method else [[InlineKeyboardButton("🔐 Ajouter plusieurs comptes", callback_data=f"adm_inventory:{offer_id}")]]),
@@ -593,8 +597,7 @@ def offer_admin_keyboard(offer_id):
         [InlineKeyboardButton("📂 Déplacer vers un autre service", callback_data=f"adm_offmove:{offer_id}")],
         [InlineKeyboardButton("🎨 Emoji animé", callback_data=f"adm_offemoji:{offer_id}")],
         [InlineKeyboardButton("📄 Description", callback_data=f"adm_offdesc:{offer_id}")],
-        [InlineKeyboardButton("🛡 Garantie (jours)", callback_data=f"adm_offnote:{offer_id}")],
-        [InlineKeyboardButton("📅 Période (jours)", callback_data=f"adm_offperiod:{offer_id}")],
+        *method_settings_rows,
         [InlineKeyboardButton("⏸ Désactiver" if off["active"] else "▶️ Activer",
                               callback_data=f"adm_offtoggle:{offer_id}"),
          InlineKeyboardButton("🗑 Archiver", callback_data=f"adm_offdel:{offer_id}")],
