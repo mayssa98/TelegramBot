@@ -5056,6 +5056,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ---- gestion catalogue ----
     if data == "adm_catalog":
+        db.ensure_methods_service()
         await q.edit_message_text("📦 *Gestion catalogue* — choisissez un service :",
                                   parse_mode=ParseMode.MARKDOWN,
                                   reply_markup=admin.catalog_admin_keyboard())
