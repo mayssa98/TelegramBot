@@ -558,8 +558,17 @@ def service_admin_keyboard(service_id):
 
 def offer_admin_keyboard(offer_id):
     off = db.get_offer(offer_id)
+    service = db.get_service(off.get("service_id")) or {}
+    is_method = str(service.get("name") or "").strip().lower() == "methods"
+    method_media = off.get("method_media") or []
+    method_row = [InlineKeyboardButton(
+        f"🎬 Method content ({len(method_media)})",
+        callback_data=f"adm_method_media:{offer_id}",
+        style="primary",
+    )] if is_method else []
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔐 Ajouter plusieurs comptes", callback_data=f"adm_inventory:{offer_id}")],
+        *([method_row] if method_row else []),
+        *([] if is_method else [[InlineKeyboardButton("🔐 Ajouter plusieurs comptes", callback_data=f"adm_inventory:{offer_id}")]]),
         [InlineKeyboardButton("🖼 Modifier l’image", callback_data=f"adm_offimage:{offer_id}")],
         [InlineKeyboardButton("💵 Modifier le prix", callback_data=f"adm_setprice:{offer_id}")],
         [InlineKeyboardButton(

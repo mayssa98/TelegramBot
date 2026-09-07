@@ -90,6 +90,15 @@ def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: 
         try:
             if order.get("is_preorder"):
                 delivered = None
+            elif offer and offer.get("method_media"):
+                # Digital Methods offers have no finite inventory; their media
+                # package is delivered once payment is confirmed.
+                delivered = ["__method_media__"]
+                now = int(time.time())
+                db.get_conn().orders.update_one(
+                    {"id": int(order_id)},
+                    {"$set": {"status": "delivered", "delivered_at": now, "updated_at": now}},
+                )
             elif offer and offer.get("supplier_provider"):
                 delivered = reseller_service.fulfill_paid_order(order_id)
             else:

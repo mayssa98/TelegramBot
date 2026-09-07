@@ -1663,6 +1663,7 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "await_withdraw_destination",
         "warranty_reason",
         "adm_warranty_refuse_reason",
+        "adm_method_media",
         "manual_order_reply",
         "await_quantity",
         "await_preorder_quantity",
@@ -3094,6 +3095,8 @@ async def handle_pending_input(update, context, lang):
             await update.message.reply_text("⚠️ Prix invalide. Envoyez un nombre, par exemple : 4.99")
             return
         data = dict(ref)
+        service = db.get_service(int(data["service_id"])) or {}
+        is_method_offer = str(service.get("name") or "").strip().lower() == "methods"
         offer_id = db.add_offer(
             data["service_id"], data["name"], price, 0,
             warranty_type=data["warranty_type"],
@@ -3102,13 +3105,18 @@ async def handle_pending_input(update, context, lang):
             description=data["description"],
             instructions="",
             photo_file_id=data["photo_file_id"],
+            unlimited_stock=is_method_offer,
         )
         PENDING.pop(uid, None)
-        await update.message.reply_text(
-            "✅ Offre créée.\n\n"
-            "📦 Le stock sera calculé automatiquement à partir des comptes ajoutés.\n"
+        confirmation = (
+            "✅ Method offer created.\n\nUse ‘Method content’ to upload the videos, images, and documents delivered after payment."
+            if is_method_offer else
+            "✅ Offre créée.\n\n📦 Le stock sera calculé automatiquement à partir des comptes ajoutés.\n"
             "🛒 Les ventes seront calculées automatiquement à partir des commandes confirmées.\n\n"
-            "Ajoutez maintenant les comptes pour alimenter le stock.",
+            "Ajoutez maintenant les comptes pour alimenter le stock."
+        )
+        await update.message.reply_text(
+            confirmation,
             reply_markup=admin.offer_admin_keyboard(offer_id),
         )
         return
@@ -3150,6 +3158,17 @@ async def handle_pending_input(update, context, lang):
                 reply_markup=kb.home_keyboard(lang_of(customer_id), customer_id),
             )
         await update.message.reply_text(f"✅ Warranty request #{int(ref)} refused and customer notified.")
+        return
+
+    if kind == "adm_method_media" and uid == ADMIN_ID:
+        if text.lower() in {"done", "finish", "finished"}:
+            PENDING.pop(uid, None)
+            await update.message.reply_text(
+                "✅ Method content saved.",
+                reply_markup=admin.offer_admin_keyboard(int(ref)),
+            )
+        else:
+            await update.message.reply_text("Send media, or send `done` when finished.", parse_mode=ParseMode.MARKDOWN)
         return
 
     if kind == "warranty_reason":
@@ -3960,6 +3979,21 @@ def supplier_delivery_problem_text(order_id, result):
     )
 
 
+async def send_method_media(bot, customer_id, media):
+    for item in media or []:
+        kind = str(item.get("type") or "document")
+        file_id = item.get("file_id")
+        if not file_id:
+            continue
+        caption = str(item.get("caption") or "")[:900] or None
+        if kind == "photo":
+            await bot.send_photo(customer_id, photo=file_id, caption=caption)
+        elif kind == "video":
+            await bot.send_video(customer_id, video=file_id, caption=caption)
+        else:
+            await bot.send_document(customer_id, document=file_id, caption=caption)
+
+
 async def send_payment_result(message, context, lang, order_id, result, uid):
     if result["status"] in ("delivered", "confirmed", "confirmed_no_delivery"):
         affiliate = result.get("affiliate")
@@ -4005,15 +4039,24 @@ async def send_payment_result(message, context, lang, order_id, result, uid):
         ):
             return
         if result["delivered_content"]:
-            content = numbered_delivery_content(result["delivered_content"])
             paid_order = db.get_order(order_id)
-            await message.reply_text(
-                premium_customer_text(lang, "delivery_received", oid=order_id,
-                  service=paid_order["service_name"], offer=paid_order["offer_name"],
-                  content=content),
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb.post_delivery_keyboard(lang, order_id),
-            )
+            offer = db.get_offer(paid_order.get("offer_id")) if paid_order else None
+            if offer and result["delivered_content"] == ["__method_media__"]:
+                await message.reply_text(
+                    f"✅ <b>Payment confirmed</b>\n\nYour method <b>{html.escape(str(paid_order.get('offer_name') or ''))}</b> is ready. The content is attached below.",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=kb.post_delivery_keyboard(lang, order_id),
+                )
+                await send_method_media(context.bot, uid, offer.get("method_media") or [])
+            else:
+                content = numbered_delivery_content(result["delivered_content"])
+                await message.reply_text(
+                    premium_customer_text(lang, "delivery_received", oid=order_id,
+                      service=paid_order["service_name"], offer=paid_order["offer_name"],
+                      content=content),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=kb.post_delivery_keyboard(lang, order_id),
+                )
         else:
             await message.reply_text(premium_customer_text(lang, "verify_ok", oid=order_id),
                                      parse_mode=ParseMode.HTML,
@@ -4217,6 +4260,28 @@ async def handle_pending_attachment(update, context):
     uid = update.effective_user.id
     pending = PENDING.get(uid)
     message = update.effective_message
+    if uid == ADMIN_ID and pending and pending[0] == "adm_method_media":
+        media_type = None
+        media_obj = getattr(message, "video", None)
+        if media_obj:
+            media_type = "video"
+        else:
+            media_obj = getattr(message, "document", None)
+            if media_obj:
+                media_type = "document"
+        if not media_obj:
+            await message.reply_text("⚠️ Send a video or document, or send `done` when finished.", parse_mode=ParseMode.MARKDOWN)
+            return
+        offer = db.get_offer(int(pending[1]))
+        media = list((offer or {}).get("method_media") or [])
+        media.append({
+            "type": media_type,
+            "file_id": media_obj.file_id,
+            "caption": str(getattr(message, "caption", "") or "")[:900],
+        })
+        db.update_offer(int(pending[1]), method_media=media, unlimited_stock=True)
+        await message.reply_text(f"✅ Content item {len(media)} saved. Send more or `done`.", parse_mode=ParseMode.MARKDOWN)
+        return
     if uid == ADMIN_ID and pending and pending[0] == "adm_lovable_zip":
         document = getattr(message, "document", None)
         file_name = str(getattr(document, "file_name", "") or "")
@@ -4307,6 +4372,17 @@ async def handle_pending_photo(update, context):
         return
     uid = update.effective_user.id
     pending = PENDING.get(uid)
+    if uid == ADMIN_ID and pending and pending[0] == "adm_method_media":
+        offer = db.get_offer(int(pending[1]))
+        media = list((offer or {}).get("method_media") or [])
+        media.append({
+            "type": "photo",
+            "file_id": update.message.photo[-1].file_id,
+            "caption": str(update.message.caption or "")[:900],
+        })
+        db.update_offer(int(pending[1]), method_media=media, unlimited_stock=True)
+        await update.message.reply_text(f"✅ Content item {len(media)} saved. Send more or `done`.", parse_mode=ParseMode.MARKDOWN)
+        return
     if uid == ADMIN_ID and pending and pending[0] == "adm_deliver":
         if lovable_service.is_lovable_order(db.get_order(int(pending[1]))):
             await update.message.reply_text(
@@ -4503,6 +4579,20 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(customer_id, customer_text, parse_mode=ParseMode.HTML, reply_markup=kb.home_keyboard(lang_of(customer_id), customer_id))
         await q.edit_message_reply_markup(reply_markup=None)
         await q.message.reply_text(f"✅ Warranty request #{request_id} resolved: {resolution}.")
+        return
+
+    if data.startswith("adm_method_media:"):
+        offer_id = int(data.split(":", 1)[1])
+        offer = db.get_offer(offer_id)
+        if not offer:
+            await q.message.reply_text("⚠️ Method offer not found.")
+            return
+        PENDING[uid] = ("adm_method_media", offer_id)
+        await q.message.reply_text(
+            "🎬 Send method content as photos, videos, or documents.\n"
+            "Send `done` when all content has been uploaded.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
         return
 
     if data.startswith("adm_withdraw_done:"):
