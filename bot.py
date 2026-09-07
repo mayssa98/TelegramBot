@@ -3046,9 +3046,27 @@ async def handle_pending_input(update, context, lang):
             return
         data = dict(ref)
         data["period_days"] = period_days
+        PENDING[uid] = ("adm_addoff_warranty", data)
+        await update.message.reply_text(
+            "🛡️ *Étape 4/6* — envoyez la garantie en jours (0 = aucune garantie) :",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if kind == "adm_addoff_warranty" and uid == ADMIN_ID:
+        try:
+            warranty_days = int(text.strip())
+            if warranty_days < 0 or warranty_days > 3650:
+                raise ValueError
+        except (TypeError, ValueError):
+            await update.message.reply_text("⚠️ Envoyez un nombre de jours valide (0 à 3650).")
+            return
+        data = dict(ref)
+        data["warranty_days"] = warranty_days
+        data["warranty_type"] = "days"
         PENDING[uid] = ("adm_addoff_description", data)
         await update.message.reply_text(
-            "📝 *Étape 4/5* — envoyez la description de l’offre :",
+            "📝 *Étape 5/6* — envoyez la description de l’offre :",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
@@ -3062,7 +3080,7 @@ async def handle_pending_input(update, context, lang):
         data["description"] = description
         PENDING[uid] = ("adm_addoff_price", data)
         await update.message.reply_text(
-            "💵 *Étape 5/5* — envoyez le prix unitaire en USDT (exemple : 4.99) :",
+            "💵 *Étape 6/6* — envoyez le prix unitaire en USDT (exemple : 4.99) :",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
@@ -3080,6 +3098,7 @@ async def handle_pending_input(update, context, lang):
             data["service_id"], data["name"], price, 0,
             warranty_type=data["warranty_type"],
             warranty_days=data["warranty_days"],
+            period_days=data["period_days"],
             description=data["description"],
             instructions="",
             photo_file_id=data["photo_file_id"],
