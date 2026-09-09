@@ -90,6 +90,25 @@ def _finalize_confirmed_payment(order_id: int, user_id: int, txid: str, method: 
         try:
             if order.get("is_preorder"):
                 delivered = None
+            elif (
+                offer
+                and offer.get("feature_key") == "bot_like_mine"
+                and str(offer.get("delivery_url") or "").strip()
+            ):
+                # Deliver only the administrator-configured private repository
+                # link after payment has completed successfully.
+                delivery_url = str(offer["delivery_url"]).strip()
+                delivered = [f"Private GitHub project: {delivery_url}"]
+                now = int(time.time())
+                db.get_conn().orders.update_one(
+                    {"id": int(order_id)},
+                    {"$set": {
+                        "status": "delivered",
+                        "delivery_text": delivered[0],
+                        "delivered_at": now,
+                        "updated_at": now,
+                    }},
+                )
             elif offer and offer.get("method_media"):
                 # Digital Methods offers have no finite inventory; their media
                 # package is delivered once payment is confirmed.

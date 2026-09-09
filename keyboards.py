@@ -615,6 +615,13 @@ def offers_keyboard(lang, service_id):
 
 def offer_detail_keyboard(lang, offer):
     buttons = []
+    if offer.get("feature_key") == "bot_like_mine":
+        buttons.append([translated_button(
+            lang,
+            "btn_bot_package_preview",
+            callback_data=f"bot_package_preview:{offer['id']}",
+            style="primary",
+        )])
     if offer.get("price") is not None and db.offer_has_stock(offer):
         buttons.append([translated_button(lang, "btn_buy", callback_data=f"buy:{offer['id']}")])
     buttons.append([translated_button(lang, "btn_back", callback_data="catalog")])

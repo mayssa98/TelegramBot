@@ -896,6 +896,9 @@ def update_offer(
     period_days=None,
     warranty_days=None,
     method_media=None,
+    benefits_document_file_id=None,
+    benefits_document_name=None,
+    delivery_url=None,
 ):
     existing = get_conn().offers.find_one({"id": offer_id}, {"service_id": 1}) or {}
     if service_id is not None and int(service_id) != int(existing.get("service_id") or 0):
@@ -943,6 +946,9 @@ def update_offer(
             "period_days": int(period_days) if period_days is not None else None,
             "warranty_days": int(warranty_days) if warranty_days is not None else None,
             "method_media": list(method_media) if method_media is not None else None,
+            "benefits_document_file_id": benefits_document_file_id,
+            "benefits_document_name": benefits_document_name,
+            "delivery_url": delivery_url,
         }.items()
         if value is not None
     }

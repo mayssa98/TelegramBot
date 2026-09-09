@@ -73,6 +73,37 @@ def test_submit_payment_success(mock_mongodb, mock_payment_verifier):
     assert db_order["txid"] == "TXID_VALID_123"
 
 
+def test_bot_like_mine_delivers_configured_github_link_after_payment(
+    mock_mongodb, mock_payment_verifier,
+):
+    import time
+
+    offer_id = db.ensure_bot_like_mine_feature()
+    repository_url = "https://github.com/example/private-bot-project"
+    db.update_offer(offer_id, delivery_url=repository_url)
+    db.get_conn().orders.insert_one({
+        "id": 901,
+        "user_id": 123,
+        "offer_id": offer_id,
+        "service_name": "BOT LIKE MINE",
+        "offer_name": "BOT LIKE MINE",
+        "qty": 1,
+        "total_price": 45.0,
+        "status": OrderStatus.PENDING_PAYMENT,
+        "txid": "",
+        "created_at": int(time.time()) - 60,
+        "expires_at": int(time.time()) + 1800,
+    })
+
+    result = payment_service.submit_payment(901, "BOT-PACKAGE-TXID", 123)
+
+    assert result["status"] == "delivered"
+    assert result["delivered_content"] == [f"Private GitHub project: {repository_url}"]
+    delivered_order = db.get_order(901)
+    assert delivered_order["status"] == OrderStatus.DELIVERED
+    assert repository_url in delivered_order["delivery_text"]
+
+
 def test_txid_verification_uses_receipt_id_and_amount(mock_mongodb, monkeypatch):
     captured = {}
 

@@ -385,6 +385,21 @@ TRANSLATIONS = {
         "ar": "{emoji} *{offer}*\n\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\n\n\U0001f4ab *تفاصيل العرض*\n\n\U0001f6e1 *الضمان*\n{note}\n\n\U000023f3 *المدة*\n{duration}\n\n\U0001f4e7 *البريد*\n{mail}\n\n\U0001f510 *الوصول*\n{access}\n\n\U0001f69a *التسليم*\n{delivery}\n\n\U0001f48e *السعر*\n*{price} {cur}*\n\n\U0001f4e6 *المخزون*\n*{stock} حساب*\n\n{description}\n\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\U00002728\n\U0001f680 _اضغط على اشترِ الآن لاختيار الكمية._",
     },
     "btn_buy": {"fr": "🛒 Acheter maintenant", "en": "🛒 Buy now", "ar": "🛒 اشترِ الآن"},
+    "btn_bot_package_preview": {
+        "fr": "📄 What you'll get?",
+        "en": "📄 What you'll get?",
+        "ar": "📄 ماذا ستحصل عليه؟",
+    },
+    "bot_package_preview_caption": {
+        "fr": "📄 BOT LIKE MINE — package benefits and included features.",
+        "en": "📄 BOT LIKE MINE — package benefits and included features.",
+        "ar": "📄 بوت مثلي — مزايا الحزمة والخصائص المشمولة.",
+    },
+    "bot_package_preview_unavailable": {
+        "fr": "⏳ The document will be available soon.",
+        "en": "⏳ The document will be available soon.",
+        "ar": "⏳ سيكون المستند متاحاً قريباً.",
+    },
     "btn_back": {"fr": "⬅️ Retour", "en": "⬅️ Back", "ar": "⬅️ رجوع"},
     "btn_back_services": {
         "fr": "🔶 Services",

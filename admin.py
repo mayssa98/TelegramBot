@@ -559,6 +559,7 @@ def offer_admin_keyboard(offer_id):
     off = db.get_offer(offer_id)
     service = db.get_service(off.get("service_id")) or {}
     is_method = str(service.get("name") or "").strip().lower() == "methods"
+    is_bot_package = off.get("feature_key") == "bot_like_mine"
     method_media = off.get("method_media") or []
     method_row = [InlineKeyboardButton(
         f"🎬 Method content ({len(method_media)})",
@@ -569,7 +570,20 @@ def offer_admin_keyboard(offer_id):
         [InlineKeyboardButton("🛡 Garantie (jours)", callback_data=f"adm_offnote:{offer_id}")],
         [InlineKeyboardButton("📅 Période (jours)", callback_data=f"adm_offperiod:{offer_id}")],
     ]
+    bot_package_rows = [] if not is_bot_package else [
+        [InlineKeyboardButton(
+            "📄 Document client" + (" ✅" if off.get("benefits_document_file_id") else ""),
+            callback_data=f"adm_bot_package_doc:{offer_id}",
+            style="primary",
+        )],
+        [InlineKeyboardButton(
+            "🔗 Lien GitHub de livraison" + (" ✅" if off.get("delivery_url") else ""),
+            callback_data=f"adm_bot_package_link:{offer_id}",
+            style="primary",
+        )],
+    ]
     return InlineKeyboardMarkup([
+        *bot_package_rows,
         *([method_row] if method_row else []),
         *([] if is_method else [[InlineKeyboardButton("🔐 Ajouter plusieurs comptes", callback_data=f"adm_inventory:{offer_id}")]]),
         [InlineKeyboardButton("🖼 Modifier l’image", callback_data=f"adm_offimage:{offer_id}")],

@@ -776,6 +776,47 @@ def test_home_uses_green_shop_blue_actions_and_red_support(mock_mongodb):
     assert "lovable" not in shop_callbacks
 
 
+def test_bot_like_mine_offer_has_preview_and_admin_asset_controls(mock_mongodb):
+    offer_id = db.ensure_bot_like_mine_feature()
+    offer = db.get_offer(offer_id)
+
+    customer_keyboard = kb.offer_detail_keyboard("en", offer)
+    customer_actions = {
+        button.callback_data: button
+        for row in customer_keyboard.inline_keyboard
+        for button in row
+        if button.callback_data
+    }
+    assert customer_actions[f"bot_package_preview:{offer_id}"].text == "📄 What you'll get?"
+    assert customer_actions[f"bot_package_preview:{offer_id}"].style == "primary"
+    assert f"buy:{offer_id}" in customer_actions
+
+    admin_actions = {
+        button.callback_data: button.text
+        for row in admin.offer_admin_keyboard(offer_id).inline_keyboard
+        for button in row
+        if button.callback_data
+    }
+    assert f"adm_bot_package_doc:{offer_id}" in admin_actions
+    assert f"adm_bot_package_link:{offer_id}" in admin_actions
+
+
+def test_bot_like_mine_configuration_survives_feature_refresh(mock_mongodb):
+    offer_id = db.ensure_bot_like_mine_feature()
+    db.update_offer(
+        offer_id,
+        benefits_document_file_id="telegram-document-id",
+        benefits_document_name="benefits.pdf",
+        delivery_url="https://github.com/example/private-project",
+    )
+
+    assert db.ensure_bot_like_mine_feature() == offer_id
+    refreshed = db.get_offer(offer_id)
+    assert refreshed["benefits_document_file_id"] == "telegram-document-id"
+    assert refreshed["benefits_document_name"] == "benefits.pdf"
+    assert refreshed["delivery_url"] == "https://github.com/example/private-project"
+
+
 def test_reseller_api_stays_in_profile_and_dashboard(mock_mongodb):
     home_callbacks = {
         button.callback_data

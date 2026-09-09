@@ -1673,6 +1673,8 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "warranty_reason",
         "adm_warranty_refuse_reason",
         "adm_method_media",
+        "adm_bot_package_doc",
+        "adm_bot_package_link",
         "manual_order_reply",
         "await_quantity",
         "await_preorder_quantity",
@@ -2252,6 +2254,22 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data == "bot_like_mine":
         data = f"off:{db.ensure_bot_like_mine_feature()}"
+    if data.startswith("bot_package_preview:"):
+        offer_id = int(data.split(":", 1)[1])
+        offer = db.get_offer(offer_id)
+        if not offer or offer.get("feature_key") != "bot_like_mine":
+            await q.answer(t(lang, "bot_package_preview_unavailable"), show_alert=True)
+            return
+        document_file_id = str(offer.get("benefits_document_file_id") or "").strip()
+        if not document_file_id:
+            await q.message.reply_text(t(lang, "bot_package_preview_unavailable"))
+            return
+        await q.message.reply_document(
+            document=document_file_id,
+            caption=t(lang, "bot_package_preview_caption"),
+            reply_markup=kb.offer_detail_keyboard(lang, offer),
+        )
+        return
     if data == "topup_onchain":
         await show_callback_screen(
             q,
@@ -3198,6 +3216,26 @@ async def handle_pending_input(update, context, lang):
             )
         else:
             await update.message.reply_text("Send media, or send `done` when finished.", parse_mode=ParseMode.MARKDOWN)
+        return
+
+    if kind == "adm_bot_package_doc" and uid == ADMIN_ID:
+        await update.message.reply_text("📄 Envoyez le document client comme fichier Telegram.")
+        return
+
+    if kind == "adm_bot_package_link" and uid == ADMIN_ID:
+        delivery_url = text.strip()
+        if not re.fullmatch(r"https://github\.com/[^\s/]+/[^\s/]+/?", delivery_url, flags=re.IGNORECASE):
+            await update.message.reply_text(
+                "⚠️ Envoyez un lien de dépôt GitHub valide, par exemple :\n"
+                "https://github.com/organisation/project"
+            )
+            return
+        db.update_offer(int(ref), delivery_url=delivery_url.rstrip("/"))
+        PENDING.pop(uid, None)
+        await update.message.reply_text(
+            "✅ Lien GitHub de livraison enregistré. Il sera envoyé uniquement après paiement confirmé.",
+            reply_markup=admin.offer_admin_keyboard(int(ref)),
+        )
         return
 
     if kind == "warranty_reason":
@@ -4289,6 +4327,24 @@ async def handle_pending_attachment(update, context):
     uid = update.effective_user.id
     pending = PENDING.get(uid)
     message = update.effective_message
+    if uid == ADMIN_ID and pending and pending[0] == "adm_bot_package_doc":
+        document = getattr(message, "document", None)
+        if not document:
+            await message.reply_text("⚠️ Envoyez le document comme fichier Telegram.")
+            return
+        file_name = str(getattr(document, "file_name", "") or "BOT-LIKE-MINE-benefits")[:240]
+        db.update_offer(
+            int(pending[1]),
+            benefits_document_file_id=document.file_id,
+            benefits_document_name=file_name,
+        )
+        PENDING.pop(uid, None)
+        await message.reply_text(
+            f"✅ Document client enregistré : <code>{html.escape(file_name)}</code>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin.offer_admin_keyboard(int(pending[1])),
+        )
+        return
     if uid == ADMIN_ID and pending and pending[0] == "adm_method_media":
         media_type = None
         media_obj = getattr(message, "video", None)
@@ -4621,6 +4677,30 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🎬 Send method content as photos, videos, or documents.\n"
             "Send `done` when all content has been uploaded.",
             parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if data.startswith("adm_bot_package_doc:"):
+        offer_id = int(data.split(":", 1)[1])
+        offer = db.get_offer(offer_id)
+        if not offer or offer.get("feature_key") != "bot_like_mine":
+            await q.message.reply_text("⚠️ Offre BOT LIKE MINE introuvable.")
+            return
+        PENDING[uid] = ("adm_bot_package_doc", offer_id)
+        await q.message.reply_text(
+            "📄 Envoyez le document affiché par le bouton « What you'll get? » comme fichier Telegram."
+        )
+        return
+
+    if data.startswith("adm_bot_package_link:"):
+        offer_id = int(data.split(":", 1)[1])
+        offer = db.get_offer(offer_id)
+        if not offer or offer.get("feature_key") != "bot_like_mine":
+            await q.message.reply_text("⚠️ Offre BOT LIKE MINE introuvable.")
+            return
+        PENDING[uid] = ("adm_bot_package_link", offer_id)
+        await q.message.reply_text(
+            "🔗 Envoyez le lien privé GitHub livré au client après confirmation du paiement."
         )
         return
 
