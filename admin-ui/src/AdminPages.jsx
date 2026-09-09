@@ -75,13 +75,6 @@ const PROVIDERS = [
 ];
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS);
-const STOREFRONT_PAYMENT_LABELS = {
-  d17: "D17",
-  flouci: "Flouci",
-  isi: "ISI",
-  bank_transfer: "Virement bancaire",
-  postal_transfer: "Virement postal",
-};
 const SERVICE_COLORS = ["#a78bfa", "#22d3ee", "#34d399", "#f59e0b", "#fb7185", "#60a5fa"];
 
 function providerLabel(value) {
@@ -917,7 +910,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
   );
 }
 
-function CatalogPage({ data, onAction, workspace = "bot" }) {
+function CatalogPage({ data, onAction }) {
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("all");
   const [offer, setOffer] = useState(undefined);
@@ -2837,272 +2830,6 @@ function ResellerClientsPage({ data }) {
   );
 }
 
-function SiteCustomersPage({ onAction }) {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
-  const [page, setPage] = useState(1);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [selected, setSelected] = useState(null);
-  const [notes, setNotes] = useState("");
-  const [result, loading] = useRemoteList("/admin/api/storefront-customers", {
-    search,
-    status,
-    page,
-    per_page: 25,
-    refresh: refreshKey,
-  });
-  const open = (customer) => {
-    setSelected(customer);
-    setNotes(customer.notes || "");
-  };
-  const save = async (nextStatus = selected?.status || "active") => {
-    if (!selected) return;
-    if (await onAction({
-      action: "update_storefront_customer",
-      phone: selected.phone,
-      status: nextStatus,
-      notes,
-    })) {
-      setSelected(null);
-      setRefreshKey((value) => value + 1);
-    }
-  };
-  const activeCount = result.items.filter((customer) => customer.status !== "blocked").length;
-  const blockedCount = result.items.filter((customer) => customer.status === "blocked").length;
-  const pageRevenue = result.items.reduce((total, customer) => total + Number(customer.total_spent || 0), 0);
-  return (
-    <>
-      <PageHeader
-        eyebrow="CRM · Trust Market TN"
-        title="Clients du site"
-        description="Consultez les achats, ajoutez des notes et contrôlez l’accès aux commandes du site."
-        actions={<a className="action-button secondary" href="/" target="_blank" rel="noreferrer"><Globe2 size={16} />Voir la boutique</a>}
-      />
-      <section className="order-kpis" aria-label="Statistiques clients du site">
-        <article><span className="order-kpi-icon violet"><Users size={19} /></span><div><small>Clients trouvés</small><strong>{result.total || 0}</strong><em>Profils du site TN</em></div></article>
-        <article><span className="order-kpi-icon green"><CheckCircle2 size={19} /></span><div><small>Actifs sur cette page</small><strong>{activeCount}</strong><em>Peuvent commander</em></div></article>
-        <article><span className="order-kpi-icon amber"><Ban size={19} /></span><div><small>Bloqués sur cette page</small><strong>{blockedCount}</strong><em>Commande désactivée</em></div></article>
-        <article><span className="order-kpi-icon cyan"><CircleDollarSign size={19} /></span><div><small>Revenu affiché</small><strong>{money(pageRevenue, "TND")}</strong><em>Paiements validés</em></div></article>
-      </section>
-      <FilterBar
-        search={search}
-        setSearch={(value) => { setSearch(value); setPage(1); }}
-        placeholder="Nom, téléphone ou e-mail…"
-        resultCount={result.total}
-      >
-        <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} aria-label="Filtrer les clients du site">
-          <option value="all">Tous les clients</option>
-          <option value="active">Clients actifs</option>
-          <option value="blocked">Clients bloqués</option>
-        </select>
-      </FilterBar>
-      <section className="data-panel">
-        <div className="responsive-table">
-          <table>
-            <thead><tr><th>Client</th><th>Contact</th><th>Commandes</th><th>Validées</th><th>Dépensé</th><th>Dernière commande</th><th>Statut</th><th /></tr></thead>
-            <tbody>{result.items.map((customer) => (
-              <tr key={customer.phone} onClick={() => open(customer)}>
-                <td><strong>{customer.name || "Client du site"}</strong><small>{customer.email || "Sans e-mail"}</small></td>
-                <td><strong>{customer.phone}</strong></td>
-                <td>{customer.order_count || 0}</td>
-                <td>{customer.approved_order_count || 0}</td>
-                <td><strong>{money(customer.total_spent, "TND")}</strong></td>
-                <td>{date(customer.last_order_at)}</td>
-                <td><span className={`status ${customer.status === "blocked" ? "cancelled" : "delivered"}`}>{customer.status === "blocked" ? "Bloqué" : "Actif"}</span></td>
-                <td><button className="row-action" aria-label={`Gérer ${customer.name || customer.phone}`}><UserRound size={15} /></button></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-        {loading ? <div className="table-loading">Chargement des clients…</div> : !result.items.length && <Empty icon={Users} title="Aucun client trouvé" text="Les clients apparaissent dès leur première commande." />}
-        <Pagination value={result} onChange={setPage} />
-      </section>
-      {selected && (
-        <Modal title={selected.name || selected.phone} onClose={() => setSelected(null)} wide>
-          <div className="detail-grid">
-            <div><span>Téléphone</span><strong>{selected.phone}</strong></div>
-            <div><span>E-mail</span><strong>{selected.email || "—"}</strong></div>
-            <div><span>Commandes</span><strong>{selected.order_count || 0}</strong></div>
-            <div><span>Total dépensé</span><strong>{money(selected.total_spent, "TND")}</strong></div>
-          </div>
-          <Field label="Notes internes" wide>
-            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Préférences, suivi, incident de paiement…" rows="4" />
-          </Field>
-          <div className="dialog-actions wrap">
-            <a className="action-button secondary" href={`https://wa.me/${selected.phone.replace(/\D/g, "")}?text=${encodeURIComponent("Bonjour, Trust Market TN vous contacte concernant votre compte.")}`} target="_blank" rel="noreferrer"><Send size={16} />WhatsApp</a>
-            <ActionButton secondary icon={Check} onClick={() => save(selected.status)}>Enregistrer les notes</ActionButton>
-            <ActionButton danger={selected.status !== "blocked"} icon={selected.status === "blocked" ? CheckCircle2 : Ban} onClick={() => save(selected.status === "blocked" ? "active" : "blocked")}>{selected.status === "blocked" ? "Réactiver le client" : "Bloquer les commandes"}</ActionButton>
-          </div>
-          <section className="customer-orders">
-            <header><div><span className="eyebrow">Historique récent</span><h4>Commandes Trust Market TN</h4></div></header>
-            <div className="responsive-table">
-              <table>
-                <thead><tr><th>Commande</th><th>Produit</th><th>Montant</th><th>Statut</th><th>Date</th></tr></thead>
-                <tbody>{(selected.recent_orders || []).map((order) => <tr key={order.id}><td><strong>TN-{order.id}</strong></td><td>{order.offer_name}</td><td>{money(order.total, "TND")}</td><td><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></td><td>{date(order.created_at)}</td></tr>)}</tbody>
-              </table>
-            </div>
-          </section>
-        </Modal>
-      )}
-    </>
-  );
-}
-
-function SiteOverviewPage() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const load = () => {
-    setLoading(true);
-    setError("");
-    fetch("/admin/api/storefront-orders?status=all", {
-      credentials: "same-origin",
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || "Commandes indisponibles");
-        setOrders(payload.orders || []);
-      })
-      .catch((requestError) => setError(requestError.message))
-      .finally(() => setLoading(false));
-  };
-  useEffect(load, []);
-  const approvedStatuses = new Set(["paid", "delivered"]);
-  const revenue = orders.filter((order) => approvedStatuses.has(order.status)).reduce((total, order) => total + Number(order.total || 0), 0);
-  const pending = orders.filter((order) => order.status === "manual_review").length;
-  const delivered = orders.filter((order) => order.status === "delivered").length;
-  const customers = new Set(orders.map((order) => order.phone).filter(Boolean)).size;
-  return (
-    <>
-      <PageHeader
-        eyebrow="Administration du site"
-        title="Trust Market TN"
-        description="Vue séparée des ventes en TND, paiements manuels et clients du site tunisien."
-        actions={<><a className="action-button secondary" href="/" target="_blank" rel="noreferrer"><Globe2 size={16} />Voir la boutique</a><ActionButton secondary icon={RefreshCw} onClick={load}>Actualiser</ActionButton></>}
-      />
-      <section className="order-kpis" aria-label="Statistiques Trust Market TN">
-        <article><span className="order-kpi-icon violet"><ShoppingBag size={19} /></span><div><small>Commandes site</small><strong>{orders.length}</strong><em>Volume total</em></div></article>
-        <article><span className="order-kpi-icon cyan"><CircleDollarSign size={19} /></span><div><small>Revenu validé</small><strong>{money(revenue, "TND")}</strong><em>Paiements acceptés</em></div></article>
-        <article><span className="order-kpi-icon amber"><Clock3 size={19} /></span><div><small>À vérifier</small><strong>{pending}</strong><em>Reçus en attente</em></div></article>
-        <article><span className="order-kpi-icon green"><Users size={19} /></span><div><small>Clients site</small><strong>{customers}</strong><em>{delivered} commande(s) livrée(s)</em></div></article>
-      </section>
-      <section className="data-panel">
-        <header className="site-overview-panel-head"><div><span>Activité récente</span><h3>Dernières commandes du site</h3></div><a className="action-button" href="/admin/tn-storefront">Gérer les commandes <ChevronRight size={15} /></a></header>
-        <div className="responsive-table">
-          <table>
-            <thead><tr><th>Commande</th><th>Client</th><th>Produit</th><th>Montant</th><th>Paiement</th><th>Statut</th><th>Date</th></tr></thead>
-            <tbody>{orders.slice(0, 8).map((order) => <tr key={order.id}><td><strong>TN-{order.id}</strong></td><td><strong>{order.customer_name}</strong><small>{order.phone}</small></td><td>{order.offer_name}</td><td><strong>{money(order.total, "TND")}</strong></td><td>{STOREFRONT_PAYMENT_LABELS[order.payment_method] || order.payment_method}</td><td><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></td><td>{date(order.created_at)}</td></tr>)}</tbody>
-          </table>
-        </div>
-        {loading && <div className="table-loading">Chargement…</div>}
-        {!loading && error && <div className="table-loading">{error}</div>}
-        {!loading && !error && !orders.length && <Empty icon={ShoppingBag} title="Aucune commande sur le site" />}
-      </section>
-    </>
-  );
-}
-
-function TunisiaStorefrontPage({ onAction }) {
-  const [status, setStatus] = useState("manual_review");
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
-  const [reason, setReason] = useState("");
-  const load = () => {
-    setLoading(true);
-    fetch(`/admin/api/storefront-orders?status=${status}`, {
-      credentials: "same-origin",
-      cache: "no-store",
-    })
-      .then((response) => response.json())
-      .then((payload) => setOrders(payload.orders || []))
-      .finally(() => setLoading(false));
-  };
-  useEffect(load, [status]);
-  const decide = async (decision) => {
-    if (await onAction({
-      action: "review_storefront_order",
-      order_id: selected.id,
-      decision,
-      reason,
-    })) {
-      setSelected(null);
-      setReason("");
-      load();
-    }
-  };
-  return (
-    <>
-      <PageHeader
-        eyebrow="Canal de vente · Tunisie"
-        title="Commandes du site tunisien"
-        description="Vérifiez les paiements manuels D17, Flouci, ISI et virements avant livraison."
-        actions={<ActionButton secondary icon={RefreshCw} onClick={load}>Actualiser</ActionButton>}
-      />
-      <div className="storefront-channel-switch">
-        <a href="/admin/site-overview">Vue d’ensemble</a>
-        <button className="active">Commandes du site</button>
-        <a href="/" target="_blank" rel="noreferrer">Voir la boutique ↗</a>
-      </div>
-      <FilterBar search="" setSearch={() => {}}>
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="manual_review">À vérifier</option>
-          <option value="delivered">Livrées</option>
-          <option value="paid">Payées / livraison manuelle</option>
-          <option value="stock_issue">Problème de stock</option>
-          <option value="rejected">Refusées</option>
-          <option value="all">Toutes</option>
-        </select>
-      </FilterBar>
-      <section className="data-panel">
-        <div className="responsive-table">
-          <table>
-            <thead><tr><th>Commande</th><th>Client</th><th>Produit</th><th>Montant</th><th>Paiement</th><th>Référence</th><th>Statut</th><th>Date</th><th /></tr></thead>
-            <tbody>{orders.map((order) => (
-              <tr key={order.id} onClick={() => { setSelected(order); setReason(""); }}>
-                <td><strong>TN-{order.id}</strong></td>
-                <td><strong>{order.customer_name}</strong><small>{order.phone}</small></td>
-                <td>{order.offer_name}<small>{order.quantity || 1} × produit</small></td>
-                <td><strong>{money(order.total, "TND")}</strong></td>
-                <td>{STOREFRONT_PAYMENT_LABELS[order.payment_method] || order.payment_method}</td>
-                <td><code>{order.transaction_reference}</code></td>
-                <td><span className={`status ${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></td>
-                <td>{date(order.created_at)}</td>
-                <td><button className="row-action"><Eye size={15} /></button></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-        {loading ? <div className="table-loading">Chargement…</div> : !orders.length && <Empty icon={ShoppingBag} title="Aucune commande dans ce statut" />}
-      </section>
-      {selected && (
-        <Modal title={`Commande tunisienne TN-${selected.id}`} onClose={() => setSelected(null)} wide>
-          <div className="detail-grid">
-            <div><span>Client</span><strong>{selected.customer_name}</strong></div>
-            <div><span>Téléphone</span><strong>{selected.phone}</strong></div>
-            <div><span>Montant attendu</span><strong>{money(selected.total, "TND")}</strong></div>
-            <div><span>Méthode</span><strong>{STOREFRONT_PAYMENT_LABELS[selected.payment_method]}</strong></div>
-          </div>
-          <div className="storefront-review-card">
-            <div><span>Produit</span><strong>{selected.offer_name}</strong></div>
-            <div><span>Référence déclarée</span><code>{selected.transaction_reference}</code></div>
-            <div className="review-links">
-              <a href={`/admin/api/storefront-proof?order_id=${selected.id}`} target="_blank" rel="noreferrer"><Eye size={16} />Ouvrir le reçu</a>
-              <a href={`https://wa.me/${selected.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Bonjour, concernant votre commande TN-${selected.id}…`)}`} target="_blank" rel="noreferrer"><Send size={16} />Contacter sur WhatsApp</a>
-            </div>
-          </div>
-          {selected.status === "manual_review" && <>
-            <Field label="Motif en cas de refus" wide><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ex. montant ou référence introuvable" /></Field>
-            <div className="warning-box">Vérifiez le montant et la référence sur votre compte avant d’accepter. L’acceptation peut déclencher la livraison automatique.</div>
-            <div className="dialog-actions"><ActionButton secondary onClick={() => setSelected(null)}>Annuler</ActionButton><ActionButton danger icon={X} onClick={() => decide("reject")}>Refuser</ActionButton><ActionButton icon={Check} onClick={() => decide("approve")}>Accepter le paiement</ActionButton></div>
-          </>}
-        </Modal>
-      )}
-    </>
-  );
-}
-
 function TicketDialog({ ticket, onAction, onClose }) {
   const [messages, setMessages] = useState([]);
   const [reply, setReply] = useState("");
@@ -3860,9 +3587,8 @@ export default function AdminPage({
   onHealthCheck,
   onNavigate,
   setToast,
-  workspace,
 }) {
-  const props = { data, onAction, onHealthCheck, onNavigate, setToast, workspace };
+  const props = { data, onAction, onHealthCheck, onNavigate, setToast };
   if (page === "ai-manager") return <AiManagerPage {...props} />;
   if (page === "orders") return <OrdersPage {...props} />;
   if (page === "catalog") return <CatalogPage {...props} />;

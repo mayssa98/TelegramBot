@@ -591,10 +591,6 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path.startswith("/api/storefront") or path.startswith("/storefront/"):
-            self._reply(404, {"ok": False, "error": "storefront_removed"})
-            return
-
         public_assets = {
             "/assets/chatgpt-plus-benefits.png": "chatgpt-plus-benefits.png",
             "/assets/blackmarket-welcome-v2.png": "blackmarket-welcome-v2.png",

@@ -86,11 +86,10 @@ function initials(value = "BM") {
     .toUpperCase();
 }
 
-function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspaceChange, workspace }) {
+function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate }) {
   const pendingOrders = data?.summary?.pending_orders || 0;
   const openTickets = data?.summary?.open_tickets || 0;
   const navItems = BOT_NAV_ITEMS;
-  const isSite = false;
 
   return (
     <>
@@ -133,7 +132,7 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspac
   );
 }
 
-function Header({ activePage, alertCount, busyAction, density, isRefreshing, onLogout, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance, onToggleDensity, onToggleTheme, theme, workspace }) {
+function Header({ activePage, alertCount, busyAction, density, isRefreshing, onLogout, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance, onToggleDensity, onToggleTheme, theme }) {
   const navItems = BOT_NAV_ITEMS;
   const current = navItems.find((item) => item.id === activePage) || navItems[0];
   return (
@@ -148,12 +147,12 @@ function Header({ activePage, alertCount, busyAction, density, isRefreshing, onL
         <kbd>Ctrl K</kbd>
       </button>
       <div className="topbar-actions">
-        {workspace === "bot" && <button className="header-action" onClick={onRepairTelegram} disabled={Boolean(busyAction)}>
+        <button className="header-action" onClick={onRepairTelegram} disabled={Boolean(busyAction)}>
           <Wrench size={16} className={busyAction === "telegram" ? "spin" : ""} /><span>Réparer Telegram</span>
-        </button>}
-        {workspace === "bot" && <button className="header-action" onClick={onTestBinance} disabled={Boolean(busyAction)}>
+        </button>
+        <button className="header-action" onClick={onTestBinance} disabled={Boolean(busyAction)}>
           <ShieldCheck size={16} className={busyAction === "binance" ? "spin" : ""} /><span>Tester Binance</span>
-        </button>}
+        </button>
         <button className={`icon-button density-button ${density === "compact" ? "active" : ""}`} onClick={onToggleDensity} aria-label="Changer la densité" title={density === "compact" ? "Affichage confortable" : "Affichage compact"}><Database size={18} /></button>
         <button className="icon-button theme-button" onClick={onToggleTheme} aria-label="Changer le thème" title={theme === "dark" ? "Activer le thème clair" : "Activer le thème sombre"}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button>
         <button className="icon-button" onClick={onRefresh} aria-label="Actualiser" title="Actualiser les données">
@@ -499,7 +498,6 @@ function LoginPage({ onAuthenticated }) {
 export default function App() {
   const routePage = () => window.location.pathname.replace(/^\/admin(?:-v2)?\/?/, "").split("/")[0] || "overview";
   const initialPage = routePage();
-  const [workspace, setWorkspace] = useState("bot");
   const [activePage, setActivePage] = useState(ALL_NAV_ITEMS.some((item) => item.id === initialPage) ? initialPage : "overview");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
@@ -599,7 +597,6 @@ export default function App() {
       const page = routePage();
       const nextPage = ALL_NAV_ITEMS.some((item) => item.id === page) ? page : "overview";
       setActivePage(nextPage);
-      setWorkspace("bot");
     };
     const restorePage = (event) => {
       synchronizeRoute();
@@ -617,12 +614,6 @@ export default function App() {
     setActivePage(page);
     setMobileOpen(false);
     window.history.pushState({}, "", page === "overview" ? "/admin" : `/admin/${page}`);
-  };
-
-  const switchWorkspace = (nextWorkspace) => {
-    setWorkspace("bot");
-    window.localStorage.setItem("admin-workspace", "bot");
-    navigate("overview");
   };
 
   const adminAction = async (params) => {
@@ -702,11 +693,11 @@ export default function App() {
 
   return (
     <div className={`app-shell ${refreshing || pendingActionCount ? "is-synchronizing" : ""}`} aria-busy={refreshing || pendingActionCount > 0}>
-      <Sidebar activePage={activePage} data={data} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={navigate} onWorkspaceChange={switchWorkspace} workspace={workspace} />
+      <Sidebar activePage={activePage} data={data} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={navigate} />
       <div className="main-shell">
-        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} density={density} isRefreshing={refreshing || pendingActionCount > 0} onLogout={logout} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} onToggleDensity={() => setDensity((current) => { const next = current === "compact" ? "comfortable" : "compact"; window.localStorage.setItem("admin-density", next); return next; })} onToggleTheme={() => setTheme((current) => { const next = current === "dark" ? "light" : "dark"; window.localStorage.setItem("admin-theme", next); return next; })} theme={theme} workspace={workspace} />
+        <Header activePage={activePage} alertCount={alertCount} busyAction={busyAction} density={density} isRefreshing={refreshing || pendingActionCount > 0} onLogout={logout} onMenu={() => setMobileOpen(true)} onNotifications={() => setNotificationsOpen(true)} onRefresh={() => loadData(true)} onRepairTelegram={() => runHealthCheck("telegram")} onSearch={() => setSearchOpen(true)} onTestBinance={() => runHealthCheck("binance")} onToggleDensity={() => setDensity((current) => { const next = current === "compact" ? "comfortable" : "compact"; window.localStorage.setItem("admin-density", next); return next; })} onToggleTheme={() => setTheme((current) => { const next = current === "dark" ? "light" : "dark"; window.localStorage.setItem("admin-theme", next); return next; })} theme={theme} />
         <main className="content">
-          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : !data ? <ErrorState message="La session administrateur n’a pas pu être restaurée." onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={activePage} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} onNavigate={navigate} setToast={setToast} workspace={workspace} />}
+          {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => loadData()} /> : !data ? <ErrorState message="La session administrateur n’a pas pu être restaurée." onRetry={() => loadData()} /> : activePage === "overview" ? <Overview data={data} onNavigate={navigate} onOpenBot={() => window.open(`https://t.me/${data.bot_username || "blackmarketa_bot"}`, "_blank", "noopener,noreferrer")} /> : <AdminPage key={activePage} page={activePage} data={data} onAction={adminAction} onHealthCheck={runHealthCheck} onNavigate={navigate} setToast={setToast} />}
         </main>
       </div>
       {searchOpen && data && <SearchDialog data={data} onClose={() => setSearchOpen(false)} onNavigate={navigate} />}

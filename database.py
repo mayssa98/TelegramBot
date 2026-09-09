@@ -283,17 +283,6 @@ def init_db():
         ("user_id", ASCENDING), ("active", ASCENDING), ("created_at", DESCENDING),
     ])
     db.external_api_connectors.create_index("id", unique=True)
-    db.site_orders.create_index("id", unique=True)
-    db.site_orders.create_index("tracking_token_hash", unique=True)
-    db.site_orders.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
-    db.site_orders.create_index(
-        [("payment_method", ASCENDING), ("transaction_reference", ASCENDING)]
-    )
-    db.storefront_customers.create_index("phone", unique=True)
-    db.storefront_customers.create_index([("status", ASCENDING), ("updated_at", DESCENDING)])
-    db.storefront_product_images.create_index("offer_id", unique=True)
-    db.storefront_product_portraits.create_index("offer_id", unique=True)
-    db.storefront_payment_proofs.create_index("order_id", unique=True)
     db.buyer_api_purchases.create_index(
         [("buyer_key_id", ASCENDING), ("idempotency_key", ASCENDING)], unique=True,
     )
@@ -352,46 +341,6 @@ def init_db():
         upsert=True,
     )
     _schema_initialized = True
-
-
-def purge_tunisian_storefront_data() -> dict[str, int]:
-    """Remove the retired Tunisia storefront data and channel metadata."""
-    conn = get_conn()
-    removed: dict[str, int] = {}
-    for collection_name in (
-        "site_orders",
-        "storefront_customers",
-        "storefront_product_images",
-        "storefront_product_portraits",
-        "storefront_payment_proofs",
-    ):
-        result = getattr(conn, collection_name).delete_many({})
-        removed[collection_name] = int(result.deleted_count)
-
-    services = conn.services.update_many(
-        {"sales_channels": "tn_site"},
-        {"$pull": {"sales_channels": "tn_site"}},
-    )
-    offers = conn.offers.update_many(
-        {"sales_channels": "tn_site"},
-        {
-            "$pull": {"sales_channels": "tn_site"},
-            "$unset": {
-                "tn_price_millimes": "",
-                "site_description_fr": "",
-                "site_description_ar": "",
-                "site_image_url": "",
-                "site_portrait_url": "",
-                "site_category": "",
-                "site_badge": "",
-                "site_badge_ar": "",
-                "site_featured": "",
-            },
-        },
-    )
-    removed["services_updated"] = int(services.modified_count)
-    removed["offers_updated"] = int(offers.modified_count)
-    return removed
 
 
 def _remove_legacy_announcement_overrides(conn):
