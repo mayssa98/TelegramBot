@@ -1042,19 +1042,19 @@ def test_admin_can_edit_topup_and_profile_even_when_text_matches_current_button(
     assert "enregistr" in message.reply_text.await_args.args[0].lower()
 
 def test_main_menu_is_compact_and_actions_match_labels():
-    keyboard = kb.main_menu_keyboard("fr", user_id=42)
+    keyboard = kb.main_menu_keyboard("en", user_id=42)
 
     labels = [[button.text for button in row] for row in keyboard.keyboard[:3]]
     assert labels == [
-        [t("fr", "menu_catalog"), t("fr", "menu_orders")],
-        [t("fr", "menu_bot_like_mine")],
-        [t("fr", "menu_topup")],
+        [t("en", "menu_catalog"), t("en", "menu_orders")],
+        [t("en", "menu_bot_like_mine")],
+        [t("en", "menu_topup")],
     ]
     assert [[button.text for button in row] for row in keyboard.keyboard[3:5]] == [
-        [t("fr", "menu_account"), t("fr", "menu_affiliate")],
-        [t("fr", "menu_support"), t("fr", "menu_lang")],
+        [t("en", "menu_account"), t("en", "menu_affiliate")],
+        [t("en", "menu_support"), t("en", "menu_lang")],
     ]
-    assert "compte" in t("fr", "menu_account").lower()
+    assert "account" in t("en", "menu_account").lower()
 
 
 def test_admin_custom_emoji_is_extracted_from_telegram_entity():
@@ -1486,14 +1486,14 @@ def test_catalog_button_opens_the_services_catalog(monkeypatch):
         edit_message_text=AsyncMock(),
     )
     update = SimpleNamespace(callback_query=query)
-    monkeypatch.setattr("bot.lang_of", lambda _user_id: "fr")
+    monkeypatch.setattr("bot.lang_of", lambda _user_id: "en")
 
     asyncio.run(cb_navigation(update, SimpleNamespace()))
 
     query.answer.assert_awaited_once()
     query.edit_message_text.assert_awaited_once()
     call = query.edit_message_text.await_args
-    assert "CATALOGUE" in call.args[0]
+    assert "CATALOG" in call.args[0]
     callbacks = {
         button.callback_data
         for row in call.kwargs["reply_markup"].inline_keyboard

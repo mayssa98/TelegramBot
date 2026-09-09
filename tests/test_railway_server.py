@@ -66,9 +66,9 @@ def test_webhook_registration_retries_transient_failure(monkeypatch):
     assert result["ok"] is True
 
 
-def test_storefront_port_blocks_admin_without_admin_domain(monkeypatch):
+def test_public_port_blocks_admin_without_admin_domain(monkeypatch):
     monkeypatch.delenv("HP_ADMIN_BASE_URL", raising=False)
-    with running_surface(railway_server.StorefrontHandler) as port:
+    with running_surface(railway_server.PublicHandler) as port:
         connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
         connection.request("GET", "/admin")
         response = connection.getresponse()
@@ -79,9 +79,9 @@ def test_storefront_port_blocks_admin_without_admin_domain(monkeypatch):
     assert b"NOT_FOUND" in body
 
 
-def test_storefront_port_redirects_admin_to_isolated_domain(monkeypatch):
+def test_public_port_redirects_admin_to_isolated_domain(monkeypatch):
     monkeypatch.setenv("HP_ADMIN_BASE_URL", "https://admin.trustmarket.tn/")
-    with running_surface(railway_server.StorefrontHandler) as port:
+    with running_surface(railway_server.PublicHandler) as port:
         connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
         connection.request("GET", "/admin/orders")
         response = connection.getresponse()

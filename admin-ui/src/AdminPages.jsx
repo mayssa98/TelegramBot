@@ -745,7 +745,7 @@ async function optimizeProductImage(file) {
 }
 
 function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both" }) {
-  const currentChannels = offer?.sales_channels || (defaultChannel === "both" ? ["bot", "tn_site"] : [defaultChannel]);
+  const currentChannels = offer?.sales_channels || ["bot"];
   const [form, setForm] = useState({
     service_id: offer?.service_id || services[0]?.id || "",
     name: offer?.name || "",
@@ -759,25 +759,10 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
     low_stock_threshold: offer?.low_stock_threshold ?? 5,
     auto_delivery: offer?.auto_delivery !== false,
     initial_inventory: "",
-    sales_channel: currentChannels.includes("bot") && currentChannels.includes("tn_site") ? "both" : currentChannels[0] || "both",
-    tn_price: offer?.tn_price_millimes != null ? Number(offer.tn_price_millimes) / 1000 : "",
+    sales_channel: "bot",
     name_ar: offer?.name_ar || "",
     description_ar: offer?.description_ar || "",
-    site_description_fr: offer?.site_description_fr || "",
-    site_description_ar: offer?.site_description_ar || "",
-    site_image_url: offer?.site_image_url || "",
-    site_portrait_url: offer?.site_portrait_url || "",
-    site_category: offer?.site_category || "",
-    site_badge: offer?.site_badge || "",
-    site_badge_ar: offer?.site_badge_ar || "",
-    site_featured: Boolean(offer?.site_featured),
   });
-  const [imageUpload, setImageUpload] = useState(null);
-  const [imageBusy, setImageBusy] = useState(false);
-  const [imageError, setImageError] = useState("");
-  const [portraitUpload, setPortraitUpload] = useState(null);
-  const [portraitBusy, setPortraitBusy] = useState(false);
-  const [portraitError, setPortraitError] = useState("");
   const set = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
   const submit = async (event) => {
@@ -794,11 +779,6 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
         ? { offer_id: offer.id, sort_order: offer.sort_order || 0 }
         : {}),
       auto_delivery: form.auto_delivery ? "on" : "",
-      site_featured: form.site_featured ? "on" : "",
-      site_image_data: imageUpload?.data || "",
-      site_image_type: imageUpload?.type || "",
-      site_portrait_data: portraitUpload?.data || "",
-      site_portrait_type: portraitUpload?.type || "",
     };
     if (await onAction(payload)) onClose();
   };
@@ -839,9 +819,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
           </Field>
           <Field label="Canal de vente">
             <select value={form.sales_channel} onChange={(event) => set("sales_channel", event.target.value)}>
-              <option value="both">Bot + Site tunisien</option>
               <option value="bot">Bot uniquement</option>
-              <option value="tn_site">Site tunisien uniquement</option>
             </select>
           </Field>
           <Field label="Prix">
@@ -853,55 +831,6 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
               value={form.price}
               onChange={(event) => set("price", event.target.value)}
             />
-          </Field>
-          <Field label="Prix site tunisien (TND)">
-            <input min="0" step="0.001" type="number" value={form.tn_price} onChange={(event) => set("tn_price", event.target.value)} placeholder="Ex. 29.900" />
-          </Field>
-          <Field label="Catégorie du site">
-            <select value={form.site_category} onChange={(event) => set("site_category", event.target.value)}>
-              <option value="">Détection automatique</option>
-              <option value="ai">Outils IA</option>
-              <option value="streaming">Streaming</option>
-              <option value="design">Design & création</option>
-              <option value="productivity">Productivité</option>
-              <option value="cloud">Cloud & Dev</option>
-              <option value="communication">Communication</option>
-              <option value="security">Sécurité</option>
-              <option value="other">Autres services</option>
-            </select>
-          </Field>
-          <Field label="Image de la carte catalogue (URL HTTPS)" wide>
-            <input type="url" value={form.site_image_url} onChange={(event) => { set("site_image_url", event.target.value); setImageUpload(null); setImageError(""); }} placeholder="https://…/produit.webp" />
-          </Field>
-          <div className="product-image-upload">
-            <label className={imageBusy ? "busy" : ""}><Upload size={19} /><strong>{imageBusy ? "Optimisation…" : "Importer une image"}</strong><span>JPG, PNG ou WebP · 8 Mo maximum</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={imageBusy} onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setImageBusy(true); setImageError(""); try { const optimized = await optimizeProductImage(file); setImageUpload(optimized); set("site_image_url", ""); } catch (error) { setImageError(error.message); } finally { setImageBusy(false); event.target.value = ""; } }} /></label>
-            <span>ou utilisez une URL HTTPS dans le champ ci-dessus.</span>
-          </div>
-          {imageError && <div className="form-error wide">{imageError}</div>}
-          {(imageUpload?.data || form.site_image_url) && <div className="product-image-preview"><img src={imageUpload?.data || form.site_image_url} alt="Aperçu de la carte catalogue" onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Aperçu de la carte catalogue</strong><span>{imageUpload ? `${Math.round(imageUpload.size / 1024)} Ko · prête à être enregistrée` : "Cette image sera utilisée sur les cartes du catalogue."}</span></div></div>}
-          <Field label="Portrait de la fiche produit (URL HTTPS)" wide>
-            <input type="url" value={form.site_portrait_url} onChange={(event) => { set("site_portrait_url", event.target.value); setPortraitUpload(null); setPortraitError(""); }} placeholder="https://…/portrait-produit.webp" />
-          </Field>
-          <div className="product-image-upload portrait-upload">
-            <label className={portraitBusy ? "busy" : ""}><Upload size={19} /><strong>{portraitBusy ? "Optimisation…" : "Importer le portrait"}</strong><span>Format vertical conseillé · JPG, PNG ou WebP · 8 Mo maximum</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={portraitBusy} onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setPortraitBusy(true); setPortraitError(""); try { const optimized = await optimizeProductImage(file); setPortraitUpload(optimized); set("site_portrait_url", ""); } catch (error) { setPortraitError(error.message); } finally { setPortraitBusy(false); event.target.value = ""; } }} /></label>
-            <span>Affiché uniquement dans le grand panneau de détails.</span>
-          </div>
-          {portraitError && <div className="form-error wide">{portraitError}</div>}
-          {(portraitUpload?.data || form.site_portrait_url) && <div className="product-image-preview portrait-preview"><img src={portraitUpload?.data || form.site_portrait_url} alt="Aperçu du portrait" onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Aperçu du portrait</strong><span>{portraitUpload ? `${Math.round(portraitUpload.size / 1024)} Ko · prêt à être enregistré` : "Ce portrait remplira le panneau gauche de la fiche produit."}</span></div></div>}
-          <Field label="Badge français">
-            <input value={form.site_badge} onChange={(event) => set("site_badge", event.target.value)} placeholder="Populaire, Nouveau…" />
-          </Field>
-          <Field label="Badge arabe">
-            <input dir="rtl" value={form.site_badge_ar} onChange={(event) => set("site_badge_ar", event.target.value)} placeholder="الأكثر طلباً" />
-          </Field>
-          <Field label="Description française du site" wide>
-            <textarea value={form.site_description_fr} onChange={(event) => set("site_description_fr", event.target.value)} placeholder="Description commerciale claire, sans balises Telegram…" />
-          </Field>
-          <Field label="Description arabe du site" wide>
-            <textarea dir="rtl" value={form.site_description_ar} onChange={(event) => set("site_description_ar", event.target.value)} placeholder="وصف المنتج بالعربية…" />
-          </Field>
-          <Field label="Mise en avant sur le site">
-            <label className="switch"><input type="checkbox" checked={form.site_featured} onChange={(event) => set("site_featured", event.target.checked)} /><span />Produit vedette</label>
           </Field>
           <Field label="Seuil de stock">
             <input
@@ -998,7 +927,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
   const [serviceNameAr, setServiceNameAr] = useState("");
   const [serviceEmoji, setServiceEmoji] = useState("📦");
   const [serviceSuffixEmoji, setServiceSuffixEmoji] = useState("");
-  const [serviceChannel, setServiceChannel] = useState(workspace === "site" ? "tn_site" : "bot");
+  const [serviceChannel, setServiceChannel] = useState("bot");
   const [stockOffer, setStockOffer] = useState(null);
   const [stock, setStock] = useState("");
   const [editService, setEditService] = useState(null);
@@ -1018,8 +947,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
     setEditServiceNameAr(service.name_ar || "");
     setEditServiceEmoji(service.emoji || "📦");
     setEditServiceSuffixEmoji(service.suffix_emoji || "");
-    const channels = service.sales_channels || ["bot", "tn_site"];
-    setEditServiceChannel(channels.length > 1 ? "both" : (channels[0] || "bot"));
+    setEditServiceChannel("bot");
   };
 
   const updateService = async (event) => {
@@ -1056,9 +984,8 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
   const visibleServices = (data.services || []).map((service) => {
     const serviceMatch = `${service.name || ""} ${service.id || ""}`.toLowerCase().includes(normalizedSearch);
     const offers = (service.offers || []).filter((item) => {
-      const channels = item.sales_channels || ["bot", "tn_site"];
-      if (workspace === "site" && !channels.includes("tn_site")) return false;
-      if (workspace === "bot" && !channels.includes("bot")) return false;
+      const channels = item.sales_channels || ["bot"];
+      if (!channels.includes("bot")) return false;
       if (!normalizedSearch) return true;
       if (searchField === "service") return serviceMatch;
       const searchable = {
@@ -1094,9 +1021,9 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
   return (
     <>
       <PageHeader
-        eyebrow={workspace === "site" ? "Trust Market TN" : "Bot Telegram"}
-        title={workspace === "site" ? "Produits du site" : "Catalogue du bot"}
-        description={workspace === "site" ? "Gérez uniquement les produits publiés sur Trust Market TN et leurs prix en TND." : "Gérez les catégories et produits publiés dans le bot Telegram."}
+        eyebrow="Bot Telegram"
+        title="Catalogue du bot"
+        description="Gérez les catégories et produits publiés dans le bot Telegram."
         actions={
           <>
             <ActionButton
@@ -1173,7 +1100,6 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
                   key={item.id || `${service.id}-${item.name}-${index}`}
                 >
                   <button className="offer-select" type="button" onClick={() => toggleOfferSelection(item.id)} aria-label={`${selectedOffers.has(item.id) ? "Désélectionner" : "Sélectionner"} ${item.name}`}>{selectedOffers.has(item.id) ? <Check size={13} /> : null}</button>
-                  {item.site_image_url && <img className="offer-thumb" src={item.site_image_url} alt="" />}
                   <div>
                     <strong>{item.name}</strong>
                     <span>
@@ -1181,11 +1107,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
                       {item.stock || 0}
                     </span>
                     <span className="offer-channel">
-                      {(item.sales_channels || ["bot", "tn_site"]).length > 1
-                        ? "Bot + Site TN"
-                        : item.sales_channels?.[0] === "tn_site" ? "Site TN" : "Bot"}
-                      {item.tn_price_millimes != null ? ` · ${(Number(item.tn_price_millimes) / 1000).toFixed(3)} TND` : ""}
-                      {item.site_category ? ` · ${item.site_category}` : ""}
+                      Bot
                     </span>
                     <span className={`offer-provider ${item.supplier_provider ? "api" : "internal"}`}>
                       {item.supplier_provider ? <Cloud size={11} /> : <Database size={11} />}
@@ -1255,7 +1177,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
           offer={offer}
           onAction={onAction}
           onClose={() => setShowOffer(false)}
-          defaultChannel={workspace === "site" ? "tn_site" : "bot"}
+          defaultChannel="bot"
         />
       )}
       {bulkOfferAction && <Modal title="Confirmer l’action groupée" onClose={() => { setBulkOfferAction(null); setBulkOfferValue(""); }}><div className="bulk-confirm"><span className={["deactivate", "archive"].includes(bulkOfferAction) ? "deactivate" : "activate"}>{bulkOfferAction === "activate" ? <ToggleRight size={28} /> : bulkOfferAction === "price" ? <CircleDollarSign size={28} /> : bulkOfferAction === "move" ? <ShoppingBag size={28} /> : bulkOfferAction === "archive" ? <Archive size={28} /> : <ToggleLeft size={28} />}</span><strong>{{ activate: "Activer", deactivate: "Désactiver", price: "Modifier le prix de", move: "Déplacer", archive: "Archiver" }[bulkOfferAction]} {selectedOffers.size} produit(s) ?</strong>{bulkOfferAction === "price" && <Field label="Variation en pourcentage"><input type="number" min="-90" max="500" step="0.1" value={bulkOfferValue} onChange={(event) => setBulkOfferValue(event.target.value)} placeholder="Ex. 10 ou -5" /></Field>}{bulkOfferAction === "move" && <Field label="Service de destination"><select value={bulkOfferValue} onChange={(event) => setBulkOfferValue(event.target.value)}><option value="">Choisir un service</option>{(data.services || []).map((service) => <option value={service.id} key={service.id}>{service.name}</option>)}</select></Field>}<p>{bulkOfferAction === "archive" ? "Les produits disparaîtront du catalogue. Cette action pourra être restaurée depuis le journal pendant 24 heures." : "La modification sera auditée et pourra être restaurée depuis le journal pendant 24 heures."}</p><div><ActionButton secondary onClick={() => { setBulkOfferAction(null); setBulkOfferValue(""); }}>Annuler</ActionButton><ActionButton danger={["deactivate", "archive"].includes(bulkOfferAction)} icon={Check} disabled={["price", "move"].includes(bulkOfferAction) && !bulkOfferValue} onClick={applyBulkOfferAction}>Confirmer</ActionButton></div></div></Modal>}
@@ -1284,9 +1206,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
               </Field>
               <Field label="Canal" wide>
                 <select value={serviceChannel} onChange={(event) => setServiceChannel(event.target.value)}>
-                  <option value="both">Bot + Site tunisien</option>
                   <option value="bot">Bot uniquement</option>
-                  <option value="tn_site">Site tunisien uniquement</option>
                 </select>
               </Field>
             </div>
@@ -1324,9 +1244,7 @@ function CatalogPage({ data, onAction, workspace = "bot" }) {
               </Field>
               <Field label="Canal" wide>
                 <select value={editServiceChannel} onChange={(event) => setEditServiceChannel(event.target.value)}>
-                  <option value="both">Bot + Site tunisien</option>
                   <option value="bot">Bot uniquement</option>
-                  <option value="tn_site">Site tunisien uniquement</option>
                 </select>
               </Field>
             </div>
@@ -2439,7 +2357,7 @@ function CustomerDetail({ customer, onAction, onClose, currency }) {
         </div>
         <div><span>Affiliés</span><strong>{customer.referrals || 0}</strong></div>
         <div><span>Tickets</span><strong>{customer.tickets?.length || 0}</strong></div>
-        <div><span>Langue</span><strong>{String(customer.lang || "fr").toUpperCase()}</strong></div>
+        <div><span>Langue</span><strong>{String(customer.lang || "en").toUpperCase()}</strong></div>
         <div><span>Inscription</span><strong>{date(customer.created_at)}</strong></div>
       </div>
       <div className="form-grid">
@@ -2958,7 +2876,7 @@ function SiteCustomersPage({ onAction }) {
         eyebrow="CRM · Trust Market TN"
         title="Clients du site"
         description="Consultez les achats, ajoutez des notes et contrôlez l’accès aux commandes du site."
-        actions={<a className="action-button secondary" href="/fr" target="_blank" rel="noreferrer"><Globe2 size={16} />Voir la boutique</a>}
+        actions={<a className="action-button secondary" href="/" target="_blank" rel="noreferrer"><Globe2 size={16} />Voir la boutique</a>}
       />
       <section className="order-kpis" aria-label="Statistiques clients du site">
         <article><span className="order-kpi-icon violet"><Users size={19} /></span><div><small>Clients trouvés</small><strong>{result.total || 0}</strong><em>Profils du site TN</em></div></article>
@@ -3061,7 +2979,7 @@ function SiteOverviewPage() {
         eyebrow="Administration du site"
         title="Trust Market TN"
         description="Vue séparée des ventes en TND, paiements manuels et clients du site tunisien."
-        actions={<><a className="action-button secondary" href="/fr" target="_blank" rel="noreferrer"><Globe2 size={16} />Voir la boutique</a><ActionButton secondary icon={RefreshCw} onClick={load}>Actualiser</ActionButton></>}
+        actions={<><a className="action-button secondary" href="/" target="_blank" rel="noreferrer"><Globe2 size={16} />Voir la boutique</a><ActionButton secondary icon={RefreshCw} onClick={load}>Actualiser</ActionButton></>}
       />
       <section className="order-kpis" aria-label="Statistiques Trust Market TN">
         <article><span className="order-kpi-icon violet"><ShoppingBag size={19} /></span><div><small>Commandes site</small><strong>{orders.length}</strong><em>Volume total</em></div></article>
@@ -3125,7 +3043,7 @@ function TunisiaStorefrontPage({ onAction }) {
       <div className="storefront-channel-switch">
         <a href="/admin/site-overview">Vue d’ensemble</a>
         <button className="active">Commandes du site</button>
-        <a href="/fr" target="_blank" rel="noreferrer">Voir la boutique ↗</a>
+        <a href="/" target="_blank" rel="noreferrer">Voir la boutique ↗</a>
       </div>
       <FilterBar search="" setSearch={() => {}}>
         <select value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -3568,7 +3486,7 @@ function SettingsPage({ data, onAction, onHealthCheck }) {
     help_message: data.help_message || "",
     terms_message: data.terms_message || "",
     privacy_message: data.privacy_message || "",
-    active_languages: data.active_languages || "fr,en,ar",
+    active_languages: data.active_languages || "en,ar",
     announcement_new_stock: data.announcement_new_stock || "",
     announcement_flash_sale: data.announcement_flash_sale || "",
     announcement_restock: data.announcement_restock || "",
@@ -3760,9 +3678,14 @@ function SettingsPage({ data, onAction, onHealthCheck }) {
             <Field label="Langues actives" wide>
               <input
                 value={form.active_languages}
-                onChange={(event) =>
-                  set("active_languages", event.target.value)
-                }
+                onChange={(event) => {
+                  const languages = event.target.value
+                    .split(",")
+                    .map((value) => value.trim())
+                    .filter((value) => ["en", "ar"].includes(value));
+                  set("active_languages", [...new Set(languages)].join(",") || "en");
+                }}
+                placeholder="en,ar"
               />
             </Field>
             <Field label="Annonce Nouveau Stock" help="Variables: {emoji}, {service}, {offer}, {period}, {warranty}, {price}, {cur}, {stock}, {added}" wide>
@@ -3940,7 +3863,6 @@ export default function AdminPage({
   workspace,
 }) {
   const props = { data, onAction, onHealthCheck, onNavigate, setToast, workspace };
-  if (page === "site-overview") return <SiteOverviewPage {...props} />;
   if (page === "ai-manager") return <AiManagerPage {...props} />;
   if (page === "orders") return <OrdersPage {...props} />;
   if (page === "catalog") return <CatalogPage {...props} />;
@@ -3948,8 +3870,6 @@ export default function AdminPage({
   if (page === "api-clients") return <ResellerClientsPage {...props} />;
   if (page === "inventory") return <InventoryPage {...props} />;
   if (page === "customers") return <CustomersPage {...props} />;
-  if (page === "site-customers") return <SiteCustomersPage {...props} />;
-  if (page === "tn-storefront") return <TunisiaStorefrontPage {...props} />;
   if (page === "support") return <SupportPage {...props} />;
   if (page === "interactions") return <InteractionsPage {...props} />;
   if (page === "activity") return <ActivityPage {...props} />;

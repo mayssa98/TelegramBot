@@ -68,7 +68,7 @@ def render_dashboard(
 
     # Template HTML brut sans formatage de chaine f-string pour éviter les collisions d'accolades avec JS/CSS
     html_template = """<!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -2989,7 +2989,7 @@ def render_dashboard(
                     <div class="form-group"><label>Message d'aide personnalisé</label><textarea id="help-message-input" name="help_message"></textarea></div>
                     <div class="form-group"><label>Conditions</label><textarea id="terms-message-input" name="terms_message"></textarea></div>
                     <div class="form-group"><label>Confidentialité</label><textarea id="privacy-message-input" name="privacy_message"></textarea></div>
-                    <div class="form-group"><label>Langues actives (fr,en,ar)</label><input id="active-languages-input" name="active_languages" value="fr,en,ar"></div>
+                    <div class="form-group"><label>Langues actives (en,ar)</label><input id="active-languages-input" name="active_languages" value="en,ar"></div>
                     <div class="form-group"><label>Annonce Nouveau Stock (variables : {emoji}, {service}, {offer}, {period}, {warranty}, {price}, {cur}, {stock}, {added})</label><textarea id="announcement-new-stock-input" name="announcement_new_stock" rows="4"></textarea></div>
                     <div class="form-group"><label>Annonce Vente Flash (variables : {emoji}, {service}, {offer}, {period}, {warranty}, {old_price}, {price}, {cur}, {discount}, {remaining})</label><textarea id="announcement-flash-sale-input" name="announcement_flash_sale" rows="4"></textarea></div>
                     <div class="form-group"><label>Annonce Restock / Produit disponible (variables : {emoji}, {service}, {offer}, {period}, {warranty}, {price}, {cur}, {stock})</label><textarea id="announcement-restock-input" name="announcement_restock" rows="4"></textarea></div>
@@ -4387,7 +4387,7 @@ def render_dashboard(
             document.getElementById("help-message-input").value = dashboardData.help_message || "";
             document.getElementById("terms-message-input").value = dashboardData.terms_message || "";
             document.getElementById("privacy-message-input").value = dashboardData.privacy_message || "";
-            document.getElementById("active-languages-input").value = dashboardData.active_languages || "fr,en,ar";
+            document.getElementById("active-languages-input").value = dashboardData.active_languages || "en,ar";
             if (document.getElementById("announcement-new-stock-input")) document.getElementById("announcement-new-stock-input").value = dashboardData.announcement_new_stock || "";
             if (document.getElementById("announcement-flash-sale-input")) document.getElementById("announcement-flash-sale-input").value = dashboardData.announcement_flash_sale || "";
             if (document.getElementById("announcement-restock-input")) document.getElementById("announcement-restock-input").value = dashboardData.announcement_restock || "";
@@ -4721,7 +4721,7 @@ def render_dashboard(
                         <div><strong>Telegram ID :</strong> <code>${customer.telegram_id}</code></div>
                         <div><strong>Username :</strong> ${escapeHtml(customer.username ? '@' + customer.username : '—')}</div>
                         <div><strong>Prénom :</strong> ${escapeHtml(customer.first_name || '—')}</div>
-                        <div><strong>Langue :</strong> ${escapeHtml(customer.lang || 'fr')}</div>
+                        <div><strong>Langue :</strong> ${escapeHtml(customer.lang || 'en')}</div>
                         <div><strong>Portefeuille :</strong> ${Number(customer.wallet_balance || 0).toFixed(2)} ${escapeHtml(dashboardData.currency)}</div>
                         <div><strong>Inscrit le :</strong> ${customer.created_at ? formatDateTime(customer.created_at) : '—'}</div>
                         <div><strong>Dernière activité :</strong> ${customer.last_active_at ? formatDateTime(customer.last_active_at) : 'Jamais'}</div>

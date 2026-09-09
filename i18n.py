@@ -35,7 +35,7 @@ TRANSLATIONS = {
         "ar": "🌍 مرحباً! الرجاء اختيار لغتك:",
     },
     "lang_set": {
-        "fr": "✅ Langue définie : Français",
+        "fr": "✅ Language set: English",
         "en": "✅ Language set: English",
         "ar": "✅ تم تعيين اللغة: العربية",
     },
@@ -818,7 +818,7 @@ TRANSLATIONS = {
 
 
 def t(lang, key, **kwargs):
-    if lang not in ("fr", "en", "ar"):
+    if lang not in ("en", "ar"):
         lang = "en"
     try:
         import database as db

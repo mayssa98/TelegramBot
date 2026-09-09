@@ -2,7 +2,7 @@
 
 The production service runs two isolated HTTP surfaces in one Railway service:
 
-- Trust Market TN storefront on Railway's injected `PORT` (default locally: 8080)
+- Public landing page, Telegram webhook, and operational endpoints on Railway's injected `PORT` (default locally: 8080)
 - Admin dashboard and operational endpoints on `ADMIN_PORT` (default: 8081)
 
 Telegram webhook, buyer API, restock checks, and supplier price checks remain in
@@ -16,11 +16,11 @@ select **Generate Domain**. The application automatically reads Railway's
 
 Configure two target ports under **Settings > Networking > Public Networking**:
 
-1. Public store domain → target port shown by `PORT`.
+1. Public bot domain → target port shown by `PORT`.
 2. Admin domain → target port `8081` (or the value of `ADMIN_PORT`).
 
 Set `HP_ADMIN_BASE_URL=https://YOUR-ADMIN-DOMAIN` so an accidental `/admin`
-visit on the store domain redirects to the isolated dashboard. Set
+visit on the public domain redirects to the isolated dashboard. Set
 `HP_PUBLIC_BASE_URL` to the public domain that should receive Telegram's
 `/api/webhook`; both HTTP surfaces support that endpoint.
 
@@ -64,9 +64,9 @@ service registers `${RAILWAY_PUBLIC_DOMAIN}/api/webhook` with Telegram.
 
 After deployment, confirm:
 
-- `https://YOUR-STORE-DOMAIN/health` returns `{"ok": true, ...}`.
-- `https://YOUR-STORE-DOMAIN/` opens Trust Market TN.
-- `https://YOUR-STORE-DOMAIN/admin` redirects to the admin domain.
+- `https://YOUR-PUBLIC-DOMAIN/health` returns `{"ok": true, ...}`.
+- `https://YOUR-PUBLIC-DOMAIN/` opens the public bot landing page.
+- `https://YOUR-PUBLIC-DOMAIN/admin` redirects to the admin domain.
 - `https://YOUR-ADMIN-DOMAIN/` redirects to `/admin`.
 - `https://YOUR-ADMIN-DOMAIN/admin` requests the dashboard password.
 - Railway logs contain `Telegram webhook registered`.

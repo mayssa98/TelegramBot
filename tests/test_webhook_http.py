@@ -68,8 +68,8 @@ def test_public_homepage_is_site():
 
     assert response.status == 200
     assert "text/html" in response.headers["Content-Type"]
-    assert "Trust Market TN" in body
-    assert "/storefront/assets/" in body
+    assert "BlackMarket" in body
+    assert "Lancer @" in body
 
 
 def test_admin_shows_login_app_but_api_requires_authentication(monkeypatch):

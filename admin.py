@@ -273,7 +273,6 @@ def texts_editor_keyboard(page=0, page_size=8):
 def text_languages_keyboard(key):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🇫🇷 Français", callback_data=f"adm_text_lang:{key}:fr"),
             InlineKeyboardButton("🇬🇧 English", callback_data=f"adm_text_lang:{key}:en"),
             InlineKeyboardButton("🇸🇦 العربية", callback_data=f"adm_text_lang:{key}:ar"),
         ],
@@ -315,7 +314,7 @@ def buttons_editor_keyboard():
     rows.append([InlineKeyboardButton("➕ Ajouter un bouton URL", callback_data="adm_btn_add")])
     for button in db.list_custom_buttons(active_only=False):
         rows.append([InlineKeyboardButton(
-            f"🗑 {button.get('label_fr') or 'Bouton'}",
+            f"🗑 {button.get('label_en') or button.get('label_ar') or 'Button'}",
             callback_data=f"adm_btn_del:{button['id']}",
         )])
     rows.append([InlineKeyboardButton("⬅️ Personnalisation", callback_data="adm_customize")])

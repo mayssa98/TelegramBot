@@ -42,7 +42,6 @@ from app.domain import (
     order_service,
     reseller_comparison_service,
     reseller_service,
-    storefront_service,
     support_service,
     wallet_service,
 )
@@ -69,7 +68,6 @@ _runtime_lock = threading.RLock()
 log = logging.getLogger(__name__)
 MAX_WEBHOOK_BODY_BYTES = 1_000_000
 ADMIN_UI_DIST = Path(__file__).resolve().parent.parent / "admin-ui" / "dist"
-STOREFRONT_UI_DIST = Path(__file__).resolve().parent.parent / "storefront-ui" / "dist"
 ADMIN_SESSION_COOKIE = "blackmarket_admin_session"
 ADMIN_SESSION_TTL_SECONDS = 12 * 60 * 60
 
@@ -291,7 +289,7 @@ def _legacy_public_site_html() -> str:
     bot_url = f"https://t.me/{html.escape(bot_username)}"
     social_image_url = f"{html.escape(public_base_url)}/assets/blackmarket-midnight-og.png"
     return f"""<!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -388,7 +386,7 @@ def _notify_wallet_adjustment(result: dict, reason: str = "") -> bool:
 def _notify_onchain_topup(topup: dict, approved: bool) -> bool:
     """Tell the customer about the administrator's on-chain top-up decision."""
     user_id = int(topup["user_id"])
-    lang = db.get_user_lang(user_id) or "fr"
+    lang = db.get_user_lang(user_id) or "en"
     if approved:
         amount = int(topup.get("amount_cents") or 0) / 100
         text = t(
@@ -444,41 +442,6 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
         path = url.path.rstrip("/")
-
-        if path == "/api/storefront/catalog":
-            lang = parse_qs(url.query).get("lang", ["fr"])[0]
-            self._reply(200, storefront_service.catalog(lang))
-            return
-
-        if path == "/api/storefront/product-image":
-            try:
-                offer_id = int(parse_qs(url.query).get("offer_id", [0])[0])
-                body, content_type = storefront_service.product_image(offer_id)
-                self._reply_bytes(200, body, content_type)
-            except (TypeError, ValueError, storefront_service.StorefrontError) as exc:
-                self._reply(404, {"ok": False, "error": str(exc)})
-            return
-
-        if path == "/api/storefront/product-portrait":
-            try:
-                offer_id = int(parse_qs(url.query).get("offer_id", [0])[0])
-                body, content_type = storefront_service.product_portrait(offer_id)
-                self._reply_bytes(200, body, content_type)
-            except (TypeError, ValueError, storefront_service.StorefrontError) as exc:
-                self._reply(404, {"ok": False, "error": str(exc)})
-            return
-
-        if path == "/api/storefront/order":
-            params = parse_qs(url.query)
-            try:
-                payload = storefront_service.order_status(
-                    int(params.get("id", [0])[0]),
-                    params.get("token", [""])[0],
-                )
-                self._reply(200, payload)
-            except (TypeError, ValueError, storefront_service.StorefrontError) as exc:
-                self._reply(404, {"ok": False, "error": str(exc)})
-            return
 
         if path == "/api/openapi.json":
             self._reply(200, openapi_document())
@@ -614,20 +577,22 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(500, {"ok": False, "error": str(exc)})
             return
 
-        storefront_route = path in {"", "/", "/fr", "/ar"} or path.startswith(("/fr/", "/ar/"))
-        if storefront_route:
-            index_file = STOREFRONT_UI_DIST / "index.html"
-            body = (
-                index_file.read_bytes()
-                if index_file.is_file()
-                else public_site_html().encode("utf-8")
-            )
+        if path == "/fr" or path.startswith("/fr/"):
+            self._reply(404, {"ok": False, "error": "language_removed"})
+            return
+
+        if path in {"", "/", "/ar"} or path.startswith("/ar/"):
+            body = public_site_html().encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store, max-age=0")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path.startswith("/api/storefront") or path.startswith("/storefront/"):
+            self._reply(404, {"ok": False, "error": "storefront_removed"})
             return
 
         public_assets = {
@@ -649,7 +614,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "asset_not_found"})
             return
 
-        admin_tabs = {"overview", "site-overview", "orders", "catalog", "api-products", "inventory", "customers", "site-customers", "tn-storefront", "support", "interactions", "activity", "settings"}
+        admin_tabs = {"overview", "orders", "catalog", "api-products", "inventory", "customers", "support", "interactions", "activity", "settings"}
         react_admin_route = (
             path in {"/admin", "/admin-v2", "/admin/login"}
             or path.startswith("/admin-v2/")
@@ -711,25 +676,6 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(500, {"ok": False, "error": str(exc)})
             return
 
-
-        if path.startswith("/storefront/"):
-            relative_path = path.removeprefix("/storefront/")
-            requested_file = STOREFRONT_UI_DIST / relative_path
-            try:
-                resolved_file = requested_file.resolve()
-                resolved_file.relative_to(STOREFRONT_UI_DIST.resolve())
-            except (OSError, ValueError):
-                self._reply(404, {"ok": False, "error": "asset_not_found"})
-                return
-            if not resolved_file.is_file():
-                self._reply(404, {"ok": False, "error": "asset_not_found"})
-                return
-            body = resolved_file.read_bytes()
-            content_type = mimetypes.guess_type(resolved_file.name)[0] or "application/octet-stream"
-            if resolved_file.suffix in {".js", ".css"}:
-                content_type += "; charset=utf-8"
-            self._reply_bytes(200, body, content_type)
-            return
 
         if path == "/admin-legacy" or path.startswith("/admin-legacy/") and path.removeprefix("/admin-legacy/") in admin_tabs:
             if not self._dashboard_authorized():
@@ -891,43 +837,6 @@ class handler(BaseHTTPRequestHandler):
                 return
             status = parse_qs(url.query).get("status", ["pending"])[0]
             self._reply(200, {"ok": True, "items": db.list_withdrawals(status)})
-            return
-
-        elif path == "/admin/api/storefront-orders":
-            if not self._dashboard_authorized():
-                self._reply(401, {"ok": False, "error": "Unauthorized"})
-                return
-            status = parse_qs(url.query).get("status", ["manual_review"])[0]
-            self._reply(200, {"ok": True, "orders": storefront_service.list_admin_orders(status)})
-            return
-
-        elif path == "/admin/api/storefront-customers":
-            if not self._dashboard_authorized():
-                self._reply(401, {"ok": False, "error": "Unauthorized"})
-                return
-            query = parse_qs(url.query)
-            try:
-                result = storefront_service.list_admin_customers(
-                    search=query.get("search", [""])[0],
-                    status=query.get("status", ["all"])[0],
-                    page=int(query.get("page", [1])[0]),
-                    per_page=int(query.get("per_page", [25])[0]),
-                )
-                self._reply(200, result)
-            except (TypeError, ValueError) as exc:
-                self._reply(400, {"ok": False, "error": str(exc)})
-            return
-
-        elif path == "/admin/api/storefront-proof":
-            if not self._dashboard_authorized():
-                self._reply(401, {"ok": False, "error": "Unauthorized"})
-                return
-            try:
-                order_id = int(parse_qs(url.query).get("order_id", [0])[0])
-                body, content_type, filename = storefront_service.payment_proof(order_id)
-                self._reply_bytes(200, body, content_type, filename)
-            except (TypeError, ValueError, storefront_service.StorefrontError) as exc:
-                self._reply(404, {"ok": False, "error": str(exc)})
             return
 
         elif path == "/admin/api/ticket-messages":
@@ -1170,19 +1079,6 @@ class handler(BaseHTTPRequestHandler):
                 self._reply(500, {"ok": False, "error": "AI Bot Manager est indisponible."})
             return
 
-        if path == "/api/storefront/orders":
-            try:
-                payload = self._read_json_body(max_bytes=5_600_000)
-                self._reply(201, storefront_service.create_order(payload))
-            except storefront_service.StorefrontError as exc:
-                self._reply(400, {"ok": False, "error": str(exc)})
-            except buyer_api_service.BuyerApiError as exc:
-                self._reply(exc.status, {"ok": False, "error": exc.message})
-            except Exception:
-                log.exception("Storefront order creation failed")
-                self._reply(500, {"ok": False, "error": "Commande temporairement indisponible."})
-            return
-
         if path == "/api/v2/telegram-buyer/purchase":
             try:
                 payload = self._read_json_body()
@@ -1297,13 +1193,11 @@ class handler(BaseHTTPRequestHandler):
             if action == "add_service":
                 name = form["name"].strip()[:80]
                 emoji = form.get("emoji", "📦")[:12]
-                channel = form.get("sales_channel", "both")
-                channels = ["bot", "tn_site"] if channel == "both" else [channel]
                 sid = db.add_service(
                     name,
                     emoji,
                     suffix_emoji=form.get("suffix_emoji", "").strip()[:12],
-                    sales_channels=channels,
+                    sales_channels=["bot"],
                     name_ar=form.get("name_ar", "").strip(),
                 )
                 db.audit_event("service.created", details={"service_id": sid, "name": name})
@@ -1314,14 +1208,12 @@ class handler(BaseHTTPRequestHandler):
                 sid = int(form["service_id"])
                 name = form["name"].strip()[:80]
                 emoji = form.get("emoji", "")[:12]
-                channel = form.get("sales_channel", "both")
-                channels = ["bot", "tn_site"] if channel == "both" else [channel]
                 db.update_service(
                     sid,
                     name=name,
                     emoji=emoji,
                     suffix_emoji=form.get("suffix_emoji", "").strip()[:12],
-                    sales_channels=channels,
+                    sales_channels=["bot"],
                     name_ar=form.get("name_ar", "").strip(),
                 )
                 db.audit_event("service.updated", details={"service_id": sid, "name": name})
@@ -1348,14 +1240,6 @@ class handler(BaseHTTPRequestHandler):
                 db.audit_event("service.archived", details={"service_id": sid, "name": service.get("name", "")})
 
             elif action == "add_offer":
-                if form.get("site_image_data"):
-                    storefront_service.validate_product_image(
-                        form["site_image_data"], form.get("site_image_type", ""),
-                    )
-                if form.get("site_portrait_data"):
-                    storefront_service.validate_product_image(
-                        form["site_portrait_data"], form.get("site_portrait_type", ""),
-                    )
                 service_id_raw = form.get("service_id", "").strip()
                 if service_id_raw:
                     sid = int(service_id_raw)
@@ -1387,10 +1271,7 @@ class handler(BaseHTTPRequestHandler):
                 auto_delivery = form.get("auto_delivery", "") == "on"
                 low_stock_threshold = max(0, int(form.get("low_stock_threshold", 5)))
                 delivery_delay = form.get("delivery_delay", "").strip()[:120]
-                channel = form.get("sales_channel", "both")
-                channels = ["bot", "tn_site"] if channel == "both" else [channel]
-                tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
-                tn_price_millimes = round(float(tn_price_raw) * 1000) if tn_price_raw else None
+                emoji_val = form.get("custom_emoji_id", form.get("emoji", "")).strip()
                 warranty_days = int(form.get("warranty_days", "0").strip() or 0)
                 note = form.get("note", "").strip()[:250]
                 if not note or note.isdigit() or note == "0":
@@ -1406,18 +1287,9 @@ class handler(BaseHTTPRequestHandler):
                     low_stock_threshold=low_stock_threshold,
                     delivery_delay=delivery_delay,
                     custom_emoji_id=emoji_val,
-                    sales_channels=channels,
-                    tn_price_millimes=tn_price_millimes,
+                    sales_channels=["bot"],
                     name_ar=form.get("name_ar", "").strip(),
                     description_ar=form.get("description_ar", "").strip(),
-                    site_description_fr=form.get("site_description_fr", "").strip(),
-                    site_description_ar=form.get("site_description_ar", "").strip(),
-                    site_image_url=form.get("site_image_url", "").strip(),
-                    site_portrait_url=form.get("site_portrait_url", "").strip(),
-                    site_category=form.get("site_category", "").strip(),
-                    site_badge=form.get("site_badge", "").strip(),
-                    site_badge_ar=form.get("site_badge_ar", "").strip(),
-                    site_featured=form.get("site_featured", "") == "on",
                     period_days=int(form.get("period_days", "30").strip()),
                     warranty_days=warranty_days,
                 )
@@ -1429,30 +1301,8 @@ class handler(BaseHTTPRequestHandler):
                         oid, inventory_service.parse_bulk_inventory(initial_inventory_text),
                     )
                 db.audit_event("offer.created", details={"offer_id": oid, "name": name})
-                if form.get("site_image_data"):
-                    storefront_service.save_product_image(
-                        oid,
-                        form["site_image_data"],
-                        form.get("site_image_type", ""),
-                        admin_id=ADMIN_ID,
-                    )
-                if form.get("site_portrait_data"):
-                    storefront_service.save_product_portrait(
-                        oid,
-                        form["site_portrait_data"],
-                        form.get("site_portrait_type", ""),
-                        admin_id=ADMIN_ID,
-                    )
 
             elif action == "update_offer":
-                if form.get("site_image_data"):
-                    storefront_service.validate_product_image(
-                        form["site_image_data"], form.get("site_image_type", ""),
-                    )
-                if form.get("site_portrait_data"):
-                    storefront_service.validate_product_image(
-                        form["site_portrait_data"], form.get("site_portrait_type", ""),
-                    )
                 oid = int(form["offer_id"])
                 previous_offer = db.get_offer(oid)
                 if not previous_offer:
@@ -1465,9 +1315,6 @@ class handler(BaseHTTPRequestHandler):
                 note = form.get("note", "").strip()[:250]
                 if warranty_days is not None and (not note or note.isdigit() or note == "0"):
                     note = "NW" if warranty_days == 0 else f"{warranty_days} days"
-                channel = form.get("sales_channel", "both")
-                channels = ["bot", "tn_site"] if channel == "both" else [channel]
-                tn_price_raw = form.get("tn_price", "").strip().replace(",", ".")
                 emoji_val = form.get("custom_emoji_id", form.get("emoji", "")).strip()
                 db.update_offer(
                     oid,
@@ -1481,18 +1328,9 @@ class handler(BaseHTTPRequestHandler):
                     low_stock_threshold=max(0, int(form.get("low_stock_threshold", 5))),
                     delivery_delay=form.get("delivery_delay", "").strip()[:120],
                     custom_emoji_id=emoji_val,
-                    sales_channels=channels,
-                    tn_price_millimes=(round(float(tn_price_raw) * 1000) if tn_price_raw else None),
+                    sales_channels=["bot"],
                     name_ar=form.get("name_ar", "").strip(),
                     description_ar=form.get("description_ar", "").strip(),
-                    site_description_fr=form.get("site_description_fr", "").strip(),
-                    site_description_ar=form.get("site_description_ar", "").strip(),
-                    site_image_url=form.get("site_image_url", "").strip(),
-                    site_portrait_url=form.get("site_portrait_url", "").strip(),
-                    site_category=form.get("site_category", "").strip(),
-                    site_badge=form.get("site_badge", "").strip(),
-                    site_badge_ar=form.get("site_badge_ar", "").strip(),
-                    site_featured=form.get("site_featured", "") == "on",
                     period_days=int(form.get("period_days", "30").strip()),
                     warranty_days=warranty_days,
                 )
@@ -1505,20 +1343,6 @@ class handler(BaseHTTPRequestHandler):
                     "previous_service_id": previous_offer.get("service_id"),
                     "service_id": target_service_id,
                 })
-                if form.get("site_image_data"):
-                    storefront_service.save_product_image(
-                        oid,
-                        form["site_image_data"],
-                        form.get("site_image_type", ""),
-                        admin_id=ADMIN_ID,
-                    )
-                if form.get("site_portrait_data"):
-                    storefront_service.save_product_portrait(
-                        oid,
-                        form["site_portrait_data"],
-                        form.get("site_portrait_type", ""),
-                        admin_id=ADMIN_ID,
-                    )
 
             elif action == "toggle_offer":
                 oid = int(form["offer_id"])
@@ -1740,39 +1564,6 @@ class handler(BaseHTTPRequestHandler):
                 })
                 return
 
-            elif action == "review_storefront_order":
-                approved = form.get("decision") == "approve"
-                result = storefront_service.review_order(
-                    int(form["order_id"]),
-                    approved=approved,
-                    admin_id=ADMIN_ID,
-                    reason=form.get("reason", ""),
-                )
-                self._reply(200, {
-                    "ok": True,
-                    **result,
-                    "message": (
-                        "Paiement accepté et commande mise à jour."
-                        if approved
-                        else "Paiement refusé."
-                    ),
-                })
-                return
-
-            elif action == "update_storefront_customer":
-                result = storefront_service.update_admin_customer(
-                    form.get("phone", ""),
-                    status=form.get("status", "active"),
-                    notes=form.get("notes", ""),
-                    admin_id=ADMIN_ID,
-                )
-                self._reply(200, {
-                    "ok": True,
-                    **result,
-                    "message": "Fiche client mise à jour.",
-                })
-                return
-
             elif action == "close_ticket":
                 tid = int(form["ticket_id"])
                 support_service.close_ticket(tid)
@@ -1911,8 +1702,8 @@ class handler(BaseHTTPRequestHandler):
                 affiliate_target = max(1, int(form.get("affiliate_target", 10)))
                 affiliate_reward_cents = max(0, int(form.get("affiliate_reward_cents", 100)))
                 active_languages = ",".join(
-                    code for code in ("fr", "en", "ar") if code in form.get("active_languages", "fr,en,ar").split(",")
-                ) or "fr"
+                    code for code in ("en", "ar") if code in form.get("active_languages", "en,ar").split(",")
+                ) or "en"
 
                 db.set_setting("shop_name", shop_name)
                 db.set_setting("currency", currency)
@@ -1934,13 +1725,13 @@ class handler(BaseHTTPRequestHandler):
                 ann_restock = form.get("announcement_restock", "").strip()
                 if ann_new:
                     db.set_setting("announcement_new_stock", ann_new)
-                    db.set_text_override("channel_stock_announcement", "fr", ann_new)
+                    db.set_text_override("channel_stock_announcement", "en", ann_new)
                 if ann_flash:
                     db.set_setting("announcement_flash_sale", ann_flash)
-                    db.set_text_override("flash_sale_announcement", "fr", ann_flash)
+                    db.set_text_override("flash_sale_announcement", "en", ann_flash)
                 if ann_restock:
                     db.set_setting("announcement_restock", ann_restock)
-                    db.set_text_override("offer_stock_announcement", "fr", ann_restock)
+                    db.set_text_override("offer_stock_announcement", "en", ann_restock)
                 db.audit_event("settings.updated")
 
             elif action == "save_reseller_product":

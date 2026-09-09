@@ -352,6 +352,46 @@ def init_db():
     _schema_initialized = True
 
 
+def purge_tunisian_storefront_data() -> dict[str, int]:
+    """Remove the retired Tunisia storefront data and channel metadata."""
+    conn = get_conn()
+    removed: dict[str, int] = {}
+    for collection_name in (
+        "site_orders",
+        "storefront_customers",
+        "storefront_product_images",
+        "storefront_product_portraits",
+        "storefront_payment_proofs",
+    ):
+        result = getattr(conn, collection_name).delete_many({})
+        removed[collection_name] = int(result.deleted_count)
+
+    services = conn.services.update_many(
+        {"sales_channels": "tn_site"},
+        {"$pull": {"sales_channels": "tn_site"}},
+    )
+    offers = conn.offers.update_many(
+        {"sales_channels": "tn_site"},
+        {
+            "$pull": {"sales_channels": "tn_site"},
+            "$unset": {
+                "tn_price_millimes": "",
+                "site_description_fr": "",
+                "site_description_ar": "",
+                "site_image_url": "",
+                "site_portrait_url": "",
+                "site_category": "",
+                "site_badge": "",
+                "site_badge_ar": "",
+                "site_featured": "",
+            },
+        },
+    )
+    removed["services_updated"] = int(services.modified_count)
+    removed["offers_updated"] = int(offers.modified_count)
+    return removed
+
+
 def _remove_legacy_announcement_overrides(conn):
     """Let obsolete stock templates fall back to the current announcement design."""
     legacy_heading = (
@@ -481,7 +521,7 @@ def upsert_user(telegram_id, username, first_name):
     result = get_conn().users.update_one(
         {"telegram_id": telegram_id},
         {"$set": {"username": username, "first_name": first_name}, "$setOnInsert": {
-            "lang": "fr",
+            "lang": "en",
             "catalog_notifications_enabled": True,
             "created_at": now,
         }},
@@ -514,7 +554,7 @@ def set_catalog_notifications_enabled(telegram_id, enabled):
         {"telegram_id": int(telegram_id)},
         {
             "$set": {"catalog_notifications_enabled": bool(enabled)},
-            "$setOnInsert": {"created_at": int(time.time()), "lang": "fr"},
+            "$setOnInsert": {"created_at": int(time.time()), "lang": "en"},
         },
         upsert=True,
     )
@@ -547,7 +587,7 @@ def set_product_notifications_enabled(telegram_id, offer_id, enabled):
         {"telegram_id": int(telegram_id)},
         {
             operator: {"catalog_notification_disabled_offer_ids": int(offer_id)},
-            "$setOnInsert": {"created_at": int(time.time()), "lang": "fr"},
+            "$setOnInsert": {"created_at": int(time.time()), "lang": "en"},
         },
         upsert=True,
     )
@@ -997,7 +1037,7 @@ def add_service(name, emoji="", custom_emoji_id="", sales_channels=None, name_ar
         "custom_emoji_id": custom_emoji_id,
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
-        "sales_channels": list(sales_channels or ["bot", "tn_site"]),
+        "sales_channels": list(sales_channels or ["bot"]),
         "name_ar": str(name_ar or "")[:120],
     })
     if special_service:
@@ -1025,10 +1065,9 @@ Included:
 • Warranty requests with accept/refuse, replacement and refund handling
 • Orders, customer accounts, support tickets and admin communication
 • Referral rewards, loyalty discounts, stock alerts and flash sales
-• English, French and Arabic support
+• English and Arabic support
 • Telegram admin panel for daily management
 • Secure web admin dashboard with catalog, orders, users and analytics
-• Public storefront website connected to the same catalog
 • Configuration and deployment structure
 
 Delivery: private GitHub repository/source package after payment confirmation. Hosting, third-party accounts, paid API keys, installation and custom development are not included unless agreed separately with the administrator."""
@@ -1045,10 +1084,9 @@ BOT_LIKE_MINE_DESCRIPTION_AR = """أطلق مشروعك الخاص لبيع ال
 • طلبات الضمان مع القبول أو الرفض والاستبدال واسترداد المبلغ
 • الطلبات وحسابات العملاء وتذاكر الدعم والتواصل مع المسؤول
 • مكافآت الإحالة وخصومات الولاء وتنبيهات المخزون والعروض السريعة
-• دعم اللغات العربية والفرنسية والإنجليزية
+• دعم اللغتين العربية والإنجليزية
 • لوحة مسؤول Telegram للإدارة اليومية
 • لوحة تحكم ويب آمنة للكتالوج والطلبات والعملاء والإحصائيات
-• موقع متجر عام متصل بالكتالوج نفسه
 • هيكل الإعدادات وملفات النشر
 
 التسليم: مستودع GitHub خاص أو حزمة الشيفرة المصدرية بعد تأكيد الدفع. الاستضافة وحسابات الجهات الخارجية ومفاتيح API المدفوعة والتثبيت والتطوير المخصص غير مشمولة إلا باتفاق منفصل مع المسؤول."""
@@ -1256,7 +1294,7 @@ def add_offer(
         "supplier_product_id": str(supplier_product_id or ""),
         "sort_order": (last or {}).get("sort_order", 0) + 1,
         "active": 1,
-        "sales_channels": list(sales_channels or ["bot", "tn_site"]),
+        "sales_channels": list(sales_channels or ["bot"]),
         "tn_price_millimes": tn_price_millimes,
         "name_ar": str(name_ar or "")[:200],
         "description_ar": str(description_ar or "")[:2000],
@@ -1523,10 +1561,16 @@ def list_text_overrides():
     return [_public(row) for row in get_conn().text_overrides.find().sort([("key", ASCENDING), ("lang", ASCENDING)])]
 
 
-def add_custom_button(label_fr, label_en, label_ar, url):
+def add_custom_button(*args):
+    if len(args) == 4:
+        _, label_en, label_ar, url = args
+    elif len(args) == 3:
+        label_en, label_ar, url = args
+    else:
+        raise TypeError("add_custom_button expects English, Arabic and URL labels")
     button_id = _next_id("custom_buttons")
     get_conn().custom_buttons.insert_one({
-        "id": button_id, "label_fr": label_fr, "label_en": label_en,
+        "id": button_id, "label_en": label_en,
         "label_ar": label_ar, "url": url, "active": 1,
     })
     return button_id
@@ -1740,7 +1784,7 @@ def shop_settings():
         "help_message": "",
         "terms_message": "",
         "privacy_message": "",
-        "active_languages": "en",
+        "active_languages": "en,ar",
         "announcement_new_stock": "",
         "announcement_flash_sale": "",
         "announcement_restock": "",
@@ -1751,18 +1795,18 @@ def shop_settings():
         from i18n import TRANSLATIONS
         if not result.get("announcement_new_stock"):
             result["announcement_new_stock"] = (
-                get_text_override("channel_stock_announcement", "fr")
-                or TRANSLATIONS.get("channel_stock_announcement", {}).get("fr", "")
+                get_text_override("channel_stock_announcement", "en")
+                or TRANSLATIONS.get("channel_stock_announcement", {}).get("en", "")
             )
         if not result.get("announcement_flash_sale"):
             result["announcement_flash_sale"] = (
-                get_text_override("flash_sale_announcement", "fr")
-                or TRANSLATIONS.get("flash_sale_announcement", {}).get("fr", "")
+                get_text_override("flash_sale_announcement", "en")
+                or TRANSLATIONS.get("flash_sale_announcement", {}).get("en", "")
             )
         if not result.get("announcement_restock"):
             result["announcement_restock"] = (
-                get_text_override("offer_stock_announcement", "fr")
-                or TRANSLATIONS.get("offer_stock_announcement", {}).get("fr", "")
+                get_text_override("offer_stock_announcement", "en")
+                or TRANSLATIONS.get("offer_stock_announcement", {}).get("en", "")
             )
     except Exception:
         pass

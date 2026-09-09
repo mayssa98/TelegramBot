@@ -30,8 +30,8 @@ class RailwayHTTPServer(ThreadingHTTPServer):
 _ADMIN_PREFIXES = ("/admin", "/admin-v2", "/admin-legacy")
 
 
-class StorefrontHandler(webhook.handler):
-    """Public storefront surface with every dashboard route blocked."""
+class PublicHandler(webhook.handler):
+    """Public Telegram and landing-page surface with dashboard routes blocked."""
 
     def _block_admin(self) -> None:
         admin_url = config.env_value("HP_ADMIN_BASE_URL").rstrip("/")
@@ -174,7 +174,7 @@ def main() -> None:
     if port == admin_port:
         raise RuntimeError("PORT and ADMIN_PORT must be different")
 
-    storefront_server = RailwayHTTPServer(("0.0.0.0", port), StorefrontHandler)
+    public_server = RailwayHTTPServer(("0.0.0.0", port), PublicHandler)
     admin_server = RailwayHTTPServer(("0.0.0.0", admin_port), AdminHandler)
     try:
         # Initialize MongoDB and Telegram before Railway marks the deployment healthy.
@@ -185,7 +185,7 @@ def main() -> None:
                 result.get("message") or "Telegram webhook registration failed"
             )
     except Exception:
-        storefront_server.server_close()
+        public_server.server_close()
         admin_server.server_close()
         raise
 
@@ -200,13 +200,13 @@ def main() -> None:
 
     def request_shutdown(_signum, _frame) -> None:
         stop_event.set()
-        threading.Thread(target=storefront_server.shutdown, daemon=True).start()
+        threading.Thread(target=public_server.shutdown, daemon=True).start()
         threading.Thread(target=admin_server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, request_shutdown)
     signal.signal(signal.SIGINT, request_shutdown)
     log.info(
-        "Trust Market storefront listening on 0.0.0.0:%s (public URL: %s)",
+        "Public Telegram service listening on 0.0.0.0:%s (public URL: %s)",
         port,
         config.public_base_url_from_environment(),
     )
@@ -219,13 +219,13 @@ def main() -> None:
     )
     admin_thread.start()
     try:
-        storefront_server.serve_forever(poll_interval=0.5)
+        public_server.serve_forever(poll_interval=0.5)
     finally:
         stop_event.set()
         admin_server.shutdown()
         admin_thread.join(timeout=5)
         scheduler.join(timeout=5)
-        storefront_server.server_close()
+        public_server.server_close()
         admin_server.server_close()
 
 

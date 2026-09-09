@@ -26,22 +26,22 @@ def test_active_languages_control_keyboard(mock_mongodb):
     db.set_setting("active_languages", "fr,ar")
 
     keyboard = keyboards.lang_keyboard()
-    callback_data = [row[0].callback_data for row in keyboard.inline_keyboard]
+    callback_data = [button.callback_data for row in keyboard.inline_keyboard for button in row]
 
-    assert callback_data == ["lang:en"]
+    assert callback_data == ["lang:ar"]
 
 
-def test_english_is_the_only_available_language(mock_mongodb):
+def test_french_is_not_an_available_language(mock_mongodb):
     db.set_setting("active_languages", "fr,en,ar")
 
     keyboard = keyboards.lang_keyboard()
 
-    assert [row[0].callback_data for row in keyboard.inline_keyboard] == ["lang:en"]
+    assert [button.callback_data for row in keyboard.inline_keyboard for button in row] == ["lang:en", "lang:ar"]
 def test_admin_can_override_any_translated_text(mock_mongodb):
-    db.set_text_override("menu_catalog", "fr", "Mes produits", "premium-menu-icon")
-    assert t("fr", "menu_catalog") == "Mes produits"
-    assert db.get_text_override_icon("menu_catalog", "fr") == "premium-menu-icon"
-    button = keyboards.home_keyboard("fr", 42).inline_keyboard[0][0]
+    db.set_text_override("menu_catalog", "en", "My products", "premium-menu-icon")
+    assert t("en", "menu_catalog") == "My products"
+    assert db.get_text_override_icon("menu_catalog", "en") == "premium-menu-icon"
+    button = keyboards.home_keyboard("en", 42).inline_keyboard[0][0]
     assert button.icon_custom_emoji_id == "premium-menu-icon"
 
 

@@ -358,7 +358,8 @@ def numbered_delivery_content(items):
     return "\n\n".join(f"{index}.\n{value}" for index, value in enumerate(cleaned, start=1))
 
 def lang_of(user_id):
-    return db.get_user_lang(user_id) or DEFAULT_LANG
+    lang = db.get_user_lang(user_id) or DEFAULT_LANG
+    return lang if lang in {"en", "ar"} else "en"
 
 
 async def notify_successful_referral(context, referrer_id):
@@ -451,13 +452,13 @@ def compact_offer_text(offer: dict, lang: str) -> str:
 
 def admin_text_preview(key: str) -> str:
     en_current = db.get_text_override(key, "en") or TRANSLATIONS.get(key, {}).get("en") or "—"
-    fr_current = db.get_text_override(key, "fr") or TRANSLATIONS.get(key, {}).get("fr") or "—"
+    ar_current = db.get_text_override(key, "ar") or TRANSLATIONS.get(key, {}).get("ar") or "—"
     rendered_en = render_stored_rich_text(en_current)
-    rendered_fr = render_stored_rich_text(fr_current)
+    rendered_ar = render_stored_rich_text(ar_current)
     return (
         f"✏️ <b>{html.escape(key)}</b>\n\n"
-        f"🇫🇷 <b>Aperçu Français :</b>\n{rendered_fr}\n\n"
         f"🇬🇧 <b>English Preview :</b>\n{rendered_en}\n\n"
+        f"🇸🇦 <b>Arabic Preview :</b>\n{rendered_ar}\n\n"
         "Choisissez la langue pour modifier ce texte :"
     )
 
@@ -1633,8 +1634,12 @@ async def show_reseller_api(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 async def cb_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     lang = q.data.split(":")[1]
-    if lang != "en":
-        await q.answer("English is the only available language.", show_alert=True)
+    active_languages = {
+        code.strip()
+        for code in str(db.shop_settings().get("active_languages") or "en,ar").split(",")
+    }
+    if lang not in {"en", "ar"} or lang not in active_languages:
+        await q.answer("Only English and Arabic are available.", show_alert=True)
         return
     db.set_user_lang(q.from_user.id, lang)
     await q.answer()
@@ -2995,15 +3000,15 @@ async def handle_pending_input(update, context, lang):
         )
         if isinstance(ref, str) and "|" in ref:
             key, selected_lang = ref.rsplit("|", 1)
-            if key not in TRANSLATIONS or selected_lang not in {"fr", "en", "ar"}:
+            if key not in TRANSLATIONS or selected_lang not in {"en", "ar"}:
                 await update.message.reply_text("⚠️ Sélection de texte invalide.")
                 return
             db.set_text_override(key, selected_lang, override_text, override_icon)
             saved_key = key
         else:
             parts = [part.strip() for part in text.split("|", 2)]
-            if len(parts) != 3 or parts[1] not in {"fr", "en", "ar"} or not parts[0] or not parts[2]:
-                await update.message.reply_text("⚠️ Format : `clé | fr/en/ar | nouveau texte`", parse_mode=ParseMode.MARKDOWN)
+            if len(parts) != 3 or parts[1] not in {"en", "ar"} or not parts[0] or not parts[2]:
+                await update.message.reply_text("⚠️ Format : `key | en/ar | new text`", parse_mode=ParseMode.MARKDOWN)
                 return
             db.set_text_override(parts[0], parts[1], parts[2])
             saved_key = parts[0]
@@ -3020,10 +3025,10 @@ async def handle_pending_input(update, context, lang):
         return
 
     if kind == "adm_btn_add" and uid == ADMIN_ID:
-        parts = [part.strip() for part in text.split("|", 3)]
-        if len(parts) != 4 or not re.fullmatch(r"https?://\S+", parts[3]):
+        parts = [part.strip() for part in text.split("|", 2)]
+        if len(parts) != 3 or not re.fullmatch(r"https?://\S+", parts[2]):
             await update.message.reply_text(
-                "⚠️ Format : `Français | English | العربية | https://exemple.com`",
+                "⚠️ Format : `English | العربية | https://exemple.com`",
                 parse_mode=ParseMode.MARKDOWN,
             )
             return
@@ -4983,7 +4988,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("adm_text_lang:"):
         key, selected_lang = data.removeprefix("adm_text_lang:").rsplit(":", 1)
-        if selected_lang not in {"fr", "en", "ar"}:
+        if selected_lang not in {"en", "ar"}:
             await q.answer("Langue non supportée.", show_alert=True)
             return
         current = db.get_text_override(key, selected_lang)
@@ -5025,7 +5030,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "adm_btn_add":
         PENDING[uid] = ("adm_btn_add", 0)
         await q.message.reply_text(
-            "➕ Envoyez : `Français | English | العربية | https://exemple.com`",
+            "➕ Envoyez : `English | العربية | https://exemple.com`",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
@@ -5308,7 +5313,7 @@ async def cb_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         service = db.get_service(off.get("service_id")) or {}
         price = "—" if off["price"] is None else f"{off['price']:.2f} {CURRENCY}"
         method_details = "" if str(service.get("name") or "").strip().lower() == "methods" else (
-            f"🛡 Garantie : {warranty_service.offer_warranty_label(off, lang='fr') or 'NW'}\n"
+            f"🛡 Garantie : {warranty_service.offer_warranty_label(off, lang='en') or 'NW'}\n"
             f"📅 Période : {int(off.get('period_days') or 30)} j\n"
         )
         await q.edit_message_text(

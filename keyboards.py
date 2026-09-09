@@ -199,8 +199,17 @@ def offer_button_label(lang, offer, *, stock_label=None, price_tbd=None):
 
 
 def lang_keyboard():
+    active = str(db.shop_settings().get("active_languages") or "en,ar").split(",")
+    active = [code.strip() for code in active if code.strip() in {"en", "ar"}]
+    if not active:
+        active = ["en"]
+    labels = {
+        "en": ("🇬🇧 English", "lang:en"),
+        "ar": ("🇸🇦 العربية", "lang:ar"),
+    }
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("🇬🇧 English", callback_data="lang:en"),
+        InlineKeyboardButton(labels[code][0], callback_data=labels[code][1])
+        for code in active
     ]])
 
 
@@ -305,7 +314,7 @@ def home_keyboard(lang, user_id):
         if visible:
             rows.append(visible)
     for button in db.list_custom_buttons():
-        label = button.get(f"label_{lang}") or button.get("label_fr") or "Lien"
+        label = button.get(f"label_{lang}") or button.get("label_en") or button.get("label_ar") or "Link"
         rows.append([InlineKeyboardButton(label[:64], url=button["url"], style="success")])
     if user_id == ADMIN_ID:
         rows.append([translated_button(

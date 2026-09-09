@@ -14,7 +14,6 @@ import {
   Eye,
   EyeOff,
   Headphones,
-  Globe2,
   KeyRound,
   LockKeyhole,
   LayoutDashboard,
@@ -50,15 +49,7 @@ const BOT_NAV_ITEMS = [
   { id: "settings", label: "Paramètres", icon: Settings },
 ];
 
-const SITE_NAV_ITEMS = [
-  { id: "site-overview", label: "Vue d’ensemble", icon: LayoutDashboard },
-  { id: "tn-storefront", label: "Commandes", icon: ClipboardList },
-  { id: "site-customers", label: "Clients du site", icon: Users },
-  { id: "catalog", label: "Produits du site", icon: ShoppingBag },
-  { id: "inventory", label: "Stock partagé", icon: Boxes },
-];
-
-const ALL_NAV_ITEMS = [...BOT_NAV_ITEMS, ...SITE_NAV_ITEMS];
+const ALL_NAV_ITEMS = BOT_NAV_ITEMS;
 
 const STATUS_LABELS = {
   pending_payment: "Paiement en attente",
@@ -98,8 +89,8 @@ function initials(value = "BM") {
 function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspaceChange, workspace }) {
   const pendingOrders = data?.summary?.pending_orders || 0;
   const openTickets = data?.summary?.open_tickets || 0;
-  const navItems = workspace === "site" ? SITE_NAV_ITEMS : BOT_NAV_ITEMS;
-  const isSite = workspace === "site";
+  const navItems = BOT_NAV_ITEMS;
+  const isSite = false;
 
   return (
     <>
@@ -110,18 +101,13 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspac
       />
       <aside className={`sidebar ${mobileOpen ? "is-open" : ""}`}>
         <div className="brand">
-          {isSite ? <img className="workspace-brand-logo" src="/admin-v2/trust-market-logo.png" alt="Trust Market TN" /> : <div className="brand-mark">{initials(data?.shop_name || "BlackMarket")}</div>}
-          <div><strong>{isSite ? "Trust Market TN" : data?.shop_name || "BlackMarket"}</strong><span>{isSite ? "Store Admin" : "Bot Control Center"}</span></div>
+          <div className="brand-mark">{initials(data?.shop_name || "BlackMarket")}</div>
+          <div><strong>{data?.shop_name || "BlackMarket"}</strong><span>Bot Control Center</span></div>
           <button className="icon-button mobile-only" onClick={onClose} aria-label="Fermer"><X size={20} /></button>
         </div>
 
-        <div className="workspace-switch" aria-label="Choisir l’espace administrateur">
-          <button className={!isSite ? "active" : ""} onClick={() => onWorkspaceChange("bot")}><Bot size={15} /><span>Bot</span></button>
-          <button className={isSite ? "active site" : ""} onClick={() => onWorkspaceChange("site")}><Globe2 size={15} /><span>Site TN</span></button>
-        </div>
-
         <nav className="nav-list" aria-label="Navigation principale">
-          <span className="nav-heading">{isSite ? "Trust Market TN" : "Bot Telegram"}</span>
+          <span className="nav-heading">Bot Telegram</span>
           {navItems.map(({ id, label, icon: Icon }) => {
             const count = id === "orders" ? pendingOrders : id === "support" ? openTickets : 0;
             return (
@@ -140,7 +126,7 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspac
 
         <div className="sidebar-footer">
           <div className="connection-dot" />
-          <div><strong>{isSite ? "Boutique en ligne" : "Bot connecté"}</strong><span>{isSite ? "Paiements en TND" : `@${data?.bot_username || "blackmarketa_bot"}`}</span></div>
+          <div><strong>Bot connecté</strong><span>@{data?.bot_username || "blackmarketa_bot"}</span></div>
         </div>
       </aside>
     </>
@@ -148,17 +134,17 @@ function Sidebar({ activePage, data, mobileOpen, onClose, onNavigate, onWorkspac
 }
 
 function Header({ activePage, alertCount, busyAction, density, isRefreshing, onLogout, onMenu, onNotifications, onRefresh, onRepairTelegram, onSearch, onTestBinance, onToggleDensity, onToggleTheme, theme, workspace }) {
-  const navItems = workspace === "site" ? SITE_NAV_ITEMS : BOT_NAV_ITEMS;
+  const navItems = BOT_NAV_ITEMS;
   const current = navItems.find((item) => item.id === activePage) || navItems[0];
   return (
     <header className="topbar">
       <div className="topbar-title">
         <button className="icon-button menu-button" onClick={onMenu} aria-label="Ouvrir le menu"><Menu size={21} /></button>
-        <div><span>{workspace === "site" ? "Trust Market TN" : "Administration du bot"}</span><h1>{current.label}</h1></div>
+        <div><span>Administration du bot</span><h1>{current.label}</h1></div>
       </div>
       <button className="global-search-trigger" onClick={onSearch}>
         <Search size={17} />
-        <span>{workspace === "site" ? "Rechercher produits et stock du site…" : "Rechercher commandes, produits ou clients…"}</span>
+        <span>Rechercher commandes, produits ou clients…</span>
         <kbd>Ctrl K</kbd>
       </button>
       <div className="topbar-actions">
@@ -513,9 +499,7 @@ function LoginPage({ onAuthenticated }) {
 export default function App() {
   const routePage = () => window.location.pathname.replace(/^\/admin(?:-v2)?\/?/, "").split("/")[0] || "overview";
   const initialPage = routePage();
-  const storedWorkspace = window.localStorage.getItem("admin-workspace");
-  const routeWorkspace = ["site-overview", "tn-storefront"].includes(initialPage) ? "site" : initialPage === "overview" ? "bot" : storedWorkspace;
-  const [workspace, setWorkspace] = useState(routeWorkspace === "site" ? "site" : "bot");
+  const [workspace, setWorkspace] = useState("bot");
   const [activePage, setActivePage] = useState(ALL_NAV_ITEMS.some((item) => item.id === initialPage) ? initialPage : "overview");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
@@ -615,8 +599,7 @@ export default function App() {
       const page = routePage();
       const nextPage = ALL_NAV_ITEMS.some((item) => item.id === page) ? page : "overview";
       setActivePage(nextPage);
-      if (["site-overview", "tn-storefront"].includes(nextPage)) setWorkspace("site");
-      if (nextPage === "overview") setWorkspace("bot");
+      setWorkspace("bot");
     };
     const restorePage = (event) => {
       synchronizeRoute();
@@ -637,9 +620,9 @@ export default function App() {
   };
 
   const switchWorkspace = (nextWorkspace) => {
-    setWorkspace(nextWorkspace);
-    window.localStorage.setItem("admin-workspace", nextWorkspace);
-    navigate(nextWorkspace === "site" ? "site-overview" : "overview");
+    setWorkspace("bot");
+    window.localStorage.setItem("admin-workspace", "bot");
+    navigate("overview");
   };
 
   const adminAction = async (params) => {

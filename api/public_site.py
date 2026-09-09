@@ -16,7 +16,7 @@ def render_public_site(bot_username: str, shop_name: str, public_base_url: str) 
         for height in (38, 72, 48, 88, 62, 96, 55, 80, 44, 92, 68, 84)
     )
     return f"""<!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
