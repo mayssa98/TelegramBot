@@ -425,7 +425,11 @@ def compact_offer_text(offer: dict, lang: str) -> str:
         "ar": ("السعر", "المخزون", "تم البيع", "الضمان", "الوصف"),
     }
     price_label, stock_label, sold_label, warranty_label, description_label = labels.get(lang, labels["en"])
-    description = (offer.get("description") or "").strip() or "—"
+    description = (
+        offer.get("description_ar") if lang == "ar" and offer.get("description_ar")
+        else offer.get("description")
+    )
+    description = (description or "").strip() or "—"
     warranty = warranty_service.offer_warranty_label(offer, lang=lang) or "NW"
     try:
         raw_price = offer.get("price")
@@ -1708,6 +1712,16 @@ async def on_text_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == t(lang, "menu_methods"):
         clear_support_pending()
         await show_methods(update, context, lang)
+    elif text == t(lang, "menu_bot_like_mine"):
+        clear_support_pending()
+        offer_id = db.ensure_bot_like_mine_feature()
+        offer = db.get_offer(offer_id)
+        await update.message.reply_text(
+            compact_offer_text(offer, lang),
+            parse_mode=ParseMode.HTML,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+            reply_markup=kb.offer_detail_keyboard(lang, offer),
+        )
     elif text == t(lang, "menu_lovable"):
         clear_support_pending()
         await show_catalog(update, context, lang)
@@ -2232,6 +2246,8 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "methods":
         await show_methods(update, context, lang)
         return
+    if data == "bot_like_mine":
+        data = f"off:{db.ensure_bot_like_mine_feature()}"
     if data == "topup_onchain":
         await show_callback_screen(
             q,

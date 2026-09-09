@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
+from urllib.error import HTTPError
 import uuid
 from urllib.parse import parse_qs, urlsplit
 
@@ -117,6 +119,40 @@ def test_api_key_is_required_without_exposing_a_secret(monkeypatch):
 
     with pytest.raises(reseller_service.ResellerApiError, match="HP_MAILREADER_API_KEY"):
         reseller_service._request_json("/api/reseller/products")
+
+
+def test_mailreader_preflight_refreshes_balance_and_rejects_stale_stock(monkeypatch):
+    payloads = [{
+        "ok": True,
+        "reseller": {"balance": "42.50"},
+        "products": [{"id": "coursera-premium-12m", "stock": 0}],
+    }]
+    monkeypatch.setattr(reseller_service, "_request_json", lambda path: payloads.pop(0))
+
+    with pytest.raises(reseller_service.ResellerOrderNotCreatedError, match="Stock MailReader insuffisant"):
+        reseller_service._mailreader_preflight_purchase(
+            {"supplier_product_id": "coursera-premium-12m", "wholesale_price": 3},
+            1,
+        )
+
+
+def test_mailreader_http_error_keeps_provider_reason(monkeypatch):
+    error = HTTPError(
+        "https://api.mailreader.tech/api/reseller?action=order",
+        409,
+        "Conflict",
+        {},
+        BytesIO(b'{"error":"insufficient stock"}'),
+    )
+    monkeypatch.setattr(reseller_service, "MAILREADER_API_KEY", "test-key")
+    monkeypatch.setattr(reseller_service, "urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(error))
+
+    with pytest.raises(reseller_service.ResellerOrderNotCreatedError, match="insufficient stock"):
+        reseller_service._request_json(
+            "/api/reseller?action=order",
+            method="POST",
+            body={"product_id": "coursera-premium-12m", "quantity": 1},
+        )
 
 
 def test_cgpt_active_client_sends_bearer_auth_and_idempotency(monkeypatch):
@@ -312,9 +348,12 @@ def test_paid_supplier_order_is_delivered_idempotently(monkeypatch, mock_mongodb
 
     assert reseller_service.fulfill_paid_order(91) == ["user:a", "user:b"]
     assert reseller_service.fulfill_paid_order(91) == ["user:a", "user:b"]
-    assert len(calls) == 1
-    assert calls[0][1] == "POST"
-    assert calls[0][2]["external_order_id"] == "BM-91"
+    assert [call[0] for call in calls] == [
+        "/api/reseller/products",
+        "/api/reseller?action=order",
+    ]
+    assert calls[1][1] == "POST"
+    assert calls[1][2]["external_order_id"] == "BM-91"
     assert db.get_order(91)["status"] == "delivered"
     assert mock_mongodb.inventory.count_documents({"delivered_order_id": 91}) == 2
     assert "user:a" not in str(mock_mongodb.reseller_fulfillments.find_one({"order_id": 91}))
@@ -392,7 +431,7 @@ def test_created_supplier_order_without_delivery_is_never_purchased_twice(
     with pytest.raises(reseller_service.ResellerApiError, match="Aucun second achat"):
         reseller_service.fulfill_paid_order(223)
 
-    assert len(calls) == 1
+    assert len(calls) == 2  # fresh balance/stock read, then the single purchase POST
     fulfillment = mock_mongodb.reseller_fulfillments.find_one({"order_id": 223})
     assert fulfillment["status"] == "delivery_pending"
     assert fulfillment["supplier_order_id"] == "supplier-223"

@@ -152,6 +152,34 @@ def _request_json(
         with urlopen(request, timeout=20) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
+        # MailReader uses the response body to explain rejected orders (for
+        # example, HTTP 409 for an out-of-stock product). Preserve that reason
+        # instead of reducing every non-auth/non-payment error to a generic
+        # review_required state.
+        error_message = ""
+        try:
+            raw_error = exc.read().decode("utf-8", errors="replace")
+            error_payload = json.loads(raw_error)
+            if isinstance(error_payload, dict):
+                error_message = str(
+                    error_payload.get("message")
+                    or error_payload.get("error")
+                    or error_payload.get("detail")
+                    or ""
+                ).strip()
+        except (OSError, ValueError, json.JSONDecodeError):
+            pass
+        normalized_error = error_message.lower()
+        no_order_words = (
+            "stock", "out of stock", "insufficient", "unavailable",
+            "sold out", "inventory", "balance", "solde", "rupture",
+            "indisponible", "épuis", "epuis",
+        )
+        if any(word in normalized_error for word in no_order_words):
+            detail = error_message or f"HTTP {exc.code}"
+            raise ResellerOrderNotCreatedError(
+                f"MailReader a refusé la commande sans la créer : {detail}"
+            ) from exc
         if exc.code in {401, 403}:
             raise ResellerApiError(
                 "Clé API MailReader refusée. Remplacez-la par une clé active."
@@ -160,7 +188,10 @@ def _request_json(
             raise ResellerOrderNotCreatedError(
                 "Solde MailReader insuffisant : aucune commande fournisseur n’a été créée."
             ) from exc
-        raise ResellerApiError(f"MailReader a répondu avec l’erreur HTTP {exc.code}.") from exc
+        detail = f" : {error_message}" if error_message else ""
+        raise ResellerApiError(
+            f"MailReader a répondu avec l’erreur HTTP {exc.code}{detail}."
+        ) from exc
     except (URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise ResellerApiError("MailReader est temporairement indisponible.") from exc
     if not isinstance(payload, dict):
@@ -171,6 +202,55 @@ def _request_json(
             raise ResellerOrderNotCreatedError(message)
         raise ResellerApiError(message)
     return payload
+
+
+def _mailreader_preflight_purchase(offer: dict[str, Any], quantity: int) -> None:
+    """Refresh MailReader balance/stock immediately before an order.
+
+    The products endpoint includes the current reseller balance and product
+    stock. A fresh read prevents stale catalog data from triggering an order
+    that the supplier cannot create, and gives us a deterministic no-order
+    error before the purchase POST is sent.
+    """
+    payload = _request_json("/api/reseller/products")
+    reseller = payload.get("reseller") if isinstance(payload.get("reseller"), dict) else {}
+    try:
+        balance = float(reseller.get("balance"))
+    except (TypeError, ValueError):
+        balance = None
+    try:
+        unit_price = float(offer.get("wholesale_price") or 0)
+    except (TypeError, ValueError):
+        unit_price = 0.0
+    if balance is not None and unit_price > 0 and balance < unit_price * quantity:
+        raise ResellerOrderNotCreatedError(
+            f"Solde MailReader insuffisant ({balance:.2f} USDT disponible, "
+            f"{unit_price * quantity:.2f} USDT requis)."
+        )
+
+    product_id = str(offer.get("supplier_product_id") or "")
+    products = payload.get("products")
+    if not isinstance(products, list):
+        return
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        current_id = str(
+            product.get("id") or product.get("_id") or product.get("product_id")
+            or product.get("productId") or ""
+        )
+        if current_id != product_id or "stock" not in product:
+            continue
+        try:
+            stock = float(product.get("stock"))
+        except (TypeError, ValueError):
+            return
+        if stock < quantity:
+            raise ResellerOrderNotCreatedError(
+                f"Stock MailReader insuffisant pour {product_id} "
+                f"({int(stock) if stock.is_integer() else stock} disponible, {quantity} requis)."
+            )
+        return
 
 
 def _shamekh_request_json(
@@ -1395,6 +1475,7 @@ def fulfill_paid_order(order_id: int) -> list[str] | None:
                 idempotency_key=supplier_idempotency_key,
             )
         else:
+            _mailreader_preflight_purchase(offer, int(order.get("qty") or 1))
             response = _request_json(
                 "/api/reseller?action=order",
                 method="POST",

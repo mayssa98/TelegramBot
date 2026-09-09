@@ -32,7 +32,7 @@ from config import ADMIN_ID, REQUIRED_CHANNEL
 from i18n import t
 
 BUTTON_TEXT_KEYS = {
-    "menu_catalog", "menu_methods", "menu_lovable", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
+    "menu_catalog", "menu_methods", "menu_bot_like_mine", "menu_lovable", "menu_orders", "menu_topup", "menu_account", "menu_affiliate",
     "menu_support", "menu_lang", "menu_admin", "menu_reseller_api", "btn_main_menu", "support_no_order",
     "catalog_request_button", "catalog_preorder_button",
     "catalog_notifications_on", "catalog_notifications_off",
@@ -265,6 +265,7 @@ def main_menu_keyboard(lang, user_id):
     hidden = set(filter(None, (db.get_setting("hidden_home_actions", "") or "").split(",")))
     candidates = [
         [("catalog", t(lang, "menu_catalog")), ("orders", t(lang, "menu_orders"))],
+        [("bot_like_mine", t(lang, "menu_bot_like_mine"))],
         [("topup", t(lang, "menu_topup"))],
         [("account", t(lang, "menu_account")), ("affiliate", t(lang, "menu_affiliate"))],
         [("support", t(lang, "menu_support")), ("language", t(lang, "menu_lang"))],
@@ -281,6 +282,9 @@ def home_keyboard(lang, user_id):
     candidate_rows = [
         [translated_button(lang, "menu_catalog", callback_data="catalog", style="success")],
         [translated_button(lang, "menu_methods", callback_data="methods", style="primary")],
+        [translated_button(
+            lang, "menu_bot_like_mine", callback_data="bot_like_mine", style="success",
+        )],
         [
             translated_button(lang, "profile_deposit", callback_data="topup", style="primary"),
             translated_button(lang, "profile_withdraw", callback_data="profile_withdraw", style="primary"),

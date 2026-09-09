@@ -1013,6 +1013,126 @@ def ensure_methods_service():
     return add_service("Methods", "🧠")
 
 
+BOT_LIKE_MINE_DESCRIPTION = """Launch your own digital-products business with a bot like BLACK MARKET.
+
+Included:
+• Complete private GitHub source code and deployment files
+• Customer Telegram bot with catalog, product details, stock and checkout
+• Binance Pay, Bybit Pay, USDT BEP20 and USDT Polygon payments
+• Wallet deposits, withdrawals and transaction verification
+• Automatic, manual and supplier-API delivery workflows
+• Reseller Buyer API with products, balance, purchase and documentation
+• Warranty requests with accept/refuse, replacement and refund handling
+• Orders, customer accounts, support tickets and admin communication
+• Referral rewards, loyalty discounts, stock alerts and flash sales
+• English, French and Arabic support
+• Telegram admin panel for daily management
+• Secure web admin dashboard with catalog, orders, users and analytics
+• Public storefront website connected to the same catalog
+• Configuration and deployment structure
+
+Delivery: private GitHub repository/source package after payment confirmation. Hosting, third-party accounts, paid API keys, installation and custom development are not included unless agreed separately with the administrator."""
+
+BOT_LIKE_MINE_DESCRIPTION_AR = """أطلق مشروعك الخاص لبيع المنتجات الرقمية مع بوت مثل BLACK MARKET.
+
+يتضمن:
+• الشيفرة المصدرية الكاملة الخاصة من GitHub وملفات النشر
+• بوت Telegram للعملاء مع الكتالوج وتفاصيل المنتجات والمخزون والدفع
+• الدفع عبر Binance Pay وBybit Pay وUSDT BEP20 وUSDT Polygon
+• المحافظ والإيداعات والسحوبات والتحقق من المعاملات
+• التسليم التلقائي واليدوي وتسليم الموردين عبر API
+• واجهة Buyer API للموزعين مع المنتجات والرصيد والشراء والتوثيق
+• طلبات الضمان مع القبول أو الرفض والاستبدال واسترداد المبلغ
+• الطلبات وحسابات العملاء وتذاكر الدعم والتواصل مع المسؤول
+• مكافآت الإحالة وخصومات الولاء وتنبيهات المخزون والعروض السريعة
+• دعم اللغات العربية والفرنسية والإنجليزية
+• لوحة مسؤول Telegram للإدارة اليومية
+• لوحة تحكم ويب آمنة للكتالوج والطلبات والعملاء والإحصائيات
+• موقع متجر عام متصل بالكتالوج نفسه
+• هيكل الإعدادات وملفات النشر
+
+التسليم: مستودع GitHub خاص أو حزمة الشيفرة المصدرية بعد تأكيد الدفع. الاستضافة وحسابات الجهات الخارجية ومفاتيح API المدفوعة والتثبيت والتطوير المخصص غير مشمولة إلا باتفاق منفصل مع المسؤول."""
+
+
+def ensure_bot_like_mine_feature():
+    """Return the dedicated 45 USDT source-code offer, creating it once."""
+    conn = get_conn()
+    service = conn.services.find_one({"feature_key": "bot_like_mine"})
+    if not service:
+        service = conn.services.find_one({
+            "name": {"$regex": r"^bot like mine$", "$options": "i"},
+        })
+    if not service:
+        service_id = add_service("BOT LIKE MINE", "🤖", sales_channels=["bot"])
+    else:
+        service_id = int(service["id"])
+    conn.services.update_one(
+        {"id": service_id},
+        {"$set": {
+            "name": "BOT LIKE MINE",
+            "emoji": "🤖",
+            "feature_key": "bot_like_mine",
+            "dedicated_home": True,
+            "active": 1,
+            "archived": 0,
+            "sales_channels": ["bot"],
+        }, "$unset": {"archived_at": ""}},
+    )
+
+    offer = conn.offers.find_one({"feature_key": "bot_like_mine"})
+    if not offer:
+        offer = conn.offers.find_one({
+            "service_id": service_id,
+            "name": {"$regex": r"^bot like mine$", "$options": "i"},
+        })
+    if not offer:
+        offer_id = add_offer(
+            service_id,
+            "BOT LIKE MINE",
+            45.0,
+            0,
+            note="Complete source-code package — delivery after admin confirmation.",
+            description=BOT_LIKE_MINE_DESCRIPTION,
+            description_ar=BOT_LIKE_MINE_DESCRIPTION_AR,
+            currency="USDT",
+            auto_delivery=False,
+            low_stock_threshold=0,
+            delivery_delay="Private GitHub source delivery after payment confirmation",
+            unlimited_stock=True,
+            manual_stock=True,
+            sales_channels=["bot"],
+            period_days=0,
+            warranty_days=0,
+        )
+    else:
+        offer_id = int(offer["id"])
+    conn.offers.update_one(
+        {"id": offer_id},
+        {"$set": {
+            "service_id": service_id,
+            "name": "BOT LIKE MINE",
+            "price": 45.0,
+            "currency": "USDT",
+            "description": BOT_LIKE_MINE_DESCRIPTION,
+            "description_ar": BOT_LIKE_MINE_DESCRIPTION_AR,
+            "note": "Complete source-code package — delivery after admin confirmation.",
+            "feature_key": "bot_like_mine",
+            "active": 1,
+            "archived": 0,
+            "stock": 0,
+            "unlimited_stock": True,
+            "manual_stock": True,
+            "auto_delivery": False,
+            "period_days": 0,
+            "warranty_days": 0,
+            "low_stock_threshold": 0,
+            "delivery_delay": "Private GitHub source delivery after payment confirmation",
+            "sales_channels": ["bot"],
+        }, "$unset": {"archived_at": ""}},
+    )
+    return offer_id
+
+
 def update_service(
     service_id, name=None, emoji=None, active=None, custom_emoji_id=None,
     sales_channels=None, name_ar=None, suffix_emoji=None,
