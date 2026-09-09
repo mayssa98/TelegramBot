@@ -18,7 +18,7 @@ from config import INVENTORY_KEY, MONGODB_DB, MONGODB_URI
 _client = None
 _db = None
 _schema_initialized = False
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 CODEX_ACCEPTANCE_SECONDS = 5 * 60
 _text_override_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
 TEXT_OVERRIDE_CACHE_SECONDS = 60
@@ -342,6 +342,8 @@ def init_db():
         _sanitize_corrupted_emojis_and_offers(db)
     if not schema or int(schema.get("version") or 0) < 21:
         _delete_lovable_catalog(db)
+    if not schema or int(schema.get("version") or 0) < 22:
+        db.text_overrides.delete_many({"key": {"$regex": r"^onboarding_"}})
     if os.environ.get("HP_SEED_DEFAULT_CATALOG", "").strip().lower() in {"1", "true", "yes"}:
         _seed_catalog()
     db.schema_meta.update_one(

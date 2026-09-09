@@ -40,8 +40,7 @@ BUTTON_TEXT_KEYS = {
     "profile_shop", "profile_notifications", "profile_reseller_api", "profile_main_menu",
     "topup_verify_txid", "topup_verify_bybit", "topup_onchain", "topup_bsc", "topup_polygon",
     "topup_home_button",
-    "btn_main_menu_short", "btn_refresh_short", "onboarding_next",
-    "onboarding_start", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
+    "btn_main_menu_short", "btn_refresh_short", "btn_back_services", "btn_buy", "btn_back", "btn_paid",
     "btn_cancel_short", "btn_verify_txid", "btn_cancel_order", "btn_pay_wallet",
     "btn_pay_binance", "btn_pay_bybit", "btn_pay_bsc", "btn_pay_polygon", "btn_submit_chain_txid",
     "btn_cancel", "btn_continue_payment", "btn_new_order", "btn_reply_manual_order",
@@ -578,16 +577,6 @@ def catalog_offers_keyboard(lang, catalog_notifications_enabled=True):
         ),
     ])
     return InlineKeyboardMarkup(buttons)
-
-
-def onboarding_keyboard(lang, step):
-    if step < 3:
-        return InlineKeyboardMarkup([[
-            translated_button(lang, "onboarding_next", callback_data=f"tour:{step + 1}"),
-        ]])
-    return InlineKeyboardMarkup([[
-        translated_button(lang, "onboarding_start", callback_data="catalog"),
-    ]])
 
 
 def offers_keyboard(lang, service_id):

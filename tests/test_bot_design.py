@@ -1445,12 +1445,6 @@ def test_inline_home_avoids_actions_repeated_in_profile():
     assert "help" not in callbacks
 
 
-def test_onboarding_has_three_steps_and_catalog_cta():
-    assert kb.onboarding_keyboard("fr", 1).inline_keyboard[0][0].callback_data == "tour:2"
-    assert kb.onboarding_keyboard("fr", 2).inline_keyboard[0][0].callback_data == "tour:3"
-    assert kb.onboarding_keyboard("fr", 3).inline_keyboard[0][0].callback_data == "catalog"
-
-
 def test_welcome_banner_is_packaged_with_the_bot():
     banner = Path(__file__).resolve().parents[1] / "assets" / "blackmarket-welcome-v2.png"
 

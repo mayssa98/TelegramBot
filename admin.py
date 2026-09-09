@@ -46,7 +46,7 @@ def text_category_for_key(key):
         ("catalog", ("catalog_", "service_", "offer_", "stock_", "choose_quantity", "quantity_", "confirm_purchase", "price_", "out_of_stock", "cat_")),
         ("orders", ("orders_", "order_", "delivery_", "warranty_", "status_", "otp_", "duplicate_order", "already_paid", "cancelled_")),
         ("support", ("support_", "ticket_", "rating_")),
-        ("account", ("affiliate_", "loyalty_", "profile_", "terms_", "privacy_", "help_", "welcome", "onboarding_", "lang_")),
+        ("account", ("affiliate_", "loyalty_", "profile_", "terms_", "privacy_", "help_", "welcome", "lang_")),
         ("menus", ("menu_", "btn_")),
     ]
     for category, prefixes in rules:

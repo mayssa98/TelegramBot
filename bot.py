@@ -1644,9 +1644,9 @@ async def cb_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.set_user_lang(q.from_user.id, lang)
     await q.answer()
     await q.edit_message_text(
-        t(lang, "onboarding_1", shop=SHOP_NAME),
+        t(lang, "welcome", shop=SHOP_NAME),
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=kb.onboarding_keyboard(lang, 1),
+        reply_markup=kb.home_keyboard(lang, q.from_user.id),
     )
 
 
@@ -2002,11 +2002,10 @@ async def cb_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_channel_member_welcome(q.edit_message_text, context, uid, DEFAULT_LANG)
         return
     if data.startswith("tour:"):
-        step = max(1, min(3, int(data.split(":", 1)[1])))
         await q.edit_message_text(
-            t(lang, f"onboarding_{step}", shop=SHOP_NAME),
+            t(lang, "welcome", shop=SHOP_NAME),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=kb.onboarding_keyboard(lang, step),
+            reply_markup=kb.home_keyboard(lang, uid),
         )
         return
     if data == "home":

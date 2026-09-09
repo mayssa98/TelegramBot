@@ -596,23 +596,6 @@ TRANSLATIONS = {
         "en": "❌ *Payment rejected*\n\nThe {network} payment for order #{oid} was not approved by the administrator. Check your transfer and submit another TXID, or contact support.",
         "ar": "❌ *Payment rejected*\n\nThe {network} payment for order #{oid} was not approved by the administrator. Check your transfer and submit another TXID, or contact support.",
     },
-    "onboarding_1": {
-        "fr": "✨ *Bienvenue dans l’univers {shop}*\n\nDes services numériques premium, présentés simplement et accessibles en quelques secondes.\n\n`1/3`  Découvrir",
-        "en": "✨ *Welcome to the {shop} experience*\n\nPremium digital services, clearly presented and available in seconds.\n\n`1/3`  Discover",
-        "ar": "✨ *مرحبًا بك في عالم {shop}*\n\nخدمات رقمية مميزة وواضحة ومتاحة خلال ثوانٍ.\n\n`1/3`  اكتشف",
-    },
-    "onboarding_2": {
-        "fr": "💳 *Paiement simple et sécurisé*\n\n1️⃣ Choisissez votre produit\n2️⃣ Payez le montant exact via Binance Pay\n3️⃣ Envoyez le TXID de votre reçu\n\n`2/3`  Paiement",
-        "en": "💳 *Simple and secure payment*\n\n1️⃣ Choose your product\n2️⃣ Pay the exact amount with Binance Pay\n3️⃣ Send the TXID from your receipt\n\n`2/3`  Payment",
-        "ar": "💳 *دفع بسيط وآمن*\n\n1️⃣ اختر المنتج\n2️⃣ ادفع المبلغ الدقيق عبر Binance Pay\n3️⃣ أرسل TXID من الإيصال\n\n`2/3`  الدفع",
-    },
-    "onboarding_3": {
-        "fr": "⚡ *Livraison et accompagnement*\n\n📦 Livraison rapide ou instantanée\n🛡️ Garantie indiquée sur chaque offre\n🎫 Support accessible depuis chaque étape\n\n`3/3`  Vous êtes prêt !",
-        "en": "⚡ *Delivery and assistance*\n\n📦 Fast or instant delivery\n🛡️ Warranty shown on every offer\n🎫 Support available at every step\n\n`3/3`  You are ready!",
-        "ar": "⚡ *التسليم والمساعدة*\n\n📦 تسليم سريع أو فوري\n🛡️ ضمان واضح لكل عرض\n🎫 الدعم متاح في كل خطوة\n\n`3/3`  أنت جاهز!",
-    },
-    "onboarding_next": {"fr": "Continuer  ›", "en": "Continue  ›", "ar": "متابعة  ›"},
-    "onboarding_start": {"fr": "🚀 Découvrir le catalogue", "en": "🚀 Explore the catalog", "ar": "🚀 اكتشف المتجر"},
     "order_card": {
         "fr": "🧾 *COMMANDE #{oid}*\n\n🛍️ Produit : *{offer}*\n📦 Quantité : *{qty}*\n💎 Total : *{total} {cur}*\n📍 Statut : *{status}*",
         "en": "🧾 *ORDER #{oid}*\n\n🛍️ Product: *{offer}*\n📦 Quantity: *{qty}*\n💎 Total: *{total} {cur}*\n📍 Status: *{status}*",
