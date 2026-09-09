@@ -40,6 +40,15 @@ def test_admin_catalog_declares_delete_confirmation_state():
     assert "const [deleteTarget, setDeleteTarget] = useState(null);" in source
 
 
+def test_offer_editor_does_not_reference_removed_image_upload_state():
+    source = (PROJECT_ROOT / "admin-ui" / "src" / "AdminPages.jsx").read_text(
+        encoding="utf-8"
+    )
+
+    assert "imageBusy" not in source
+    assert "portraitBusy" not in source
+
+
 def test_react_admin_sends_scoped_token_for_write_requests():
     app_source = (PROJECT_ROOT / "admin-ui" / "src" / "App.jsx").read_text(
         encoding="utf-8"

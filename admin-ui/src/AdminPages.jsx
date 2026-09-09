@@ -901,7 +901,7 @@ function OfferForm({ services, offer, onAction, onClose, defaultChannel = "both"
           <ActionButton secondary onClick={onClose} type="button">
             Annuler
           </ActionButton>
-          <ActionButton icon={Check} type="submit" disabled={imageBusy || portraitBusy}>
+          <ActionButton icon={Check} type="submit">
             Enregistrer
           </ActionButton>
         </div>
