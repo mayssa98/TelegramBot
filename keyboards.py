@@ -295,14 +295,9 @@ def home_keyboard(lang, user_id):
         )],
         [
             translated_button(lang, "profile_deposit", callback_data="topup", style="primary"),
-            translated_button(lang, "profile_withdraw", callback_data="profile_withdraw", style="primary"),
-        ],
-        [
             translated_button(lang, "menu_account", callback_data="account", style="primary"),
-            translated_button(lang, "profile_notifications", callback_data="profile_notifications", style="primary"),
         ],
         [
-            translated_button(lang, "menu_warranty", callback_data="warranty", style="primary"),
             translated_button(lang, "menu_lang", callback_data="language", style="primary"),
         ],
         [translated_button(lang, "menu_support", callback_data="support", style="danger")],
@@ -687,10 +682,17 @@ def profile_keyboard(lang):
             translated_button(lang, "profile_deposit", callback_data="topup", style="success"),
         ],
         [
-            translated_button(lang, "profile_orders", callback_data="orders", style="primary"),
-            translated_button(lang, "profile_referral", callback_data="affiliate", style="primary"),
+            translated_button(lang, "profile_withdraw", callback_data="profile_withdraw", style="primary"),
+            translated_button(lang, "profile_notifications", callback_data="profile_notifications", style="primary"),
         ],
-        [translated_button(lang, "profile_shop", callback_data="catalog", style="primary")],
+        [
+            translated_button(lang, "profile_orders", callback_data="orders", style="primary"),
+            translated_button(lang, "menu_warranty", callback_data="warranty", style="primary"),
+        ],
+        [
+            translated_button(lang, "profile_referral", callback_data="affiliate", style="primary"),
+            translated_button(lang, "profile_shop", callback_data="catalog", style="primary"),
+        ],
         [translated_button(lang, "profile_reseller_api", callback_data="reseller_api", style="success")],
         [translated_button(lang, "profile_main_menu", callback_data="home", style="danger")],
     ])
@@ -705,7 +707,7 @@ def withdrawal_methods_keyboard(lang):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(label, callback_data=f"withdraw_method:{method}")]
         for label, method in labels.get(lang, labels["en"])
-    ] + [[translated_button(lang, "profile_main_menu", callback_data="home")]])
+    ] + [[translated_button(lang, "menu_account", callback_data="account")]])
 
 
 def withdrawal_admin_keyboard(withdrawal_id):
@@ -722,7 +724,7 @@ def warranty_orders_keyboard(lang, orders):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"🛡️ #{int(order['id'])} · {str(order.get('offer_name') or order.get('service_name') or 'Product')[:40]}", callback_data=f"warranty_order:{int(order['id'])}")]
         for order in orders
-    ] + [[translated_button(lang, "profile_main_menu", callback_data="home")]])
+    ] + [[translated_button(lang, "menu_account", callback_data="account")]])
 
 
 def warranty_review_keyboard(request_id):

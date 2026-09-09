@@ -36,8 +36,9 @@ def test_profile_keyboard_matches_customer_profile_navigation():
     ]
     assert callbacks == [
         ["topup"],
-        ["orders", "affiliate"],
-        ["catalog"],
+        ["profile_withdraw", "profile_notifications"],
+        ["orders", "warranty"],
+        ["affiliate", "catalog"],
         ["reseller_api"],
         ["home"],
     ]
@@ -49,7 +50,10 @@ def test_profile_keyboard_matches_customer_profile_navigation():
     assert styles["topup"] == "success"
     assert styles["reseller_api"] == "success"
     assert styles["home"] == "danger"
-    assert {styles[action] for action in ("orders", "affiliate", "catalog")} == {"primary"}
+    assert {
+        styles[action]
+        for action in ("profile_withdraw", "profile_notifications", "orders", "warranty", "affiliate", "catalog")
+    } == {"primary"}
 
 
 def test_notification_manager_lists_every_product_with_pagination(monkeypatch):
@@ -756,11 +760,10 @@ def test_home_uses_green_shop_blue_actions_and_red_support(mock_mongodb):
     assert keyboard.inline_keyboard[0][0].callback_data == "catalog"
     assert actions["catalog"].text == "🛍️ Shop"
     assert actions["catalog"].style == "success"
-    assert {
-        actions[action].style for action in ("topup", "profile_withdraw", "account", "profile_notifications", "warranty", "language")
-    } == {"primary"}
+    assert {actions[action].style for action in ("topup", "account", "language")} == {"primary"}
+    assert {"profile_withdraw", "profile_notifications", "warranty"}.isdisjoint(actions)
     assert actions["support"].style == "danger"
-    assert [len(row) for row in keyboard.inline_keyboard[:6]] == [1, 1, 1, 2, 2, 2]
+    assert [len(row) for row in keyboard.inline_keyboard[:5]] == [1, 1, 1, 2, 1]
     assert actions["bot_like_mine"].text == "🤖 BOT LIKE MINE"
     assert actions["bot_like_mine"].style == "success"
     assert "lovable" not in actions
