@@ -118,6 +118,7 @@ TRANSLATIONS = {
     },
     "topup_verify_txid": {"fr": "🟡 Binance Pay", "en": "🟡 Binance Pay", "ar": "🟡 دفع Binance"},
     "topup_verify_bybit": {"fr": "🟠 Bybit Pay", "en": "🟠 Bybit Pay", "ar": "🟠 دفع Bybit"},
+    "topup_ltc": {"fr": "Ł Litecoin (LTC)", "en": "Ł Litecoin (LTC)", "ar": "Ł لايتكوين (LTC)"},
     "topup_onchain": {"fr": "⛓️ Onchain", "en": "⛓️ Onchain", "ar": "⛓️ على السلسلة"},
     "topup_bsc": {
         "fr": "🟨 USDT - BEP20",
@@ -128,6 +129,21 @@ TRANSLATIONS = {
         "fr": "🟪 USDT - POLY",
         "en": "🟪 USDT - POLY",
         "ar": "🟪 USDT - POLY",
+    },
+    "topup_ltc_instructions": {
+        "fr": "Ł <b>DÉPÔT LITECOIN</b>\n\n<b>Réseau obligatoire : LTC (Litecoin)</b>\n\nEnvoyez au moins <b>{minimum} LTC</b> à :\n<code>{address}</code>\n\nAprès l’envoi, collez le TXID Litecoin ici. Après <b>{confirmations} confirmations</b>, le bot lit le montant LTC réel, prend le cours LTC/USDT en direct et crédite automatiquement votre portefeuille en USDT.\n\n⚠️ Utilisez uniquement le réseau <b>LTC (Litecoin)</b>. N’utilisez aucun autre réseau, sinon vos fonds pourraient être perdus. Les dépôts confidentiels MWEB ne sont pas pris en charge.",
+        "en": "Ł <b>LITECOIN DEPOSIT</b>\n\n<b>Required network: LTC (Litecoin)</b>\n\nSend at least <b>{minimum} LTC</b> to:\n<code>{address}</code>\n\nAfter sending, paste the Litecoin TXID here. After <b>{confirmations} confirmations</b>, the bot reads the actual LTC amount, locks the live LTC/USDT rate, and automatically credits your wallet in USDT.\n\n⚠️ Use only the <b>LTC (Litecoin)</b> network. Do not use another network, or your funds may be lost. Confidential MWEB deposits are not supported.",
+        "ar": "Ł <b>إيداع لايتكوين</b>\n\n<b>الشبكة المطلوبة: LTC (Litecoin)</b>\n\nأرسل ما لا يقل عن <b>{minimum} LTC</b> إلى:\n<code>{address}</code>\n\nبعد الإرسال، الصق TXID الخاص بلايتكوين هنا. بعد <b>{confirmations} تأكيدات</b>، يقرأ البوت مبلغ LTC الفعلي ويثبت سعر LTC/USDT المباشر ثم يضيف الرصيد تلقائياً إلى محفظتك بعملة USDT.\n\n⚠️ استخدم شبكة <b>LTC (Litecoin)</b> فقط. لا تستخدم أي شبكة أخرى وإلا قد تفقد أموالك. إيداعات MWEB السرية غير مدعومة.",
+    },
+    "topup_ltc_pending": {
+        "fr": "⏳ Le dépôt LTC attend encore des confirmations ou le cours est momentanément indisponible. Renvoyez le même TXID dans quelques instants.",
+        "en": "⏳ The LTC deposit is still confirming or the live rate is temporarily unavailable. Send the same TXID again shortly.",
+        "ar": "⏳ لا يزال إيداع LTC بانتظار التأكيدات أو أن السعر المباشر غير متاح مؤقتاً. أرسل TXID نفسه مجدداً بعد قليل.",
+    },
+    "topup_ltc_approved": {
+        "fr": "✅ <b>Dépôt LTC converti</b>\n\nReçu : <b>{ltc_amount} LTC</b>\nCours bloqué : <b>1 LTC = {rate} USDT</b>\nCrédité : <b>{amount} USDT</b>\nNouveau solde : <b>{balance} USDT</b>",
+        "en": "✅ <b>LTC deposit converted</b>\n\nReceived: <b>{ltc_amount} LTC</b>\nLocked rate: <b>1 LTC = {rate} USDT</b>\nCredited: <b>{amount} USDT</b>\nNew balance: <b>{balance} USDT</b>",
+        "ar": "✅ <b>تم تحويل إيداع LTC</b>\n\nالمستلم: <b>{ltc_amount} LTC</b>\nالسعر المثبت: <b>1 LTC = {rate} USDT</b>\nالمضاف: <b>{amount} USDT</b>\nالرصيد الجديد: <b>{balance} USDT</b>",
     },
     "topup_onchain_amount": {
         "fr": "💰 Entrez le montant à ajouter à votre portefeuille via USDT {network} (minimum 1 USDT) :",
