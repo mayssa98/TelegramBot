@@ -83,11 +83,15 @@ USDT_EVM_ADDRESS: str = os.environ.get(
     "0x6529804d712d5ef4bef5c60af4a3683bd7300411",
 ).strip()
 LTC_DEPOSIT_ADDRESS: str = os.environ.get(
-    "HP_LTC_DEPOSIT_ADDRESS", "LgSoW9DoZkgd4TwY3SGs4FsM6eynNbzzv7"
+    "HP_LTC_DEPOSIT_ADDRESS", USDT_EVM_ADDRESS
 ).strip()
-LTC_BLOCKCYPHER_API_BASE: str = os.environ.get(
-    "HP_LTC_BLOCKCYPHER_API_BASE", "https://api.blockcypher.com/v1/ltc/main"
-).rstrip("/")
+LTC_BSC_RPC_URL: str = os.environ.get(
+    "HP_LTC_BSC_RPC_URL", "https://bsc-dataseed.bnbchain.org"
+).strip()
+LTC_BSC_TOKEN_CONTRACT: str = os.environ.get(
+    "HP_LTC_BSC_TOKEN_CONTRACT",
+    "0x4338665cbb7b2485a8855a139b75d5e34ab0db94",
+).strip()
 LTC_PRICE_API_URL: str = os.environ.get(
     "HP_LTC_PRICE_API_URL",
     "https://api.binance.com/api/v3/ticker/price?symbol=LTCUSDT",

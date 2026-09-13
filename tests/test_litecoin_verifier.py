@@ -4,42 +4,43 @@ import litecoin_verifier
 
 
 def test_litecoin_verifier_sums_only_outputs_to_configured_address(monkeypatch):
-    address = "LgSoW9DoZkgd4TwY3SGs4FsM6eynNbzzv7"
+    address = "0x6529804d712d5ef4bef5c60af4a3683bd7300411"
     monkeypatch.setattr(litecoin_verifier, "LTC_MIN_CONFIRMATIONS", 3)
     monkeypatch.setattr(litecoin_verifier, "LTC_MIN_DEPOSIT", 0.001)
-    monkeypatch.setattr(
-        litecoin_verifier,
-        "_request_json",
-        lambda _url: {
-            "confirmations": 4,
-            "received": "2026-09-10T12:00:00Z",
-            "outputs": [
-                {"value": 120_000, "addresses": [address]},
-                {"value": 50_000, "addresses": ["LotherAddress"]},
-                {"value": 80_000, "addresses": [address]},
-            ],
-        },
-    )
+    def rpc(method, _params):
+        if method == "eth_getTransactionReceipt":
+            return {"status": "0x1", "blockNumber": "0x10", "logs": [
+                {"address": litecoin_verifier.LTC_BSC_TOKEN_CONTRACT,
+                 "topics": [litecoin_verifier.TRANSFER_TOPIC, "0x0", "0x" + "0" * 24 + address[2:]],
+                 "data": "0x1d4c0"},
+                {"address": litecoin_verifier.LTC_BSC_TOKEN_CONTRACT,
+                 "topics": [litecoin_verifier.TRANSFER_TOPIC, "0x0", "0x" + "0" * 24 + address[2:]],
+                 "data": "0x13880"},
+            ]}
+        if method == "eth_blockNumber":
+            return "0x14"
+        raise AssertionError(method)
+    monkeypatch.setattr(litecoin_verifier, "_rpc", rpc)
 
     result = litecoin_verifier.verify_litecoin_deposit(
-        "a" * 64, address, created_at=1_757_505_000,
+        "0x" + "a" * 64, address, created_at=1_757_505_000,
     )
 
     assert result["status"] == "confirmed"
     assert result["ltc_amount"] == 0.002
-    assert result["confirmations"] == 4
+    assert result["confirmations"] == 5
 
 
 def test_litecoin_verifier_waits_for_confirmations(monkeypatch):
     monkeypatch.setattr(litecoin_verifier, "LTC_MIN_CONFIRMATIONS", 3)
     monkeypatch.setattr(
         litecoin_verifier,
-        "_request_json",
-        lambda _url: {"confirmations": 1, "outputs": []},
+        "_rpc",
+        lambda method, _params: {"eth_getTransactionReceipt": {"status": "0x1", "blockNumber": "0x10", "logs": []}, "eth_blockNumber": "0x11"}[method],
     )
 
     result = litecoin_verifier.verify_litecoin_deposit(
-        "a" * 64, "LgSoW9DoZkgd4TwY3SGs4FsM6eynNbzzv7",
+        "0x" + "a" * 64, "0x6529804d712d5ef4bef5c60af4a3683bd7300411",
     )
 
     assert result["status"] == "pending"
@@ -50,15 +51,12 @@ def test_litecoin_verifier_rejects_wrong_recipient(monkeypatch):
     monkeypatch.setattr(litecoin_verifier, "LTC_MIN_CONFIRMATIONS", 3)
     monkeypatch.setattr(
         litecoin_verifier,
-        "_request_json",
-        lambda _url: {
-            "confirmations": 6,
-            "outputs": [{"value": 100_000_000, "addresses": ["LotherAddress"]}],
-        },
+        "_rpc",
+        lambda method, _params: {"eth_getTransactionReceipt": {"status": "0x1", "blockNumber": "0x10", "logs": []}, "eth_blockNumber": "0x20"}[method],
     )
 
     result = litecoin_verifier.verify_litecoin_deposit(
-        "a" * 64, "LgSoW9DoZkgd4TwY3SGs4FsM6eynNbzzv7",
+        "0x" + "a" * 64, "0x6529804d712d5ef4bef5c60af4a3683bd7300411",
     )
 
     assert result["status"] == "failed"

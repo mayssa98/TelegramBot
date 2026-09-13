@@ -105,7 +105,7 @@ def test_litecoin_topup_converts_live_rate_and_credits_once(
             "source": "binance_ltcusdt",
         },
     )
-    txid = "b" * 64
+    txid = "0x" + "b" * 64
 
     result = wallet_service.submit_litecoin_topup(42, txid, 1_699_999_900)
 
@@ -118,7 +118,7 @@ def test_litecoin_topup_converts_live_rate_and_credits_once(
     saved = mock_mongodb.wallet_topups.find_one({"txid": txid})
     assert saved["source_currency"] == "LTC"
     assert saved["amount_cents"] == 2000
-    assert saved["verification_method"] == "automatic_litecoin"
+    assert saved["verification_method"] == "automatic_bsc_ltc"
 
 
 def test_litecoin_topup_does_not_credit_without_live_quote(
@@ -137,7 +137,7 @@ def test_litecoin_topup_does_not_credit_without_live_quote(
         },
     )
 
-    result = wallet_service.submit_litecoin_topup(42, "c" * 64)
+    result = wallet_service.submit_litecoin_topup(42, "0x" + "c" * 64)
 
     assert result["status"] == "pending"
     assert wallet_service.balance_cents(42) == 0

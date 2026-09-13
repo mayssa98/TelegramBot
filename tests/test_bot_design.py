@@ -1859,7 +1859,7 @@ def test_litecoin_topup_instructions_require_ltc_network(mock_mongodb):
         address="Lexample", confirmations=3,
     )
 
-    assert "Required network: LTC (Litecoin)" in message
+    assert "Required network: BSC (BEP20)" in message
     assert "Do not use another network" in message
 
 

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from config import (
-    LTC_BLOCKCYPHER_API_BASE,
+    LTC_BSC_RPC_URL,
+    LTC_BSC_TOKEN_CONTRACT,
     LTC_MIN_CONFIRMATIONS,
     LTC_MIN_DEPOSIT,
     LTC_PRICE_API_URL,
@@ -35,14 +35,24 @@ def _request_json(url: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _unix_time(value) -> int | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        return int(datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(UTC).timestamp())
-    except (ValueError, TypeError):
-        return None
+TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+
+def _rpc(method: str, params: list):
+    request = Request(
+        LTC_BSC_RPC_URL,
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
+        headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "BlackMarketBot/1.0 ltc-bsc-verifier"},
+    )
+    with urlopen(request, timeout=12) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if payload.get("error"):
+        raise RuntimeError(payload["error"].get("message") or "BSC RPC error")
+    return payload.get("result")
+
+
+def _hex_int(value) -> int:
+    return int(str(value or "0x0"), 16)
 
 
 def verify_litecoin_deposit(
@@ -53,37 +63,35 @@ def verify_litecoin_deposit(
     """Verify a confirmed LTC transaction and derive the amount sent to our address."""
     txid = str(txid or "").strip().lower()
     destination = str(destination or "").strip()
-    if not re.fullmatch(r"[a-f0-9]{64}", txid):
-        return _result("failed", "invalid_format", "Invalid Litecoin transaction ID.")
-    if not destination:
+    if not re.fullmatch(r"0x[a-f0-9]{64}", txid):
+        return _result("failed", "invalid_format", "Invalid BSC transaction hash.")
+    if not re.fullmatch(r"0x[a-fA-F0-9]{40}", destination):
         return _result("failed", "not_configured", "Litecoin receiving address is not configured.")
 
     try:
-        payload = _request_json(f"{LTC_BLOCKCYPHER_API_BASE}/txs/{txid}")
-        if payload.get("error"):
-            return _result("failed", "not_found", "Litecoin transaction was not found.")
-        if payload.get("double_spend"):
-            return _result("failed", "double_spend", "The Litecoin transaction is a double spend.")
-
-        confirmations = max(0, int(payload.get("confirmations") or 0))
+        receipt = _rpc("eth_getTransactionReceipt", [txid])
+        if receipt is None:
+            return _result("pending", "not_mined", "BSC transaction is not mined yet.")
+        if _hex_int(receipt.get("status")) != 1:
+            return _result("failed", "transaction_failed", "The BSC transaction failed on-chain.")
+        block_number = _hex_int(receipt.get("blockNumber"))
+        latest_block = _hex_int(_rpc("eth_blockNumber", []))
+        confirmations = max(0, latest_block - block_number + 1)
         if confirmations < LTC_MIN_CONFIRMATIONS:
             return _result(
                 "pending", "confirming", "Waiting for Litecoin confirmations.",
                 confirmations=confirmations,
             )
 
-        received_at = _unix_time(payload.get("received") or payload.get("confirmed"))
-        if created_at and received_at and received_at < int(created_at) - 600:
-            return _result(
-                "failed", "transaction_too_old",
-                "The Litecoin transaction predates this deposit request.",
-            )
-
         satoshis = 0
-        for output in payload.get("outputs") or []:
-            addresses = [str(value).strip() for value in (output.get("addresses") or [])]
-            if destination in addresses:
-                satoshis += int(output.get("value") or 0)
+        destination_topic = destination.lower().replace("0x", "").rjust(64, "0")
+        contract = LTC_BSC_TOKEN_CONTRACT.lower()
+        for log in receipt.get("logs") or []:
+            topics = [str(topic).lower() for topic in (log.get("topics") or [])]
+            if str(log.get("address") or "").lower() != contract or len(topics) < 3:
+                continue
+            if topics[0] == TRANSFER_TOPIC and topics[2].endswith(destination_topic):
+                satoshis += _hex_int(log.get("data"))
         amount = Decimal(satoshis) / SATOSHIS_PER_LTC
         minimum = Decimal(str(LTC_MIN_DEPOSIT))
         if amount <= 0:
@@ -95,17 +103,13 @@ def verify_litecoin_deposit(
             )
         return _result(
             "confirmed", "confirmed", "Litecoin deposit confirmed.",
-            txid=txid,
+            txid=txid, network="bsc", token_contract=LTC_BSC_TOKEN_CONTRACT,
             ltc_amount=float(amount),
             confirmations=confirmations,
-            received_at=received_at,
+            received_at=None,
         )
-    except HTTPError as exc:
-        if exc.code == 404:
-            return _result("failed", "not_found", "Litecoin transaction was not found.")
-        return _result("pending", "api_unavailable", f"Litecoin API unavailable: HTTP {exc.code}")
-    except (URLError, TimeoutError, OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-        return _result("pending", "api_unavailable", f"Litecoin API unavailable: {exc}")
+    except (HTTPError, URLError, TimeoutError, OSError, RuntimeError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        return _result("pending", "api_unavailable", f"BSC RPC unavailable: {exc}")
 
 
 def fetch_ltc_usdt_quote() -> dict:

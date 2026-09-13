@@ -143,8 +143,8 @@ def submit_litecoin_topup(
 ) -> dict[str, Any]:
     """Verify LTC, lock a live LTC/USDT quote, and credit the USDT wallet once."""
     txid = str(txid or "").strip().lower()
-    if not re.fullmatch(r"[a-f0-9]{64}", txid):
-        return {"status": "failed", "code": "invalid_format", "message": "TXID Litecoin invalide."}
+    if not re.fullmatch(r"0x[a-f0-9]{64}", txid):
+        return {"status": "failed", "code": "invalid_format", "message": "TXID BSC invalide."}
 
     conn = db.get_conn()
     if conn.wallet_topups.find_one({"txid": txid}) or conn.orders.find_one({"txid": txid}):
@@ -174,7 +174,7 @@ def submit_litecoin_topup(
 
     topup_id = db._next_id("wallet_topups")
     if not db.claim_onchain_transaction(
-        txid, "litecoin", user_id, "wallet_topup", topup_id, amount_cents / 100,
+        txid, "bsc_ltc", user_id, "wallet_topup", topup_id, amount_cents / 100,
     ):
         return {"status": "failed", "code": "already_used", "message": "TXID déjà utilisé."}
     try:
@@ -189,10 +189,10 @@ def submit_litecoin_topup(
             "conversion_rate": rate,
             "quote_source": quote["source"],
             "quote_at": int(time.time()),
-            "network": "litecoin",
+            "network": "bsc",
             "confirmations": int(verification.get("confirmations") or 0),
             "received_at": verification.get("received_at"),
-            "verification_method": "automatic_litecoin",
+            "verification_method": "automatic_bsc_ltc",
             "status": "confirmed",
             "created_at": int(time.time()),
         })
