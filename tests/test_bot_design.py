@@ -1861,6 +1861,7 @@ def test_litecoin_topup_instructions_require_ltc_network(mock_mongodb):
 
     assert "Required network: BSC (BEP20)" in message
     assert "Do not use another network" in message
+    assert "0x4338665c" not in message
 
 
 def test_topup_instructions_are_txid_only(mock_mongodb):
